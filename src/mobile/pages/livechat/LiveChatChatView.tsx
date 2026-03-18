@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useLivechatProfilePhoto } from '@/features/5-3-whatsapp/hooks/useLivechatProfilePhoto';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
@@ -12,26 +12,6 @@ import type { WhatsAppAccount } from '@/features/5-3-whatsapp/types';
 import { ChatThread } from '@/features/5-3-whatsapp/components/inbox/ChatThread';
 import { EmailChatThread } from '@/features/5-3-whatsapp/components/inbox/EmailChatThread';
 import { MobileLivechatQuickActionPanel } from './components/MobileLivechatQuickActionPanel';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { devLog } from '@/config/logger';
-import { toast } from 'sonner';
-
-function urlBase64ToUint8Array(base64Url: string): Uint8Array {
-  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = base64.length % 4;
-  const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 function ChannelIcon({ channel = 'whatsapp', className }: { channel?: string; className?: string }) {
   const c = (channel || 'whatsapp').toLowerCase();
@@ -80,68 +60,11 @@ export function LiveChatChatView({
 }: LiveChatChatViewProps) {
   const { t } = useAppTranslation();
   const [quickActionOpen, setQuickActionOpen] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() =>
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
-  );
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const isKeyboardOpen =
     typeof window !== 'undefined' &&
     viewportHeight > 0 &&
     viewportHeight < window.innerHeight * 0.85;
-
-  const handleRequestNotificationPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    setIsRequestingPermission(true);
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      if (permission !== 'granted') return;
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-      const reg = await navigator.serviceWorker.ready;
-      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-      if (!vapidPublicKey?.trim()) return;
-      const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey.trim());
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey,
-      });
-      const p256dh = subscription.getKey('p256dh');
-      const auth = subscription.getKey('auth');
-      if (!p256dh || !auth) {
-        toast.error(t('livechat.notificationNotSupported', 'Notifikasi tidak didukung.'));
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      const body = {
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: arrayBufferToBase64Url(p256dh),
-          auth: arrayBufferToBase64Url(auth),
-        },
-      };
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-push-subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        devLog.error('livechat-save-push-subscription failed', res.status, err);
-        toast.error(t('livechat.pushSubscriptionFailed', 'Tidak dapat mengaktifkan notifikasi. Coba lagi nanti.'));
-      }
-    } catch (e) {
-      setNotificationPermission('denied');
-      devLog.error('Push subscribe error', e);
-      toast.error(t('livechat.pushSubscribeError', 'Aktivasi notifikasi gagal.'));
-    } finally {
-      setIsRequestingPermission(false);
-    }
-  };
 
   const isEmail = selectedConversation.source === 'email';
   const isInstagram = selectedConversation.source === 'instagram';
@@ -212,21 +135,6 @@ export function LiveChatChatView({
           <h2 className="font-semibold text-white truncate">{displayName}</h2>
           {subText && <p className="text-xs text-slate-300 truncate">{subText}</p>}
         </div>
-        {notificationPermission !== 'granted' && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white"
-            onClick={handleRequestNotificationPermission}
-            disabled={isRequestingPermission}
-            aria-busy={isRequestingPermission}
-            title={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
-            aria-label={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
-          >
-            <Bell className="h-5 w-5 text-slate-300" />
-          </Button>
-        )}
         <Sheet open={quickActionOpen} onOpenChange={setQuickActionOpen}>
           <SheetTrigger asChild>
             <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white" aria-label={t('whatsappInbox.quickAction', 'Quick Action')}>

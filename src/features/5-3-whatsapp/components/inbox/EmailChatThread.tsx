@@ -310,11 +310,11 @@ export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadPro
           );
         })}
       </div>
-      <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 p-3 border-t border-slate-700 bg-slate-800 safe-area-bottom">
+      <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 pt-1 pb-2.5 px-3 border-t border-slate-700 bg-slate-800 safe-area-bottom">
         <Button
           type="button"
           variant="outline"
-          className="w-full border-slate-500 text-white hover:bg-slate-700 hover:text-white"
+          className="w-full mb-1.5 border-slate-400 bg-white text-slate-800 hover:bg-slate-100 hover:text-slate-900"
           onClick={handleOpenCompose}
           disabled={isSending}
         >

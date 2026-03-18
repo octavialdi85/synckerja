@@ -59,6 +59,8 @@ async function getFcmAccessToken(serviceAccountJson: string): Promise<string> {
   return tokenData.access_token;
 }
 
+const PUBLIC_APP_ORIGIN = Deno.env.get("PUBLIC_APP_ORIGIN") ?? "https://app.profitloop.id";
+
 async function sendFcmMessage(
   accessToken: string,
   projectId: string,
@@ -68,6 +70,11 @@ async function sendFcmMessage(
   data: Record<string, string>
 ): Promise<{ ok: boolean; status?: number }> {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const notification: { title: string; body: string; image: string } = {
+    title,
+    body,
+    image: `${PUBLIC_APP_ORIGIN}/splash-logo.png`,
+  };
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -77,11 +84,11 @@ async function sendFcmMessage(
     body: JSON.stringify({
       message: {
         token: fcmToken,
-        notification: { title, body },
+        notification,
         data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
         android: {
           priority: "high",
-          notification: { channel_id: "notifications", sound: "default", icon: "ic_notification" },
+          notification: { channel_id: "notifications", sound: "default", icon: "splash_white_logo" },
         },
         apns: { payload: { aps: { sound: "default" } } },
       },

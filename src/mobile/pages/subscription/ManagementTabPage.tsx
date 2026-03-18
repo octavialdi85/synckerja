@@ -10,6 +10,7 @@ import { ManagementTabPageSkeleton } from "./ManagementTabPageSkeleton";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 import { useOptimizedSubscription } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { useNextBillingFromPayments } from "@/features/10-management/hooks/useNextBillingFromPayments";
+import { useLastPaidSubscription } from "@/features/10-Plans/hooks/useLastPaidSubscription";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { MobileCurrentPlanCard } from "./section/management/MobileCurrentPlanCard";
 import { MobileSubscriptionStats } from "./section/management/MobileSubscriptionStats";
@@ -31,6 +32,7 @@ const ManagementTabPage = memo(() => {
   const { organizationId } = useCurrentOrg();
   const { subscriptionStatus, isLoading, statusError, refreshSubscriptionStatus } = useOptimizedSubscription();
   const { nextBillingDate, daysUntilExpiry, paymentsLoading } = useNextBillingFromPayments(organizationId ?? undefined);
+  const { lastPaidAmount } = useLastPaidSubscription(organizationId ?? undefined);
   const nextBillingOverride =
     nextBillingDate != null ? { date: nextBillingDate, daysRemaining: daysUntilExpiry } : null;
 
@@ -149,6 +151,7 @@ const ManagementTabPage = memo(() => {
           subscriptionStatus={subscriptionStatus}
           nextBillingOverride={nextBillingOverride}
           nextBillingLoading={paymentsLoading}
+          lastPaidAmount={lastPaidAmount}
         />
         <MobilePaymentHistory />
       </div>

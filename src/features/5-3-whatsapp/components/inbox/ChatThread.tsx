@@ -26,47 +26,9 @@ import { isResolvedStatus, isOutside24hWindow } from '../../constants/leadStatus
 /** Bucket yang sama dipakai untuk kirim (outbound) dan terima (webhook/resolve) media */
 const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
 
-function getNotificationSoundUrl() {
-  if (typeof window === 'undefined') return '/notification-bell.wav';
-  return `${window.location.origin}/notification-bell.wav`;
-}
-
-/** Shared Audio instance, unlocked on first user gesture so Android allows programmatic play. */
-let sharedNotificationAudio: HTMLAudioElement | null = null;
-/** Resumed AudioContext for beep fallback on Android. */
-let sharedAudioContext: AudioContext | null = null;
-
-/** Call from a user gesture (e.g. touchstart/focus in chat) so Android allows sound later. */
+/** No-op: previously unlocked notification sound on user gesture. Bell sound removed. */
 function unlockInboundNotificationAudio() {
-  if (typeof document === 'undefined') return;
-  const url = getNotificationSoundUrl();
-  if (sharedNotificationAudio != null) return;
-  try {
-    const audio = new Audio(url);
-    audio.preload = 'auto';
-    audio.volume = 0;
-    sharedNotificationAudio = audio;
-    audio.load();
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.then === 'function') {
-      playPromise.then(() => {
-        audio.pause();
-        audio.currentTime = 0;
-      }).catch(() => {});
-    }
-  } catch {
-    // ignore
-  }
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (Ctx && !sharedAudioContext) {
-      const ctx = new Ctx();
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      sharedAudioContext = ctx;
-    }
-  } catch {
-    // ignore
-  }
+  // no-op
 }
 
 function isTouchDevice() {
@@ -106,68 +68,6 @@ function playInboundNotificationSound(options?: { conversationName?: string }) {
   }
   if (document.visibilityState === 'hidden') return;
   if (navigator.vibrate) navigator.vibrate(200);
-  const url = getNotificationSoundUrl();
-  const tryBeep = () => {
-    try {
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = sharedAudioContext || (Ctx ? new Ctx() : null);
-      if (!ctx) return;
-      if (!sharedAudioContext) sharedAudioContext = ctx;
-      if (ctx.state === 'suspended') ctx.resume().then(() => playBeep(ctx)).catch(() => {});
-      else playBeep(ctx);
-    } catch {
-      // ignore
-    }
-  };
-  const tryWav = () => {
-    try {
-      if (sharedNotificationAudio) {
-        sharedNotificationAudio.currentTime = 0;
-        sharedNotificationAudio.volume = 1;
-        sharedNotificationAudio.play().catch(() => tryBeep());
-        return;
-      }
-      const audio = new Audio(url);
-      audio.volume = 1;
-      audio.play().catch(() => tryBeep());
-    } catch {
-      tryBeep();
-    }
-  };
-  if (isTouchDevice()) {
-    tryBeep();
-  } else {
-    tryWav();
-  }
-}
-
-function playInboundNotificationBeep() {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = sharedAudioContext || (Ctx ? new Ctx() : null);
-    if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().then(() => playBeep(ctx)).catch(() => {});
-    else playBeep(ctx);
-  } catch {
-    // ignore
-  }
-}
-
-function playBeep(ctx: AudioContext) {
-  try {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
-  } catch {
-    // ignore
-  }
 }
 
 interface ChatThreadProps {
@@ -507,6 +407,20 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const [swipeOffset, setSwipeOffset] = useState<{ msgId: string; translateX: number } | null>(null);
   const knownInboundIdsRef = useRef<Set<string>>(new Set());
   const hasScrollTargetRef = useRef(false);
+
+  /** Mobile (hideHeader): auto-expand textarea with Enter/newlines, fixed max height with vertical scroll */
+  const MOBILE_INPUT_MIN_HEIGHT_PX = 44;
+  const MOBILE_INPUT_MAX_HEIGHT_PX = 120;
+  useLayoutEffect(() => {
+    if (!hideHeader) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const scrollH = el.scrollHeight;
+    const h = Math.min(Math.max(scrollH, MOBILE_INPUT_MIN_HEIGHT_PX), MOBILE_INPUT_MAX_HEIGHT_PX);
+    el.style.height = `${h}px`;
+    el.style.overflowY = scrollH > MOBILE_INPUT_MAX_HEIGHT_PX ? 'auto' : 'hidden';
+  }, [text, hideHeader]);
 
   const vibrate = useCallback((ms = 50) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms);
@@ -1060,7 +974,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         )}
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.75rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-[4rem]' : 'pb-[calc(3.5rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
         {...(hideHeader ? { onTouchStart: unlockInboundNotificationAudio } : {})}
       >
         {isLoading ? (
@@ -1068,13 +982,8 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         ) : (
           (() => {
             const reversedMessages = [...displayMessages].reverse();
-            return reversedMessages.map((msg, index) => {
-            const nextMsg = reversedMessages[index + 1];
-            const marginBetween = !nextMsg
-              ? 'mb-0'
-              : msg.direction !== nextMsg.direction
-                ? 'mb-1.5'
-                : 'mb-0';
+            return reversedMessages.map((msg) => {
+            const marginBetween = 'mb-0';
             const CheckboxBtn = () =>
               selectionMode ? (
                 <button
@@ -1438,7 +1347,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       </div>
       <div
         ref={chatInputBarRef}
-        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 bg-transparent ${keyboardOpen ? 'pb-2' : 'pb-[max(1.25rem,calc(env(safe-area-inset-bottom,0px)+0.5rem))]'} ${hideHeader ? 'px-1 pt-2' : 'px-4 pt-4'}`}
+        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 bg-[#efeae2] ${hideHeader ? 'px-1 pt-2' : 'px-4 pt-4'} ${keyboardOpen ? 'pb-2' : 'pb-[max(0.5rem,calc(env(safe-area-inset-bottom,0px)+0.5rem))]'}`}
       >
         {sendDisabledByNoAccount && (
           <div
@@ -1544,10 +1453,10 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             </Button>
           </div>
         )}
-        <div className={`flex rounded-xl border-2 border-border bg-background shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-primary/50 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[36px]' : 'min-h-[44px]'}`}>
+        <div className={`flex rounded-xl border-2 border-border bg-background shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-primary/50 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[44px]' : 'min-h-[44px]'}`}>
           <button
             type="button"
-            className={`shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50 self-center ${hideHeader ? 'p-1.5' : 'p-2.5'}`}
+            className={`shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50 self-end ${hideHeader ? 'p-2 pb-2.5' : 'p-2.5'}`}
             disabled={isSending || isUploading || sendDisabled}
             onClick={() => !sendDisabled && fileInputRef.current?.click()}
             title={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
@@ -1570,7 +1479,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             }}
             rows={hideHeader ? 1 : 2}
             readOnly={sendDisabled}
-            className={`resize-none flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent pr-1 pl-0 ${hideHeader ? 'min-h-[36px] py-1.5 text-base' : 'min-h-[44px] py-2'}`}
+            className={`resize-none flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent pr-1 pl-0 overflow-x-hidden seamless-scroll ${hideHeader ? 'min-h-[44px] max-h-[120px] py-2.5 text-base leading-normal' : 'min-h-[44px] py-2'}`}
           />
           <button
             type="button"
@@ -1582,7 +1491,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             disabled={sendDisabled || (!text.trim() && !pendingMedia) || isSending || isUploading}
             title={t('whatsappInbox.send', 'Send')}
             aria-label={t('whatsappInbox.send', 'Send')}
-            className={`shrink-0 self-center rounded-full bg-background border-2 border-border flex items-center justify-center text-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-background ${hideHeader ? 'mr-1 w-8 h-8' : 'mr-1.5 w-9 h-9'}`}
+            className={`shrink-0 self-end rounded-full bg-background border-2 border-border flex items-center justify-center text-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-background ${hideHeader ? 'mr-1.5 mb-1 w-9 h-9' : 'mr-1.5 w-9 h-9'}`}
           >
             <Send className={hideHeader ? 'w-4 h-4' : 'w-4 h-4'} strokeWidth={2.5} />
           </button>

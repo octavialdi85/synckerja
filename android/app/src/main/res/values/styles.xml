@@ -18,5 +18,8 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="android:windowSplashScreenBackground">#f5f5f5</item>
+        <!-- Status bar: ikon gelap di cold start agar kontras dengan background terang -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

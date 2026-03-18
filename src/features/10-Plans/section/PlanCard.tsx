@@ -33,6 +33,9 @@ interface PlanCardProps {
     days_until_expiry?: number;
     billing_cycle?: string;
   };
+  /** For current plan only: last successful payment total and member count (display only). */
+  lastPaidAmount?: number | null;
+  lastPaidMemberCount?: number | null;
   onMemberCountChange: (planId: string, count: number) => void;
   onBillingCycleChange: (planId: string, isYearly: boolean) => void;
   onUpgrade: (plan: SubscriptionPlan, memberCount: number, billingCycle: 'monthly' | 'yearly') => void;
@@ -57,6 +60,8 @@ export const PlanCard = memo(({
   currentEmployeeCount,
   isRenewEligible,
   subscriptionStatus,
+  lastPaidAmount,
+  lastPaidMemberCount,
   onMemberCountChange,
   onBillingCycleChange,
   onUpgrade,
@@ -244,6 +249,11 @@ export const PlanCard = memo(({
 
         {/* Price Breakdown */}
         <div className="space-y-2 text-sm text-gray-600">
+          {isCurrent && lastPaidAmount != null && lastPaidMemberCount != null && (
+            <div className="flex justify-between text-green-700">
+              <span>{applyVariables(t('subscription.plans.lastPaidForMembers', 'Last paid: {{amount}} ({{count}} members)'), { amount: formatIDR(lastPaidAmount), count: String(lastPaidMemberCount) })}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>{t('subscription.plans.priceBreakdown.perMember', 'Price per member:')}</span>
             <span>{formatIDR(plan.base_price_per_member)}</span>

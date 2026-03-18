@@ -18,12 +18,14 @@ export function useNextBillingFromPayments(organizationId: string | undefined) {
         .from('payments')
         .select('id, created_at, billing_cycle, subscription_start_date, subscription_end_date, status')
         .eq('organization_id', organizationId)
+        .in('status', ['success', 'settlement', 'paid'])
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
     enabled: !!organizationId,
+    refetchOnWindowFocus: false,
   });
 
   const computed = useMemo(() => {

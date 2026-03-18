@@ -6,6 +6,8 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
 import { Paperclip, Send, X, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 
 /** Same accept as WhatsApp ChatThread for consistency. */
 const ACCEPT_ATTACHMENTS = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip';
@@ -49,6 +51,7 @@ export function EmailComposePopup({
   isSending = false,
 }: EmailComposePopupProps) {
   const { t } = useAppTranslation();
+  const isMobile = useIsMobile();
   const [to, setTo] = useState(toEmail);
   const [subject, setSubject] = useState(defaultSubject);
   const [body, setBody] = useState(defaultBody);
@@ -123,17 +126,25 @@ export function EmailComposePopup({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
-        hideCloseButton={false}
+        className={cn(
+          'flex flex-col p-0 gap-0 overflow-hidden',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            : 'max-w-2xl w-[95vw] max-h-[90vh]'
+        )}
+        hideCloseButton={isMobile}
+        fullscreenAnimation={isMobile}
       >
-        {/* Gmail-style header: light blue bar with title and window controls */}
-        <div className="flex-shrink-0 px-4 py-3 bg-[#e8f0fe] border-b border-gray-200 flex items-center justify-between">
-          <DialogHeader>
-            <DialogTitle className="text-base font-medium text-gray-800">
-              {t('emailConnect.newMessage', 'Pesan Baru')}
-            </DialogTitle>
-          </DialogHeader>
-        </div>
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+            isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'px-4 py-3 bg-[#e8f0fe] border-gray-200'
+          )}
+        >
+          <DialogTitle className={cn('font-semibold', isMobile ? 'text-lg text-foreground' : 'text-base font-medium text-gray-800')}>
+            {t('emailConnect.newMessage', 'Pesan Baru')}
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto seamless-scroll flex flex-col min-h-0">
           {/* To */}
@@ -150,7 +161,7 @@ export function EmailComposePopup({
               onClick={() => setShowCcBcc((v) => !v)}
               className="text-sm text-blue-600 hover:text-blue-800 shrink-0"
             >
-              Cc Bcc
+              {t('emailConnect.ccBcc', 'Cc Bcc')}
             </button>
           </div>
 
@@ -232,38 +243,68 @@ export function EmailComposePopup({
             </div>
           )}
 
-          {/* Bottom bar: Send + paperclip (Gmail-style) */}
-          <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-white flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPT_ATTACHMENTS}
-                className="hidden"
-                multiple
-                onChange={handleFileChange}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                disabled={isSending || attachments.length >= MAX_ATTACHMENTS}
-                onClick={() => fileInputRef.current?.click()}
-                title={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
-              >
-                <Paperclip className="w-4 h-4" />
-              </Button>
-            </div>
+          {/* Footer: per modal-android-fullscreen.mdc on mobile */}
+          <div
+            className={cn(
+              'flex-shrink-0 border-t flex items-center gap-2',
+              isMobile ? 'px-4 pt-3 pb-3 bg-muted/30' : 'px-4 py-3 border-gray-200 bg-white justify-between'
+            )}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT_ATTACHMENTS}
+              className="hidden"
+              multiple
+              onChange={handleFileChange}
+            />
             <Button
               type="button"
-              onClick={handleSend}
-              disabled={isSending || !body.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+              variant="ghost"
+              size="icon"
+              className={cn('shrink-0', isMobile ? 'h-9 w-9' : 'h-9 w-9')}
+              disabled={isSending || attachments.length >= MAX_ATTACHMENTS}
+              onClick={() => fileInputRef.current?.click()}
+              title={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
+              aria-label={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
             >
-              <Send className="w-4 h-4 mr-2" />
-              {t('emailConnect.send', 'Kirim')}
+              <Paperclip className="w-4 h-4" />
             </Button>
+            <div className="flex items-center justify-end gap-2 flex-1">
+              {isMobile && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isSending}
+                >
+                  {t('common.cancel', 'Batal')}
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={handleSend}
+                disabled={isSending || !body.trim()}
+                size={isMobile ? 'sm' : undefined}
+                className={cn(
+                  isMobile && 'min-w-[120px] flex items-center justify-center gap-1.5',
+                  !isMobile && 'bg-blue-600 hover:bg-blue-700 text-white'
+                )}
+              >
+                {isSending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>{t('emailConnect.sending', 'Mengirim...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    {t('emailConnect.send', 'Kirim')}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

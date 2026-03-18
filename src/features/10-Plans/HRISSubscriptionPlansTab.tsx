@@ -3,6 +3,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Zap, Users, Shield, Star } from 'lucide-react';
 import { useSubscriptionPlans } from './hooks/useSubscriptionPlans';
 import { useOptimizedSubscription, SubscriptionPlan } from '@/features/10-management/hooks/useOptimizedSubscription';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useLastPaidSubscription } from './hooks/useLastPaidSubscription';
 import { useMidtransPayment } from './hooks/useMidtransPayment';
 import { useProRateCalculation } from './hooks/useProRateCalculation';
 import { useEmployeeCount } from '@/features/share/hooks/useEmployeeCount';
@@ -33,6 +35,8 @@ const HRISSubscriptionPlansTab = () => {
   
   const { data: plans, isLoading } = useSubscriptionPlans();
   const { subscriptionStatus, subscriptionPlans } = useOptimizedSubscription();
+  const { organizationId } = useCurrentOrg();
+  const { lastPaidAmount, lastPaidMemberCount } = useLastPaidSubscription(organizationId ?? undefined);
   const { initiateMidtransPayment } = useMidtransPayment();
   const proRateCalculation = useProRateCalculation();
   const { data: currentEmployeeCount = 0 } = useEmployeeCount();
@@ -496,6 +500,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
                         currentEmployeeCount={currentEmployeeCount}
                         isRenewEligible={isRenewEligible}
                         subscriptionStatus={subscriptionStatus}
+                        lastPaidAmount={isCurrent ? lastPaidAmount : undefined}
+                        lastPaidMemberCount={isCurrent ? lastPaidMemberCount : undefined}
                         onRenew={handleRenew}
                         onMemberCountChange={handleMemberCountChange}
                         onBillingCycleChange={handleBillingCycleChange}

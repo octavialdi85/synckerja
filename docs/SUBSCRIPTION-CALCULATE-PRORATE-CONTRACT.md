@@ -6,6 +6,13 @@
 - **Signature:** `(p_org_id uuid, p_new_member_count integer, p_target_plan_id uuid DEFAULT NULL)`
 - **Return:** **Satu objek JSONB** (bukan array). Jangan ubah ke `RETURNS SETOF jsonb` agar edge function dan frontend tidak perlu mengurai array.
 
+### Sumber tanggal akhir periode (remaining_days)
+
+- **Utama:** `payments.subscription_end_date` dari pembayaran terakhir yang sukses (`status IN ('success','settlement','paid')`) untuk org tersebut, agar **remaining_days** sinkron dengan tampilan "Renews ... / X days remaining" di UI (Payment History, Overview).
+- **Fallback:** Jika tidak ada payment dengan `subscription_end_date`, dipakai `organization_subscriptions.subscription_end_date`.
+
+(Migration: `20260317000000_prorate_use_payments_end_date.sql`.)
+
 ### Bentuk return sukses (sesuai ProRateCalculation)
 
 ```json

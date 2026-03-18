@@ -60,9 +60,12 @@ export const LeadsInsights = ({
   const sectionCardClass = (base: string) => {
     if (!denserSections) return base;
     return base
-      .replace('border-none', 'border-2 border-slate-200')
-      .replace('shadow-sm', 'shadow');
+      .replace('border-none', 'border border-border')
+      .replace(/shadow-sm|shadow/g, 'shadow-none');
   };
+
+  const sectionSpacingClass = denserSections ? 'space-y-1 mt-1' : 'space-y-3 mt-4';
+  const outerSpacingClass = denserSections ? 'space-y-1' : 'space-y-4';
 
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
@@ -435,7 +438,7 @@ export const LeadsInsights = ({
       setIsGeneratingPDF(false);
     }
   };
-  return <div className="space-y-4">
+  return <div className={outerSpacingClass}>
       {/* Dropdown for different views - hidden on mobile when tab is controlled via drawer */}
       {!hideTabDropdown && (
       <div className="w-full">
@@ -462,7 +465,7 @@ export const LeadsInsights = ({
         </DropdownMenu>
         </div>
       )}
-        {activeTab === 'overview' && <div className="space-y-3 mt-4">
+        {activeTab === 'overview' && <div className={sectionSpacingClass}>
           {/* Conversion Metrics */}
           <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-emerald-50 to-green-50")}>
             <CardHeader className="pb-3">
@@ -791,7 +794,7 @@ export const LeadsInsights = ({
             </Card>
           </div>}
         
-        {activeTab === 'source-performance' && <div className="space-y-3 mt-4">
+        {activeTab === 'source-performance' && <div className={sectionSpacingClass}>
           {/* Source Performance Header */}
           <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50")}>
             <CardHeader className="pb-3">
@@ -961,7 +964,7 @@ export const LeadsInsights = ({
             </Card>}
           </div>}
         
-        {activeTab === 'consultant-performance' && <div className="space-y-3 mt-4">
+        {activeTab === 'consultant-performance' && <div className={sectionSpacingClass}>
           {/* Consultant Performance Header */}
           <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50")}>
             <CardHeader className="pb-3">

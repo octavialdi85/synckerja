@@ -7,6 +7,7 @@ import SubscriptionExpiredPage from '@/features/1-login/pages/SubscriptionExpire
 import { LoadingDots } from './LoadingDots';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
+import { MobileSplashScreen } from '@/mobile/components/MobileSplashScreen';
 
 interface SubscriptionExpiryGuardProps {
   children: ReactNode;
@@ -116,7 +117,9 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
 
   if (isAnyLoading) {
     if (isMobile) {
-      return <RouteLoadingSkeleton />;
+      const isHomeRoute = location.pathname === '/' || location.pathname === '/dashboard';
+      const showSplashForHome = isHomeRoute && (typeof sessionStorage === 'undefined' || sessionStorage.getItem('homeSplashShown') !== '1');
+      return showSplashForHome ? <MobileSplashScreen /> : <RouteLoadingSkeleton />;
     }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/features/ui/card";
 import { Input } from "@/features/ui/input";
@@ -8,6 +8,11 @@ import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { AuthTestimonialsPanel } from "@/features/1-login/AuthTestimonialsPanel";
+import { Capacitor } from "@capacitor/core";
+import { Keyboard } from "@capacitor/keyboard";
+
+const GAP_ABOVE_KEYBOARD = 12;
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,8 +20,68 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const passwordFocusedRef = useRef(false);
+
+  const scrollPanelSoButtonNearKeyboard = useCallback(() => {
+    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
+    const panel = panelRef.current;
+    const btn = submitButtonRef.current;
+    if (!panel || !btn || !passwordFocusedRef.current) return;
+    const vv = window.visualViewport;
+    const visibleHeight = vv ? vv.height : window.innerHeight;
+    const panelRect = panel.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const targetBottom = visibleHeight - GAP_ABOVE_KEYBOARD;
+    const btnBottomInViewport = btnRect.bottom;
+    const scrollDelta = btnBottomInViewport - targetBottom;
+    if (scrollDelta > 0) {
+      panel.scrollTop = Math.max(0, panel.scrollTop + scrollDelta);
+    }
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (passwordFocusedRef.current) scrollPanelSoButtonNearKeyboard();
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [scrollPanelSoButtonNearKeyboard]);
+
+  // Capacitor Keyboard: reserve space so Sign in button sits just above keyboard (native only)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const showHandler = (info: { keyboardHeight: number }) => {
+      setKeyboardHeight(info.keyboardHeight ?? 0);
+      if (passwordFocusedRef.current) {
+        setTimeout(scrollPanelSoButtonNearKeyboard, 100);
+        setTimeout(scrollPanelSoButtonNearKeyboard, 400);
+      }
+    };
+    const hideHandler = () => setKeyboardHeight(0);
+    const showPromise = Keyboard.addListener("keyboardWillShow", showHandler);
+    const hidePromise = Keyboard.addListener("keyboardWillHide", hideHandler);
+    return () => {
+      showPromise.then((h) => h.remove());
+      hidePromise.then((h) => h.remove());
+    };
+  }, [scrollPanelSoButtonNearKeyboard]);
+
+  // Hide native splash when Login mounts (e.g. after redirect from home guard)
+  useEffect(() => {
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return;
+      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+        void SplashScreen.hide();
+      });
+    });
+  }, []);
 
   // Show message when redirected due to session/refresh token error (500/504)
   useEffect(() => {
@@ -255,11 +320,11 @@ const Login = () => {
 
   // Show loading while checking authentication status
   if (checkingAuth) {
-    return <div className="min-h-screen flex">
+    return <div className="auth-page-fixed flex">
       <div className="hidden lg:flex lg:flex-1">
         <AuthTestimonialsPanel />
       </div>
-      <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+      <div className="auth-right-panel auth-form-panel-mobile flex-1 min-h-0 flex items-center justify-center p-4 sm:p-8 overflow-hidden">
         <div className="w-full max-w-md">
           <div className="text-center">
             <Loader2 className="h-12 w-12 animate-spin text-orange-500 mx-auto" />
@@ -270,14 +335,18 @@ const Login = () => {
     </div>;
   }
 
-  return <div className="min-h-screen flex">
+  return <div className="auth-page-fixed flex">
       {/* Left Panel - Testimonials */}
       <div className="hidden lg:flex lg:flex-1">
         <AuthTestimonialsPanel />
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+      {/* Right Panel - Login Form — keyboard padding only on native so Sign in sits above keyboard */}
+      <div
+        ref={panelRef}
+        className="auth-right-panel auth-form-panel-mobile flex-1 min-h-0 flex items-center justify-center p-4 sm:p-8 overflow-hidden"
+        style={keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : undefined}
+      >
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="text-center mb-6">
@@ -289,14 +358,14 @@ const Login = () => {
           <Card className="border-0 shadow-none bg-transparent">
             <CardContent className="p-0">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2 auth-input-scroll-margin">
                   <Label htmlFor="email" className="text-sm font-medium">Email Address *</Label>
                   <div className="relative">
                     <Input type="email" id="email" name="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary" />
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 auth-input-scroll-margin">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password" className="text-sm font-medium">Password *</Label>
                     <Link to="/forgot-password" className="text-primary text-sm hover:underline">
@@ -304,7 +373,25 @@ const Login = () => {
                     </Link>
                   </div>
                   <div className="relative">
-                    <Input type={showPwd ? "text" : "password"} id="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary pr-10" />
+                    <Input
+                      type={showPwd ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      onFocus={() => {
+                        passwordFocusedRef.current = true;
+                        setTimeout(scrollPanelSoButtonNearKeyboard, 150);
+                        setTimeout(scrollPanelSoButtonNearKeyboard, 450);
+                        setTimeout(scrollPanelSoButtonNearKeyboard, 800);
+                      }}
+                      onBlur={() => { passwordFocusedRef.current = false; }}
+                      required
+                      placeholder=""
+                      disabled={loading}
+                      className="h-12 rounded-md border-border focus:border-primary pr-10"
+                    />
                     <button type="button" aria-label={showPwd ? "Sembunyikan password" : "Tampilkan password"} onClick={() => setShowPwd(v => !v)} className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground" tabIndex={-1}>
                       {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -313,7 +400,7 @@ const Login = () => {
 
                 {error && <div className="text-destructive text-sm">{error}</div>}
 
-                <Button type="submit" className="w-full h-12 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-medium" disabled={loading}>
+                <Button ref={submitButtonRef} type="submit" className="w-full h-12 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-medium" disabled={loading}>
                   {loading ? "Signing in..." : "Sign in"}
                 </Button>
 

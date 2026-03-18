@@ -144,8 +144,8 @@ export function LivechatQuickActionPanel({ conversation, hideLeadTitle = false }
       const { data, error } = await supabase
         .from('leads')
         .select('id, services, category')
-        .eq('ticket_id', ticketId)
         .eq('organization_id', organizationId)
+        .ilike('ticket_id', ticketId)
         .maybeSingle();
       if (error) throw error;
       return data as { id: string; services: string | null; category: string | null } | null;
@@ -519,16 +519,20 @@ export function LivechatQuickActionPanel({ conversation, hideLeadTitle = false }
     }
     const oldStatusName = currentStatus?.name ?? null;
     try {
+      // Use real lead UUID when available so mutation updates the correct row; pass conversation id to sync conversation status
+      const idToUse = leadRow?.id ?? leadId;
       await updateLead({
-        id: leadId,
+        id: idToUse,
         status_id: newStatusId,
         organization_id: conversation.organization_id,
         lead_status: oldStatusName ? { name: oldStatusName } : undefined,
         conversionDescription,
+        ...(leadRow?.id && { whatsapp_conversation_id: conversation.id }),
       });
       queryClient.setQueryData([statusQueryKeyBase, conversation.id], { lead_status_id: newStatusId, last_inbound_at: lastInboundAt, created_at: conversationCreatedAt });
       await queryClient.invalidateQueries({ queryKey: [statusQueryKey, conversation.id] });
-      await queryClient.invalidateQueries({ queryKey: ['leads'] });
+      await queryClient.invalidateQueries({ queryKey: ['leads'], refetchType: 'active' });
+      await queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
       toast.success(t('whatsappInbox.statusUpdated', 'Status updated'));
     } catch (err) {
       devLog.error('Failed to update lead status:', err);

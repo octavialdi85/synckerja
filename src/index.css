@@ -52,6 +52,50 @@
   display: none !important;
 }
 
+/* Auth pages (Login/Register) on mobile: fixed viewport, no vertical scroll */
+.auth-page-fixed {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-x;
+}
+@supports (height: 100dvh) {
+  .auth-page-fixed { height: 100dvh; max-height: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  .auth-page-fixed { height: 100vh; max-height: 100vh; }
+}
+@media (min-width: 1024px) {
+  .auth-page-fixed {
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
+    overflow: visible;
+    touch-action: auto;
+  }
+}
+
+/* Auth form panel on mobile: boleh scroll sedikit saat keyboard terbuka, tanpa over-scroll, jarak bawah minimal */
+.auth-form-panel-mobile {
+  overflow-y: auto !important;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 0;
+}
+.auth-form-panel-mobile .auth-input-scroll-margin {
+  scroll-margin-bottom: 0;
+}
+@media (min-width: 1024px) {
+  .auth-form-panel-mobile {
+    overflow-y: hidden !important;
+    scroll-padding-bottom: 0;
+  }
+  .auth-form-panel-mobile .auth-input-scroll-margin {
+    scroll-margin-bottom: 0;
+  }
+}
+
 /* Nested scroll container: keep touch scroll inside this element so parent does not steal it */
 .nested-scroll-touch {
   overscroll-behavior: contain;
@@ -337,6 +381,11 @@ All colors MUST be HSL.
 /* Habits (mobile): section terakhir 4rem ke nav footer. */
 .content-padding-above-nav-habits {
   padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Livechat (mobile): list chat terakhir tidak tertutup nav footer; padding lebih besar agar item terakhir bisa di-scroll di atas footer. Di emulator safe-area sering 0, jadi pakai minimum 48px inset agar tetap cukup. */
+.content-padding-above-nav-livechat {
+  padding-bottom: calc(5rem + max(48px, var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
 }
 
 @layer base {

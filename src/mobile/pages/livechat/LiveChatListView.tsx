@@ -361,19 +361,21 @@ export function LiveChatListView({
                     )}
                   </div>
                 )}
-                <MobileConversationList
-                  conversations={conversations}
-                  isLoading={isLoading}
-                  isRefreshing={isRefreshing}
-                  error={error}
-                  selectedId={null}
-                  onSelect={onSelectConversation}
-                  initialConversationId={null}
-                  initialTicketId={initialTicketId}
-                  searchQuery={searchQuery}
-                  accountFilter={accountFilter || undefined}
-                  waAccountsForHint={waAccountsForHint}
-                />
+                <div className="content-padding-above-nav-livechat flex flex-col min-h-0">
+                  <MobileConversationList
+                    conversations={conversations}
+                    isLoading={isLoading}
+                    isRefreshing={isRefreshing}
+                    error={error}
+                    selectedId={null}
+                    onSelect={onSelectConversation}
+                    initialConversationId={null}
+                    initialTicketId={initialTicketId}
+                    searchQuery={searchQuery}
+                    accountFilter={accountFilter || undefined}
+                    waAccountsForHint={waAccountsForHint}
+                  />
+                </div>
               </div>
             </div>
 

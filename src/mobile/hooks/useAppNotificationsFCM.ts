@@ -45,18 +45,23 @@ export function useAppNotificationsFCM() {
         } = await supabase.auth.getSession();
         if (!session?.access_token) return;
         const platform = Capacitor.getPlatform() as "android" | "ios";
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-fcm-token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ token, platform, context: "general" }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          devLog.error("app-notifications FCM token save failed", res.status, err);
-          toast.error(FALLBACK.fcmTokenSaveFailed);
+        const headers = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        };
+        // Save for both "general" (app notifications: plan status, daily task, approvals, review comments)
+        // and "livechat" (WhatsApp/Instagram/email inbound) so one device gets all push types
+        for (const context of ["general", "livechat"] as const) {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-fcm-token`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ token, platform, context }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            devLog.error(`FCM token save failed (${context})`, res.status, err);
+            toast.error(FALLBACK.fcmTokenSaveFailed);
+          }
         }
       } catch (e) {
         devLog.error("app-notifications FCM token save error", e);

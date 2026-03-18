@@ -108,16 +108,19 @@ async function sendFcmMessage(
   fcmToken: string,
   title: string,
   body: string,
-  data: Record<string, string>
-): Promise<{ ok: boolean; status?: number }> {
+  data: Record<string, string>,
+  imageUrl?: string
+): Promise<{ ok: boolean; status?: number; errorBody?: string }> {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const notification: { title: string; body: string; image?: string } = { title, body };
+  if (imageUrl) notification.image = imageUrl;
   const bodyPayload = {
     message: {
       token: fcmToken,
-      notification: { title, body },
+      notification,
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
       android: {
-        notification: { channel_id: "livechat", sound: "default" },
+        notification: { channel_id: "livechat", sound: "default", icon: "splash_white_logo" },
       },
       apns: {
         payload: { aps: { sound: "default" } },
@@ -133,7 +136,8 @@ async function sendFcmMessage(
     body: JSON.stringify(bodyPayload),
   });
   if (res.ok) return { ok: true };
-  return { ok: false, status: res.status };
+  const errorBody = await res.text();
+  return { ok: false, status: res.status, errorBody };
 }
 
 Deno.serve(async (req: Request) => {
@@ -246,6 +250,18 @@ Deno.serve(async (req: Request) => {
       .select("user_id")
       .eq("active_organization_id", organizationId);
     const userIds = (profiles ?? []).map((p: { user_id: string }) => p.user_id);
+    // #region agent log
+    console.log("livechat-send-push:debug H1 userIds=" + userIds.length + " org=" + (organizationId ?? ""));
+    console.log("livechat-send-push:debug", JSON.stringify({
+      hypothesisId: "H1",
+      message: "userIds from profiles (active_organization_id = org)",
+      data: {
+        organizationId,
+        userIdsLength: userIds.length,
+        userIdsSample: userIds.slice(0, 5).map((u) => u.slice(0, 8) + "..."),
+      },
+    }));
+    // #endregion
     if (userIds.length === 0) {
       console.log("livechat-send-push: skipped no_users_in_org", { organizationId });
       return new Response(JSON.stringify({ ok: true, skipped: "no_users_in_org" }), {
@@ -331,20 +347,49 @@ Deno.serve(async (req: Request) => {
       .in("user_id", userIds)
       .eq("context", "livechat");
     const fcmTokensList = (fcmRows ?? []) as { id: string; token: string }[];
+    // #region agent log
+    console.log("livechat-send-push:debug H2-H3 hasFcm=" + !!fcmServiceAccountJson + " fcmTokens=" + fcmTokensList.length);
+    console.log("livechat-send-push:debug", JSON.stringify({
+      hypothesisId: "H2-H3",
+      message: "FCM config and token query result",
+      data: {
+        hasFcmSecret: Boolean(fcmServiceAccountJson),
+        fcmTokensListLength: fcmTokensList.length,
+        userIdsLength: userIds.length,
+      },
+    }));
+    // #endregion
     if (fcmServiceAccountJson && fcmTokensList.length > 0) {
       try {
         const sa = JSON.parse(fcmServiceAccountJson) as { project_id?: string };
         const projectId = sa.project_id ?? Deno.env.get("FCM_PROJECT_ID") ?? "";
+        // #region agent log
+        console.log("livechat-send-push:debug", JSON.stringify({
+          hypothesisId: "H4",
+          message: "projectId for FCM",
+          data: { hasProjectId: Boolean(projectId), projectIdLength: (projectId ?? "").length },
+        }));
+        // #endregion
         if (projectId) {
           const accessToken = await getFcmAccessToken(fcmServiceAccountJson);
           const fcmToDelete: string[] = [];
           const dataPayload = { url, ticket_id: ticketId, channel: table === "whatsapp_messages" ? "wa" : table === "instagram_messages" ? "ig" : "email" };
           for (const row of fcmTokensList) {
-            const result = await sendFcmMessage(accessToken, projectId, row.token, title, bodyPreview, dataPayload);
+            const notificationImageUrl = (APP_ORIGIN || "https://app.profitloop.id") + "/splash-logo.png";
+            const result = await sendFcmMessage(accessToken, projectId, row.token, title, bodyPreview, dataPayload, notificationImageUrl);
             if (result.ok) {
               fcmSent++;
-            } else if (result.status === 404 || result.status === 400) {
-              fcmToDelete.push(row.id);
+            } else {
+              // #region agent log
+              console.log("livechat-send-push:debug", JSON.stringify({
+                hypothesisId: "H5b",
+                message: "FCM API returned error",
+                data: { status: result.status, errorBody: (result.errorBody ?? "").slice(0, 500) },
+              }));
+              // #endregion
+              if (result.status === 404 || result.status === 400) {
+                fcmToDelete.push(row.id);
+              }
             }
           }
           if (fcmToDelete.length > 0) {
@@ -352,6 +397,13 @@ Deno.serve(async (req: Request) => {
           }
         }
       } catch (fcmErr) {
+        // #region agent log
+        console.log("livechat-send-push:debug", JSON.stringify({
+          hypothesisId: "H5",
+          message: "FCM send threw",
+          data: { errorName: fcmErr instanceof Error ? fcmErr.name : "unknown", errorMessage: fcmErr instanceof Error ? fcmErr.message : String(fcmErr) },
+        }));
+        // #endregion
         console.error("livechat-send-push: FCM error", fcmErr);
       }
     }

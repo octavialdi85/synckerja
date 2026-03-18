@@ -12,11 +12,13 @@ import { format } from "date-fns";
 import { addMonths, addYears } from "date-fns";
 import { id as localeID } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, History, Loader2, RefreshCw } from "lucide-react";
+import { Download, History, Loader2, RefreshCw, Trash2, CreditCard } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Tables } from "@/mobile/integrations/supabase/types";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { applyVariables } from "@/features/share/i18n/translations";
+import { useMidtransPayment } from "@/features/10-Plans/hooks/useMidtransPayment";
 
 type PaymentRecord = Tables<"payments"> & {
   subscription_plans: {
@@ -52,6 +54,36 @@ export const MobilePaymentHistory = memo(() => {
   const queryClient = useQueryClient();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
+  const { openSnapForPendingOrder, isLoading: isSnapLoading } = useMidtransPayment({
+    onPaymentStatusChange: () => {
+      queryClient.invalidateQueries({ queryKey: ["payment-pending", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-status", organizationId] });
+    },
+  });
+
+  const cancelPendingPayment = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data, error } = await supabase.functions.invoke("cancel-pending-payment", {
+        body: { order_id: orderId },
+      });
+      if (error) throw error;
+      const res = data as { success?: boolean; error?: string; message?: string } | undefined;
+      if (res && res.success !== true && res.error) {
+        throw new Error(res.message ?? res.error);
+      }
+      return data;
+    },
+    onSuccess: () => {
+      toast.success(t("subscription.management.pendingPayments.deleteSuccess", "Pembayaran pending dibatalkan."));
+      queryClient.invalidateQueries({ queryKey: ["payment-pending", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history", organizationId] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? t("subscription.management.pendingPayments.deleteError", "Gagal membatalkan pembayaran."));
+    },
+  });
+
   const refreshPaymentStatus = useMutation({
     mutationFn: async (payment: PaymentRecord) => {
       const { data, error } = await supabase.functions.invoke("check-midtrans-payment-status", {
@@ -69,6 +101,7 @@ export const MobilePaymentHistory = memo(() => {
         toast.info(t("subscription.management.refreshPending", "Status masih pending. Tunggu konfirmasi."));
       }
       queryClient.invalidateQueries({ queryKey: ["payment-history", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["payment-pending", organizationId] });
       queryClient.invalidateQueries({ queryKey: ["subscription-status", organizationId] });
     },
     onError: (error: Error) => {
@@ -81,6 +114,7 @@ export const MobilePaymentHistory = memo(() => {
     enabled: !!organizationId,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!organizationId) return [];
       const { data, error } = await supabase
@@ -96,8 +130,35 @@ export const MobilePaymentHistory = memo(() => {
         `,
         )
         .eq("organization_id", organizationId)
+        .in("status", ["success", "settlement", "paid"])
         .order("created_at", { ascending: false });
 
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: pendingPayments = [] } = useQuery<PaymentRecord[]>({
+    queryKey: ["payment-pending", organizationId],
+    enabled: !!organizationId,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from("payments")
+        .select(
+          `
+          *,
+          subscription_plans (
+            id,
+            name,
+            base_price_per_member
+          )
+        `,
+        )
+        .eq("organization_id", organizationId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -295,23 +356,6 @@ export const MobilePaymentHistory = memo(() => {
     );
   }
 
-  if (!payments.length) {
-    return (
-      <Card className="border border-border">
-        <CardHeader className="pb-2 pt-3 px-3">
-          <CardTitle className="text-base text-foreground">{t("subscription.management.paymentHistory")}</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground mt-0.5">
-            {t("subscription.management.noPayments")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-2 py-6 px-3 pb-3 text-sm text-muted-foreground">
-          <History className="h-8 w-8 text-muted-foreground/60" />
-          <p>{t("subscription.management.noPaymentsHint")}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="border border-border">
       <CardHeader className="pb-2 pt-3 px-3">
@@ -321,6 +365,61 @@ export const MobilePaymentHistory = memo(() => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2.5 pt-0 px-3 pb-3">
+        {pendingPayments.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3">
+            <p className="text-xs font-medium text-amber-800">
+              {applyVariables(t("subscription.management.pendingPayments.title", "You have {{count}} pending payment(s)."), { count: String(pendingPayments.length) })}
+            </p>
+            <div className="mt-2 space-y-2">
+              {pendingPayments.map((payment) => (
+                <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/80 bg-white/60 p-2 text-xs">
+                  <span className="font-mono text-amber-900">{payment.order_id}</span>
+                  <span className="font-semibold text-amber-900">{formatIDR(payment.amount)}</span>
+                  <span className="text-amber-700">{payment.created_at ? formatDateTime(payment.created_at) : "N/A"}</span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1 text-xs"
+                      onClick={() => openSnapForPendingOrder(payment.order_id)}
+                      disabled={isSnapLoading}
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      {t("subscription.management.pendingPayments.pay", "Bayar")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1 text-xs text-destructive hover:text-destructive"
+                      onClick={() => cancelPendingPayment.mutate(payment.order_id)}
+                      disabled={cancelPendingPayment.isPending}
+                    >
+                      {cancelPendingPayment.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      {t("subscription.management.pendingPayments.delete", "Hapus")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1 text-xs"
+                      onClick={() => refreshPaymentStatus.mutate(payment)}
+                      disabled={refreshPaymentStatus.isPending}
+                    >
+                      {refreshPaymentStatus.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      {t("subscription.management.pendingPayments.refreshStatus", "Refresh status")}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {payments.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-6 text-sm text-muted-foreground">
+            <History className="h-8 w-8 text-muted-foreground/60" />
+            <p>{t("subscription.management.noPaymentsHint")}</p>
+          </div>
+        ) : (
+        <>
         {paymentsForDisplay.map((payment) => {
           const badge = statusBadgeVariant(payment.status, t);
           const nextDate = nextPaymentDateByPaymentId.nextMap.get(payment.id);
@@ -405,6 +504,8 @@ export const MobilePaymentHistory = memo(() => {
             </div>
           );
         })}
+        </>
+        )}
       </CardContent>
     </Card>
   );

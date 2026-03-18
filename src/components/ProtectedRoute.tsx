@@ -8,6 +8,7 @@ import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { LoadingDots } from './LoadingDots';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
+import { MobileSplashScreen } from '@/mobile/components/MobileSplashScreen';
 import { AccessDeniedPage } from '@/mobile/pages/access-denied';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
@@ -125,7 +126,9 @@ export const ProtectedRoute = ({
   
   if (shouldShowLoading) {
     if (isMobile) {
-      return <RouteLoadingSkeleton />;
+      const isHomeRoute = pathToCheck === '/' || pathToCheck === '/dashboard';
+      const showSplashForHome = isHomeRoute && (typeof sessionStorage === 'undefined' || sessionStorage.getItem('homeSplashShown') !== '1');
+      return showSplashForHome ? <MobileSplashScreen /> : <RouteLoadingSkeleton />;
     }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

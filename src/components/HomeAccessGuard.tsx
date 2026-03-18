@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { WifiOff } from 'lucide-react';
 import { useAuth } from '@/features/1-login';
@@ -7,11 +7,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { LoadingDots } from './LoadingDots';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
-import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
+import { MobileSplashScreen } from '@/mobile/components/MobileSplashScreen';
 import { logger } from '@/config/logger';
 
 const SUBSCRIPTION_CACHE_KEY_PREFIX = 'home_subscription_';
 const SUBSCRIPTION_CACHE_TTL_MS = 60 * 1000; // 1 minute – avoid 2 queries on every home open
+const SPLASH_MIN_MS = 3000; // Minimum time to show splash logo before home (mobile)
+const HOME_SPLASH_SHOWN_KEY = 'homeSplashShown';
+
+function showSplashForHome(): boolean {
+  return typeof sessionStorage === 'undefined' || sessionStorage.getItem(HOME_SPLASH_SHOWN_KEY) !== '1';
+}
 
 interface SubscriptionCacheEntry {
   hasActiveSubscription: boolean | null;
@@ -57,6 +63,18 @@ export function clearHomeSubscriptionCache(organizationId: string | undefined): 
   }
 }
 
+function SplashMinDelayEffect({ remainingMs, onDone }: { remainingMs: number; onDone: () => void }) {
+  useEffect(() => {
+    if (remainingMs <= 0) {
+      onDone();
+      return;
+    }
+    const t = setTimeout(onDone, remainingMs);
+    return () => clearTimeout(t);
+  }, [remainingMs, onDone]);
+  return null;
+}
+
 interface HomeAccessGuardProps {
   children: ReactNode;
 }
@@ -100,6 +118,9 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   const [subscriptionRetryCount, setSubscriptionRetryCount] = useState(0);
   const [loadingStartTime, setLoadingStartTime] = useState<number>(Date.now());
   const [showSlowConnectionWarning, setShowSlowConnectionWarning] = useState(false);
+  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+  const splashStartRef = useRef<number | null>(null);
+  const homeSplashShownSetRef = useRef(false);
 
   // Check if user is coming from email verification (bypass email verification check)
   const emailJustVerified = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('emailJustVerified') === 'true';
@@ -204,10 +225,17 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // Show loading while checking auth, user data, and expiry status
   if (authLoading || userDataLoading || loadingSubscription || expiryLoading) {
     if (isMobile) {
-      return (
-        <>
-          <RouteLoadingSkeleton />
-          {showSlowConnectionWarning && (
+      const useSplash = showSplashForHome();
+      if (useSplash) {
+        const wasNull = splashStartRef.current === null;
+        splashStartRef.current = splashStartRef.current ?? Date.now();
+        if (wasNull) setSplashMinElapsed(false);
+      }
+      if (useSplash) {
+        return (
+          <>
+            <MobileSplashScreen />
+            {showSlowConnectionWarning && (
             <div className="fixed bottom-4 left-4 right-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 z-50">
               <WifiOff className="h-6 w-6 text-yellow-600 mx-auto mb-2 block" />
               <p className="text-sm text-yellow-800 text-center">
@@ -229,6 +257,39 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
             </div>
           )}
         </>
+        );
+      }
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
+            <LoadingDots size="lg" />
+            <p className="text-sm text-gray-600">Loading page...</p>
+            {showSlowConnectionWarning && (
+              <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <WifiOff className="h-6 w-6 text-yellow-600" />
+                <p className="text-sm text-yellow-800 text-center">
+                  Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
+                </p>
+                <p className="text-xs text-yellow-600 text-center">
+                  Sistem akan mencoba ulang hingga {((Date.now() - loadingStartTime) / 1000).toFixed(0)} detik
+                </p>
+              </div>
+            )}
+            {userDataError && (
+              <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-sm text-red-800 text-center">
+                  Terjadi kesalahan: {userDataError.message}
+                </p>
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+                >
+                  Muat Ulang Halaman
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       );
     }
     return (
@@ -294,7 +355,20 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   if (organizationJustCreated && (!hasOrganization || !organization)) {
     logger.debug('HomeAccessGuard: Organization just created, waiting for context update...');
     if (isMobile) {
-      return <RouteLoadingSkeleton />;
+      if (showSplashForHome()) {
+        const wasNull = splashStartRef.current === null;
+        splashStartRef.current = splashStartRef.current ?? Date.now();
+        if (wasNull) setSplashMinElapsed(false);
+        return <MobileSplashScreen />;
+      }
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4">
+            <LoadingDots size="lg" />
+            <p className="text-sm text-gray-600">Loading page...</p>
+          </div>
+        </div>
+      );
     }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -334,6 +408,22 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // If has_active_subscription is explicitly TRUE, allow access
   if (hasActiveSubscription === true) {
     logger.debug('HomeAccessGuard: has_active_subscription = TRUE, allowing access to home');
+    if (isMobile && showSplashForHome() && splashStartRef.current != null && !splashMinElapsed) {
+      const remaining = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartRef.current));
+      if (remaining > 0) {
+        return (
+          <>
+            <MobileSplashScreen />
+            <SplashMinDelayEffect remainingMs={remaining} onDone={() => setSplashMinElapsed(true)} />
+          </>
+        );
+      }
+    }
+    splashStartRef.current = null;
+    if (typeof sessionStorage !== 'undefined' && !homeSplashShownSetRef.current) {
+      sessionStorage.setItem(HOME_SPLASH_SHOWN_KEY, '1');
+      homeSplashShownSetRef.current = true;
+    }
     return <>{children}</>;
   }
 
@@ -344,6 +434,22 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     // If status is not 'active' or null/undefined, redirect to create-plan
     if (subscriptionStatus === 'active') {
       logger.debug('HomeAccessGuard: has_active_subscription is null but subscription status is active, allowing access');
+      if (isMobile && showSplashForHome() && splashStartRef.current != null && !splashMinElapsed) {
+        const remaining = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartRef.current));
+        if (remaining > 0) {
+          return (
+            <>
+              <MobileSplashScreen />
+              <SplashMinDelayEffect remainingMs={remaining} onDone={() => setSplashMinElapsed(true)} />
+            </>
+          );
+        }
+      }
+      splashStartRef.current = null;
+      if (typeof sessionStorage !== 'undefined' && !homeSplashShownSetRef.current) {
+        sessionStorage.setItem(HOME_SPLASH_SHOWN_KEY, '1');
+        homeSplashShownSetRef.current = true;
+      }
       return <>{children}</>;
     } else if (subscriptionStatus !== null && subscriptionStatus !== undefined && subscriptionStatus !== 'active') {
       clearHomeSubscriptionCache(organization?.id);
@@ -355,7 +461,22 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
       clearHomeSubscriptionCache(organization.id);
       setSubscriptionRetryCount(1);
       setLoadingSubscription(true);
-      if (isMobile) return <RouteLoadingSkeleton />;
+      if (isMobile) {
+        if (showSplashForHome()) {
+          const wasNull = splashStartRef.current === null;
+          splashStartRef.current = splashStartRef.current ?? Date.now();
+          if (wasNull) setSplashMinElapsed(false);
+          return <MobileSplashScreen />;
+        }
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="flex flex-col items-center space-y-4">
+              <LoadingDots size="lg" />
+              <p className="text-sm text-gray-600">Loading page...</p>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="flex flex-col items-center space-y-4">

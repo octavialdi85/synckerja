@@ -1398,22 +1398,6 @@ export const DetectFromImageSection: React.FC = () => {
         return;
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/3025297e-3d48-4c21-b146-4bec28fb6bc4', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9d707f' },
-        body: JSON.stringify({
-          sessionId: '9d707f',
-          location: 'DetectFromImageSection.tsx:invoke',
-          message: 'body before invoke',
-          data: { bodyAspectRatio: body.aspectRatio, designImageAspectRatio, customW: customSizeWidth, customH: customSizeHeight },
-          timestamp: Date.now(),
-          hypothesisId: 'H1',
-          runId: 'generate-image',
-        }),
-      }).catch(() => {});
-      // #endregion
-
       const { data, error } = await supabase.functions.invoke('generate-design-image', {
         body,
         // Perpanjang timeout agar request sampai ke Gemini (generate image bisa 60–120 detik)
@@ -1439,21 +1423,6 @@ export const DetectFromImageSection: React.FC = () => {
       }
       const dataUrl = `data:${mimeType};base64,${base64}`;
       const targetRatio = getTargetAspectRatio(designImageAspectRatio, customSizeWidth, customSizeHeight);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/3025297e-3d48-4c21-b146-4bec28fb6bc4', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9d707f' },
-        body: JSON.stringify({
-          sessionId: '9d707f',
-          location: 'DetectFromImageSection.tsx:afterResponse',
-          message: 'before fit',
-          data: { targetRatio, designImageAspectRatio, dataUrlLen: dataUrl.length },
-          timestamp: Date.now(),
-          hypothesisId: 'H2',
-          runId: 'generate-image',
-        }),
-      }).catch(() => {});
-      // #endregion
       const fittedUrl = await fitDataUrlToAspectRatio(dataUrl, targetRatio);
       setGeneratedImageUrl(fittedUrl);
     } catch (err) {

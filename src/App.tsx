@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
@@ -177,11 +178,40 @@ const LoginRouteElement = () => {
   return <Login />;
 };
 
+// Fade-in wrapper for smooth transition from splash to home
+const HomeFadeIn = ({ children }: { children: ReactNode }) => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setVisible(true));
+    });
+    return () => cancelAnimationFrame(t);
+  }, []);
+  return (
+    <div
+      className={`transition-opacity duration-300 ease-out ${visible ? 'opacity-100' : 'opacity-0'}`}
+      style={{ minHeight: '100%' }}
+    >
+      {children}
+    </div>
+  );
+};
+
 // Route element selector for Home: desktop/tablet landscape = desktop version; handphone/tablet portrait = mobile
 const HomeRouteElement = () => {
   const location = useLocation();
   const useDesktop = useDesktopLayout();
-  return useDesktop ? <ModernHomePage key={location.pathname} /> : <MobileHome key={location.pathname} />;
+  useEffect(() => {
+    if (useDesktop) return;
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return;
+      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+        void SplashScreen.hide();
+      });
+    });
+  }, [useDesktop]);
+  const content = useDesktop ? <ModernHomePage key={location.pathname} /> : <MobileHome key={location.pathname} />;
+  return <HomeFadeIn>{content}</HomeFadeIn>;
 };
 
 // Route element selector for EmployeeWelcome

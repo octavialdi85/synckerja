@@ -12,10 +12,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useSubscriptionPlans } from "@/features/10-Plans/hooks/useSubscriptionPlans";
+import { useLastPaidSubscription } from "@/features/10-Plans/hooks/useLastPaidSubscription";
 import {
   useOptimizedSubscription,
   type SubscriptionPlan,
 } from "@/features/10-management/hooks/useOptimizedSubscription";
+import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { useMidtransPayment } from "@/features/10-Plans/hooks/useMidtransPayment";
 import { useProRateCalculation } from "@/features/10-Plans/hooks/useProRateCalculation";
 import { useEmployeeCount } from "@/features/share/hooks/useEmployeeCount";
@@ -48,6 +50,7 @@ import {
   DialogDescription,
 } from "@/mobile/components/ui/dialog";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { applyVariables } from "@/features/share/i18n/translations";
 import { cn } from "@/lib/utils";
 import { MobileUpgradeConfirmationModal } from "./modal/MobileUpgradeConfirmationModal";
 import { MobileUpgradeOptionsModal } from "./modal/MobileUpgradeOptionsModal";
@@ -314,6 +317,8 @@ const PlanCard = memo(
     onMemberCountChange,
     onBillingCycleChange,
     isEmployeeCountError,
+    lastPaidAmount,
+    lastPaidMemberCount,
     t,
   }: {
     plan: SubscriptionPlan;
@@ -336,6 +341,8 @@ const PlanCard = memo(
     onMemberCountChange: (planId: string, count: number) => void;
     onBillingCycleChange: (planId: string, checked: boolean) => void;
     isEmployeeCountError?: boolean;
+    lastPaidAmount?: number | null;
+    lastPaidMemberCount?: number | null;
     t: (key: string, fallback: string, variables?: Record<string, string | number>) => string;
   }) => {
     const IconComponent = getPlanIcon(plan.name);
@@ -396,6 +403,11 @@ const PlanCard = memo(
             <div className="text-[11px] text-muted-foreground">
               {t("subscription.plans.mobile.equivalentPerMonth", "Setara {{amount}} per bulan", { amount: formatIDR(monthlyPrice) })}
             </div>
+            {isCurrent && lastPaidAmount != null && lastPaidMemberCount != null && (
+              <div className="text-xs text-green-700">
+                {applyVariables(t("subscription.plans.lastPaidForMembers", "Last paid: {{amount}} ({{count}} members)"), { amount: formatIDR(lastPaidAmount), count: String(lastPaidMemberCount) })}
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4 pb-5">
@@ -526,6 +538,8 @@ interface HRISSubscriptionPlansTabProps {
 const HRISSubscriptionPlansTab = ({ refetchRef }: HRISSubscriptionPlansTabProps) => {
   const navigate = useNavigate();
   const { t } = useAppTranslation();
+  const { organizationId } = useCurrentOrg();
+  const { lastPaidAmount, lastPaidMemberCount } = useLastPaidSubscription(organizationId ?? undefined);
   const { data: plans, isLoading, error, refetch: refetchPlans } = useSubscriptionPlans();
   const { subscriptionStatus, subscriptionPlans, refreshSubscriptionStatus } = useOptimizedSubscription();
 
@@ -914,6 +928,8 @@ const HRISSubscriptionPlansTab = ({ refetchRef }: HRISSubscriptionPlansTabProps)
                 isComingSoon={isComingSoon}
                 onMemberCountChange={handleMemberCountChange}
                 onBillingCycleChange={handleBillingCycleToggle}
+                lastPaidAmount={isCurrent ? lastPaidAmount : undefined}
+                lastPaidMemberCount={isCurrent ? lastPaidMemberCount : undefined}
                 t={t}
               />
             );

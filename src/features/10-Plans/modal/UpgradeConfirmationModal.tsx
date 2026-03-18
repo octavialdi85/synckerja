@@ -22,6 +22,9 @@ interface ProRatedData {
     name: string;
     base_price_per_member: number;
   };
+  /** From latest successful payment; null when no payment history (new user). */
+  last_paid_amount?: number | null;
+  last_paid_member_count?: number | null;
   calculation: {
     new_member_count: number;
     member_difference: number;
@@ -198,6 +201,17 @@ export const UpgradeConfirmationModal = ({
             
             {proRatedData ? (
               <div className="space-y-2 text-sm">
+                {proRatedData.last_paid_amount != null && proRatedData.last_paid_member_count != null && proRatedData.calculation.member_difference > 0 && (
+                  <>
+                    <div className="flex justify-between text-green-700">
+                      <span>{applyVariables(t('subscription.plans.lastPaidForMembers', 'Last paid: {{amount}} ({{count}} members)'), { amount: formatIDR(proRatedData.last_paid_amount), count: String(proRatedData.last_paid_member_count) })}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t('subscription.plans.newPricePerMember', 'New price per member:')}</span>
+                      <span>{formatIDR(proRatedData.target_plan?.base_price_per_member ?? newPlan.base_price_per_member)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between">
                   <span>{t('subscription.plans.modal.details.currentPlan', 'Current Plan:')}</span>
                   <span>{proRatedData.current_plan?.name || currentPlan?.name || 'Unknown'}</span>

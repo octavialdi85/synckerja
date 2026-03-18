@@ -18,6 +18,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -53,6 +54,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
       streamRef.current = null;
       setStream(null);
     }
+    setIsVideoPlaying(false);
   }, []);
 
   const capturePhoto = useCallback(() => {
@@ -104,6 +106,13 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
     };
   }, [isOpen, stream, startCamera, stopCamera]);
 
+  // Set video srcObject when stream becomes available (video element may mount after stream is set)
+  React.useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md w-full mx-auto">
@@ -121,19 +130,29 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
           <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
             {!capturedImage ? (
               <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover scale-x-[-1]"
-                />
-                <canvas ref={canvasRef} className="hidden" />
-                {isLoading && (
+                {stream ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover scale-x-[-1] ${isVideoPlaying ? "opacity-100" : "opacity-0 absolute inset-0 pointer-events-none"}`}
+                      onPlaying={() => setIsVideoPlaying(true)}
+                      onCanPlay={() => setIsVideoPlaying(true)}
+                    />
+                    {!isVideoPlaying && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                        <Skeleton className="h-24 w-24 rounded-lg" />
+                      </div>
+                    )}
+                  </>
+                ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-muted">
                     <Skeleton className="h-24 w-24 rounded-lg" />
                   </div>
                 )}
+                <canvas ref={canvasRef} className="hidden" />
               </>
             ) : (
               <img

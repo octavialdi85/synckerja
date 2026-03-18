@@ -4,9 +4,19 @@ const config: CapacitorConfig = {
   appId: 'id.synckerja.app',
   appName: 'Profitloop',
   webDir: 'dist',
+  backgroundColor: '#f5f5f5',
+  android: {
+    backgroundColor: '#f5f5f5',
+  },
   plugins: {
     LocalNotifications: {
-      smallIcon: 'ic_notification',
+      smallIcon: 'splash_white_logo',
+    },
+    PushNotifications: {
+      smallIcon: 'splash_white_logo',
+    },
+    SplashScreen: {
+      launchAutoHide: false,
     },
   },
 };

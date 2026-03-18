@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { Globe, User, Calendar, Briefcase, Flag } from 'lucide-react';
 import { NewLead } from '@/types/leads';
 import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
+import { isResolvedStatus } from '@/features/5-3-whatsapp/constants/leadStatus';
 import { Badge } from '@/features/ui/badge';
 import { Card, CardContent } from '@/features/ui/card';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -18,7 +19,9 @@ export function LeadCard({ lead, onPress }: LeadCardProps) {
   const { t } = useAppTranslation();
   const statusName = lead.lead_status?.name ?? 'Open';
   const displayStatus = getLeadStatusDisplayName(statusName);
-  const statusColor = lead.lead_status?.color ?? undefined;
+  // Resolve/Closed always green; otherwise use color from API
+  const statusColor = isResolvedStatus(statusName) ? undefined : (lead.lead_status?.color ?? undefined);
+  const resolvedGreenClass = isResolvedStatus(statusName) ? 'bg-green-100 text-green-700 border-green-200' : '';
 
   const formatDate = (dateString: string) => {
     try {
@@ -45,9 +48,9 @@ export function LeadCard({ lead, onPress }: LeadCardProps) {
             {lead.client || t('leadsManagement.unknownClient', 'Unknown client')}
           </h3>
           <Badge
-            className="shrink-0 text-xs font-medium"
+            className={`shrink-0 text-xs font-medium ${resolvedGreenClass}`}
             style={statusColor ? { backgroundColor: `${statusColor}20`, color: statusColor, borderColor: statusColor } : undefined}
-            variant={statusColor ? undefined : 'secondary'}
+            variant={statusColor || resolvedGreenClass ? undefined : 'secondary'}
           >
             {displayStatus}
           </Badge>

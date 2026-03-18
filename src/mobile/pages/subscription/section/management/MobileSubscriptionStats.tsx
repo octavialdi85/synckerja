@@ -12,9 +12,11 @@ interface MobileSubscriptionStatsProps {
   nextBillingOverride?: { date: Date | null; daysRemaining: number } | null;
   /** When true and no override, show loading for period/days */
   nextBillingLoading?: boolean;
+  /** When provided, show this as "Estimated bill" (last paid amount) instead of computed plan price */
+  lastPaidAmount?: number | null;
 }
 
-export const MobileSubscriptionStats = memo(({ subscriptionStatus, nextBillingOverride, nextBillingLoading }: MobileSubscriptionStatsProps) => {
+export const MobileSubscriptionStats = memo(({ subscriptionStatus, nextBillingOverride, nextBillingLoading, lastPaidAmount }: MobileSubscriptionStatsProps) => {
   const { t } = useAppTranslation();
   const periodEndValue =
     nextBillingLoading && !nextBillingOverride
@@ -61,17 +63,18 @@ export const MobileSubscriptionStats = memo(({ subscriptionStatus, nextBillingOv
   );
 
   const billingSummary = useMemo(() => {
+    const billingCycleLabel = subscriptionStatus.billing_cycle === "yearly" ? t("subscription.management.yearly") : t("subscription.management.monthly");
+    if (lastPaidAmount != null && lastPaidAmount > 0) {
+      return { billingCycle: billingCycleLabel, amount: formatIDR(lastPaidAmount) };
+    }
     const basePrice = subscriptionStatus.base_price_per_member || 0;
     const discountPct = subscriptionStatus.annual_discount_percentage ?? 0;
     const amount =
       subscriptionStatus.billing_cycle === "yearly"
         ? basePrice * subscriptionStatus.member_count * 12 * (1 - discountPct / 100)
         : basePrice * subscriptionStatus.member_count;
-    return {
-      billingCycle: subscriptionStatus.billing_cycle === "yearly" ? t("subscription.management.yearly") : t("subscription.management.monthly"),
-      amount: formatIDR(amount),
-    };
-  }, [subscriptionStatus, t]);
+    return { billingCycle: billingCycleLabel, amount: formatIDR(amount) };
+  }, [subscriptionStatus, t, lastPaidAmount]);
 
   return (
     <div className="space-y-1">

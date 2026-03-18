@@ -377,7 +377,7 @@ export function LeadsReportSummaryView() {
               )}
             </div>
           )}
-          <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-leads-management space-y-1 min-w-0 flex-1">
+          <div className="mx-auto w-full max-w-md px-2 pt-1 content-padding-above-nav-leads-management space-y-1 min-w-0 flex-1">
             <LeadsInsights
               leads={filteredLeads}
               filters={filters}

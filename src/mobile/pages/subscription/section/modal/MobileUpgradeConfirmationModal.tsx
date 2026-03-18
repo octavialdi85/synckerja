@@ -5,6 +5,7 @@ import { Separator } from "@/mobile/components/ui/separator";
 import { formatIDR } from "@/features/1-login/utils/subscriptionUtils";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { applyVariables } from "@/features/share/i18n/translations";
 import { cn } from "@/lib/utils";
 
 interface ProRatedData {
@@ -19,6 +20,8 @@ interface ProRatedData {
     name: string;
     base_price_per_member: number;
   };
+  last_paid_amount?: number | null;
+  last_paid_member_count?: number | null;
   calculation: {
     new_member_count: number;
     member_difference: number;
@@ -71,9 +74,16 @@ export const MobileUpgradeConfirmationModal = ({
   const calculation = proRatedData?.calculation;
   const isScheduled = calculation && !calculation.charge_now;
   const isImmediateCharge = calculation?.charge_now;
-  const totalAmount = isYearly
+  const fullPlanAmount = isYearly
     ? newPlan.base_price_per_member * newMemberCount * 12 * (1 - (newPlan.annual_discount_percentage || 0) / 100)
     : newPlan.base_price_per_member * newMemberCount;
+  // Total actually charged: prorate when immediate charge, else full plan (or 0 if scheduled)
+  const totalAmount =
+    isScheduled
+      ? 0
+      : isImmediateCharge && calculation?.prorate_amount != null
+        ? calculation.prorate_amount
+        : fullPlanAmount;
 
   const summaryLine = `${newPlan.name} • ${newMemberCount} ${t("subscription.plans.unit.member", "member")} • ${billingCycle === "yearly" ? t("subscription.plans.modal.details.billingYearly", "Tahunan") : t("subscription.plans.modal.details.billingMonthly", "Bulanan")}`;
 
@@ -138,7 +148,7 @@ export const MobileUpgradeConfirmationModal = ({
               <li>{t("subscription.plans.modal.prorate.memberCost", "Biaya tambahan member:")} {formatIDR(calculation.member_change_charge)}</li>
             )}
           </ul>
-          <p className="rounded-lg bg-primary/10 p-2 text-[11px] text-primary-foreground/80">
+          <p className="rounded-lg bg-primary/10 p-2 text-[11px] text-primary">
             {t("subscription.plans.modal.confirm.payRemainingPeriod", "Anda hanya akan membayar sesuai sisa periode subscription saat ini.")}
           </p>
         </div>
@@ -178,6 +188,17 @@ export const MobileUpgradeConfirmationModal = ({
                 {t("subscription.plans.modal.confirm.summaryTitle", "Ringkasan perubahan")}
               </h4>
               <div className="space-y-2 text-xs">
+                {proRatedData?.last_paid_amount != null && proRatedData?.last_paid_member_count != null && calculation && calculation.member_difference > 0 && (
+                  <>
+                    <div className="flex items-center justify-between text-green-700">
+                      <span>{applyVariables(t("subscription.plans.lastPaidForMembers", "Last paid: {{amount}} ({{count}} members)"), { amount: formatIDR(proRatedData.last_paid_amount), count: String(proRatedData.last_paid_member_count) })}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>{t("subscription.plans.newPricePerMember", "New price per member:")}</span>
+                      <span className="font-medium text-foreground">{formatIDR(proRatedData.target_plan?.base_price_per_member ?? newPlan.base_price_per_member)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center justify-between">
                   <span>{t("subscription.plans.modal.details.currentPlan", "Plan saat ini:").replace(":", "")}</span>
                   <span className="font-medium text-foreground">{currentPlan.name}</span>

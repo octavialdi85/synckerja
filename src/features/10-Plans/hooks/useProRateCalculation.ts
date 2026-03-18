@@ -24,6 +24,9 @@ interface ProRateCalculation {
     name: string;
     base_price_per_member: number;
   };
+  /** From latest successful payment; null when no payment history (new user). */
+  last_paid_amount?: number | null;
+  last_paid_member_count?: number | null;
   calculation: {
     new_member_count: number;
     member_difference: number;

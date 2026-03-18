@@ -8,6 +8,7 @@ import { devLog } from '@/config/logger';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { isOutside24hWindow, isResolvedStatus } from '@/features/5-3-whatsapp/constants/leadStatus';
 
 // Types
 export interface SalesActivity {
@@ -1169,7 +1170,7 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       // 2) Fetch leads from whatsapp_conversations (same org; includes channel: whatsapp | instagram) and map to lead-like rows
       const { data: whatsappConvs, error: whatsappError } = await supabase
         .from('whatsapp_conversations')
-        .select('id, organization_id, customer_wa_id, customer_name, channel, last_message_at, last_message_body, last_opened_at, lead_status_id, followup, fu_priority, assignee_id, created_at, updated_at, ticket_id')
+        .select('id, organization_id, customer_wa_id, customer_name, channel, last_message_at, last_message_body, last_opened_at, lead_status_id, last_inbound_at, followup, fu_priority, assignee_id, created_at, updated_at, ticket_id')
         .eq('organization_id', organizationId)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
@@ -1209,23 +1210,41 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         }
       }
 
+      // Resolved status (Closed/Resolve) for effective status when chat >24h — same as Quick Action
+      let resolvedStatusObj: { id: string; name: string; color: string } | null = null;
+      for (const [, s] of statusMap) {
+        if (isResolvedStatus(s.name)) {
+          resolvedStatusObj = s;
+          break;
+        }
+      }
+
       // Sync status and assignee from WhatsApp/Instagram conversation when lead has matching ticket_id (table utama = quick action)
+      // Apply effective status: if last inbound >24h ago, show Resolve (same as Quick Action) so list stays in sync
       if (whatsappConvs && whatsappConvs.length > 0) {
-        const convByTicketId = new Map<string, { lead_status_id: string | null; assignee_id: string | null }>();
+        const convByTicketId = new Map<string, { lead_status_id: string | null; assignee_id: string | null; last_inbound_at: string | null; created_at: string | null }>();
         whatsappConvs.forEach((c: any) => {
           const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
           const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
-          convByTicketId.set(normTicket(waTicketId), { lead_status_id: c.lead_status_id ?? null, assignee_id: c.assignee_id ?? null });
+          convByTicketId.set(normTicket(waTicketId), {
+            lead_status_id: c.lead_status_id ?? null,
+            assignee_id: c.assignee_id ?? null,
+            last_inbound_at: c.last_inbound_at ?? null,
+            created_at: c.created_at ?? null,
+          });
         });
         leadsWithStatus = leadsWithStatus.map((lead: any) => {
           const key = normTicket(lead.ticket_id);
           if (!key) return lead;
           const conv = convByTicketId.get(key);
           if (!conv) return lead;
-          const status = conv.lead_status_id ? statusMap.get(normId(conv.lead_status_id)) ?? null : null;
+          const outside24h = isOutside24hWindow(conv.last_inbound_at, conv.created_at);
+          const useResolved = outside24h && resolvedStatusObj;
+          const status = useResolved ? resolvedStatusObj : (conv.lead_status_id ? statusMap.get(normId(conv.lead_status_id)) ?? null : null);
+          const statusId = useResolved ? resolvedStatusObj!.id : (conv.lead_status_id ?? lead.status_id);
           return {
             ...lead,
-            status_id: conv.lead_status_id ?? lead.status_id,
+            status_id: statusId,
             lead_status: status || lead.lead_status,
             assignee_id: conv.assignee_id ?? lead.assignee_id,
             assignee: conv.assignee_id != null ? (assigneeNameMap.get(normId(conv.assignee_id)) ?? lead.assignee) : lead.assignee,
@@ -1272,8 +1291,10 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           return !ticketIdsInLeadsTable.has(normTicket(waTicketId));
         });
         const whatsappAsLeads = waConvsWithoutLead.map((c: any) => {
-          const statusId = c.lead_status_id ?? '';
-          const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
+          const outside24h = isOutside24hWindow(c.last_inbound_at ?? null, c.created_at ?? null);
+          const useResolved = outside24h && resolvedStatusObj;
+          const statusId = useResolved ? resolvedStatusObj!.id : (c.lead_status_id ?? '');
+          const leadStatus = useResolved ? resolvedStatusObj : (statusId ? statusMap.get(normId(statusId)) ?? null : null);
           const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
           const sourceLabel = isInstagram ? 'Instagram' : 'WhatsApp';
           const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
@@ -1531,30 +1552,42 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           .eq('id', convId)
           .maybeSingle();
         const ticketId = (convRow?.ticket_id as string) ?? `WA-${convId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+        const fallbackTicketId = `WA-${convId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
         if (orgId) {
           const leadUpdatePayload: { status_id?: string; assignee_id: string | null; updated_at: string } = {
             assignee_id: lead.assignee_id ?? null,
             updated_at: new Date().toISOString(),
           };
           if (safeStatusId != null) leadUpdatePayload.status_id = safeStatusId;
-          // Find lead row by ticket_id (case-insensitive) so update always hits the correct row
-          const { data: leadRowByTicket } = await supabase
+          // Find lead row by ticket_id (case-insensitive); try conversation ticket_id then fallback WA-{convId} so /leads-management stays in sync
+          let { data: leadRowByTicket } = await supabase
             .from('leads')
             .select('id')
             .eq('organization_id', orgId)
             .ilike('ticket_id', ticketId)
             .maybeSingle();
+          if (!leadRowByTicket?.id && fallbackTicketId !== ticketId) {
+            const res = await supabase
+              .from('leads')
+              .select('id')
+              .eq('organization_id', orgId)
+              .ilike('ticket_id', fallbackTicketId)
+              .maybeSingle();
+            leadRowByTicket = res.data;
+          }
           if (leadRowByTicket?.id) {
-            await supabase
+            const { error: updErr } = await supabase
               .from('leads')
               .update(leadUpdatePayload)
               .eq('id', leadRowByTicket.id);
+            if (updErr) console.error('Error updating lead by id (wa sync):', updErr);
           } else {
-            await supabase
+            const { error: updErr } = await supabase
               .from('leads')
               .update(leadUpdatePayload)
               .eq('organization_id', orgId)
-              .eq('ticket_id', ticketId);
+              .ilike('ticket_id', ticketId);
+            if (updErr) console.error('Error updating lead by ticket_id (wa sync):', updErr);
           }
         }
         if (newStatusName?.trim().toLowerCase() === 'converted' && orgId) {
@@ -1609,9 +1642,12 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             }
           }
         }
+        // Sync UI: invalidate leads list and lead-by-ticket so Quick Action and /operations/consultant/leads-management stay in sync
+        queryClient.invalidateQueries({ queryKey: ['leads'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['lead-by-ticket'] });
         return lead;
       }
-      const { id, lead_status, organization_id: leadOrgId, ...updateData } = lead;
+      const { id, lead_status, organization_id: leadOrgId, whatsapp_conversation_id: whatsappConvId, ...updateData } = lead;
       const organizationIdForHistory = leadOrgId ?? organizationId;
 
       // Ambil status lama dari DB untuk catat ke lead_status_history
@@ -1662,16 +1698,34 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       }
 
       const updatedLead = data as { ticket_id?: string; assignee_id?: string | null; organization_id?: string };
-      const ticketId = updatedLead?.ticket_id;
-      if (ticketId && (ticketId.startsWith('WA-') || ticketId.startsWith('IG-')) && organizationIdForHistory) {
+      const newStatusIdForConv = validFields.status_id as string | undefined;
+      // Sync status to whatsapp_conversations: by conversation id (from Quick Action) or by ticket_id
+      if (whatsappConvId && newStatusIdForConv) {
         await supabase
           .from('whatsapp_conversations')
           .update({
+            lead_status_id: newStatusIdForConv,
             assignee_id: updatedLead.assignee_id ?? null,
             updated_at: new Date().toISOString(),
           })
-          .eq('organization_id', organizationIdForHistory)
-          .eq('ticket_id', ticketId);
+          .eq('id', whatsappConvId);
+      } else {
+        const ticketId = updatedLead?.ticket_id;
+        if (ticketId && (ticketId.startsWith('WA-') || ticketId.startsWith('IG-')) && organizationIdForHistory) {
+          await supabase
+            .from('whatsapp_conversations')
+            .update({
+              assignee_id: updatedLead.assignee_id ?? null,
+              ...(newStatusIdForConv != null && { lead_status_id: newStatusIdForConv }),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('organization_id', organizationIdForHistory)
+            .eq('ticket_id', ticketId);
+        }
+      }
+      if (whatsappConvId) {
+        queryClient.invalidateQueries({ queryKey: ['leads'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['lead-by-ticket'] });
       }
 
       // Catat perubahan status ke lead_status_history (agar Status History modal berisi data)
