@@ -3618,7 +3618,9 @@ export type Database = {
           next_payment_date: string | null
           organization_id: string
           receipt_url: string | null
+          receipt_urls: unknown | null
           recurring_frequency: string | null
+          recurring_settlement_for_expense_id: string | null
           status: string
           updated_at: string
         }
@@ -3640,7 +3642,9 @@ export type Database = {
           next_payment_date?: string | null
           organization_id: string
           receipt_url?: string | null
+          receipt_urls?: unknown | null
           recurring_frequency?: string | null
+          recurring_settlement_for_expense_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -3662,7 +3666,9 @@ export type Database = {
           next_payment_date?: string | null
           organization_id?: string
           receipt_url?: string | null
+          receipt_urls?: unknown | null
           recurring_frequency?: string | null
+          recurring_settlement_for_expense_id?: string | null
           status?: string
           updated_at?: string
         }

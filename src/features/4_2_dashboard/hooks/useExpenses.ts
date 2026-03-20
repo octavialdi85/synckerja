@@ -1,10 +1,11 @@
-
 import { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+
+export const EXPENSES_QUERY_KEY = ['expenses'] as const;
 
 export interface Expense {
   id: string;
@@ -27,11 +28,16 @@ export interface Expense {
   next_payment_date?: string;
   description?: string;
   receipt_url?: string;
+  /** Additional receipt URLs when more than one attachment exists (jsonb array in DB). */
+  receipt_urls?: string[] | null;
   status: string;
   created_by: string;
   created_at: string;
   updated_at: string;
   purchase_request_id?: string; // When expense was created from payment-process
+  bill_source?: 'expense' | 'purchase_request';
+  /** Payment row linked to master recurring expense; excluded from reminder bills list. */
+  recurring_settlement_for_expense_id?: string | null;
 }
 
 export interface CreateExpenseData {
@@ -48,103 +54,202 @@ export interface CreateExpenseData {
   first_payment_date?: string;
   description?: string;
   receipt_file?: File;
+  /** Multiple receipts (share flow, gallery). Takes precedence over receipt_file when set. */
+  receipt_files?: File[];
   purchase_request_id?: string; // Link to purchase request when created from payment-process
+  /** When set, inserts a recurring settlement payment (no own next_payment_date schedule). */
+  recurring_settlement_for_expense_id?: string | null;
+}
+
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+
+function normalizeReceiptMetadata(file: File): { extension: string; mimeType: string } {
+  const rawType = (file.type || '').toLowerCase().trim();
+  const byType = MIME_TO_EXT[rawType];
+  if (byType) {
+    return {
+      extension: byType,
+      mimeType: rawType === 'image/jpg' ? 'image/jpeg' : rawType,
+    };
+  }
+
+  const name = (file.name || '').toLowerCase();
+  const byName = name.endsWith('.jpeg') || name.endsWith('.jpg')
+    ? 'jpg'
+    : name.endsWith('.png')
+      ? 'png'
+      : name.endsWith('.webp')
+        ? 'webp'
+        : name.endsWith('.pdf')
+          ? 'pdf'
+          : 'bin';
+
+  const mimeByExt = byName === 'jpg'
+    ? 'image/jpeg'
+    : byName === 'png'
+      ? 'image/png'
+      : byName === 'webp'
+        ? 'image/webp'
+        : byName === 'pdf'
+          ? 'application/pdf'
+          : (rawType || 'application/octet-stream');
+
+  return { extension: byName, mimeType: mimeByExt };
+}
+
+function addRecurringInterval(baseDate: Date, recurringFrequency?: string): Date {
+  const nextDate = new Date(baseDate);
+  switch ((recurringFrequency || '').toLowerCase()) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + 1);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + 7);
+      break;
+    case 'biweekly':
+      nextDate.setDate(nextDate.getDate() + 14);
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+    case 'quarterly':
+      nextDate.setMonth(nextDate.getMonth() + 3);
+      break;
+    case 'semiannually':
+      nextDate.setMonth(nextDate.getMonth() + 6);
+      break;
+    case 'annually':
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+      break;
+    default:
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+  }
+  return nextDate;
+}
+
+async function fetchExpensesForOrg(organizationId: string): Promise<Expense[]> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select(`
+      *,
+      expense_types (
+        id,
+        name
+      )
+    `)
+    .eq('organization_id', organizationId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  const debtIds = data?.filter((exp: any) => exp.withdrawal_from_balance).map((exp: any) => exp.withdrawal_from_balance) || [];
+  let debtsMap: Record<string, { id: string; debt_name: string }> = {};
+
+  if (debtIds.length > 0) {
+    const { data: debtsData, error: debtsError } = await supabase
+      .from('debts')
+      .select('id, debt_name')
+      .in('id', debtIds);
+
+    if (!debtsError && debtsData) {
+      debtsMap = debtsData.reduce(
+        (acc, debt) => {
+          acc[debt.id] = debt;
+          return acc;
+        },
+        {} as Record<string, { id: string; debt_name: string }>
+      );
+    }
+  }
+
+  const bankAccountIds = data?.filter((exp: any) => exp.bank_account_id).map((exp: any) => exp.bank_account_id) || [];
+  let bankAccountsMap: Record<string, { id: string; name: string }> = {};
+
+  if (bankAccountIds.length > 0) {
+    const { data: bankAccountsData, error: bankAccountsError } = await supabase
+      .from('bank_accounts')
+      .select('id, name')
+      .in('id', bankAccountIds);
+
+    if (!bankAccountsError && bankAccountsData) {
+      bankAccountsMap = bankAccountsData.reduce(
+        (acc, bankAccount) => {
+          acc[bankAccount.id] = bankAccount;
+          return acc;
+        },
+        {} as Record<string, { id: string; name: string }>
+      );
+    }
+  }
+
+  const transformedData = data?.map((expense: any) => ({
+    ...expense,
+    receipt_urls: Array.isArray(expense.receipt_urls)
+      ? (expense.receipt_urls as string[])
+      : null,
+    expense_type: expense.expense_types?.name || expense.expense_type || 'Unknown',
+    withdrawal_from_balance_debt:
+      expense.withdrawal_from_balance && debtsMap[expense.withdrawal_from_balance]
+        ? debtsMap[expense.withdrawal_from_balance]
+        : null,
+    withdrawal_from_balance_bank_account:
+      expense.bank_account_id && bankAccountsMap[expense.bank_account_id]
+        ? bankAccountsMap[expense.bank_account_id]
+        : null,
+  }));
+
+  return transformedData || [];
 }
 
 export const useExpenses = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const { updateBalance } = useBankAccountBalances();
   const [isCreating, setIsCreating] = useState(false);
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
 
-  const fetchExpenses = async () => {
-    if (!organizationId) return;
+  const queryKey = [...EXPENSES_QUERY_KEY, organizationId] as const;
 
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('expenses')
-        .select(`
-          *,
-          expense_types (
-            id,
-            name
-          )
-        `)
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+  const {
+    data: expenses = [],
+    isLoading,
+    isPending,
+    refetch,
+    isError,
+    error,
+  } = useQuery({
+    queryKey,
+    queryFn: () => fetchExpensesForOrg(organizationId!),
+    enabled: !!organizationId,
+    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000, // 2 min — avoid refetch on mount when revisiting; invalidateQueries after create/delete still refetches
+  });
 
-      if (error) throw error;
-      
-      // Fetch debts separately for expenses that have withdrawal_from_balance
-      const debtIds = data?.filter(exp => exp.withdrawal_from_balance).map(exp => exp.withdrawal_from_balance) || [];
-      let debtsMap: Record<string, { id: string; debt_name: string }> = {};
-      
-      if (debtIds.length > 0) {
-        const { data: debtsData, error: debtsError } = await supabase
-          .from('debts')
-          .select('id, debt_name')
-          .in('id', debtIds);
-        
-        if (!debtsError && debtsData) {
-          debtsMap = debtsData.reduce((acc, debt) => {
-            acc[debt.id] = debt;
-            return acc;
-          }, {} as Record<string, { id: string; debt_name: string }>);
-        }
-      }
-      
-      // Fetch bank accounts separately for expenses that have bank_account_id
-      const bankAccountIds = data?.filter(exp => exp.bank_account_id).map(exp => exp.bank_account_id) || [];
-      let bankAccountsMap: Record<string, { id: string; name: string }> = {};
-      
-      if (bankAccountIds.length > 0) {
-        const { data: bankAccountsData, error: bankAccountsError } = await supabase
-          .from('bank_accounts')
-          .select('id, name')
-          .in('id', bankAccountIds);
-        
-        if (!bankAccountsError && bankAccountsData) {
-          bankAccountsMap = bankAccountsData.reduce((acc, bankAccount) => {
-            acc[bankAccount.id] = bankAccount;
-            return acc;
-          }, {} as Record<string, { id: string; name: string }>);
-        }
-      }
-      
-      // Transform data to include expense type name, debt name, and bank account name
-      const transformedData = data?.map((expense: any) => ({
-        ...expense,
-        expense_type: expense.expense_types?.name || expense.expense_type || 'Unknown',
-        withdrawal_from_balance_debt: expense.withdrawal_from_balance && debtsMap[expense.withdrawal_from_balance]
-          ? debtsMap[expense.withdrawal_from_balance]
-          : null,
-        withdrawal_from_balance_bank_account: expense.bank_account_id && bankAccountsMap[expense.bank_account_id]
-          ? bankAccountsMap[expense.bank_account_id]
-          : null
-      }));
-      
-      setExpenses(transformedData || []);
-    } catch (error) {
-      console.error('Error fetching expenses:', error);
+  useEffect(() => {
+    if (isError && error) {
       toast.error('Failed to load expenses');
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [isError, error]);
 
   const uploadReceiptFile = async (file: File): Promise<string | null> => {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { extension, mimeType } = normalizeReceiptMetadata(file);
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${extension}`;
       const filePath = `${organizationId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('expense-receipts')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          contentType: mimeType,
+          upsert: false,
+        });
 
       if (uploadError) throw uploadError;
 
@@ -155,7 +260,12 @@ export const useExpenses = () => {
       return urlData.publicUrl;
     } catch (error) {
       console.error('Error uploading receipt:', error);
-      toast.error('Failed to upload receipt file');
+      const rawMessage =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message?: unknown }).message ?? '')
+          : '';
+      const detailedMessage = rawMessage.trim() || 'Failed to upload receipt file';
+      toast.error(detailedMessage);
       return null;
     }
   };
@@ -169,15 +279,22 @@ export const useExpenses = () => {
     try {
       setIsCreating(true);
 
-      let receiptUrl: string | null = null;
-      if (expenseData.receipt_file) {
-        receiptUrl = await uploadReceiptFile(expenseData.receipt_file);
-        if (!receiptUrl) {
-          return false; // Upload failed
+      const receiptUrls: string[] = [];
+      if (expenseData.receipt_files?.length) {
+        for (const f of expenseData.receipt_files) {
+          const u = await uploadReceiptFile(f);
+          if (!u) return false;
+          receiptUrls.push(u);
         }
+      } else if (expenseData.receipt_file) {
+        const u = await uploadReceiptFile(expenseData.receipt_file);
+        if (!u) return false;
+        receiptUrls.push(u);
       }
+      const receiptUrl = receiptUrls[0] ?? null;
+      const receiptUrlsJson =
+        receiptUrls.length > 1 ? receiptUrls : null;
 
-      // Get the expense type ID from the database
       const { data: expenseTypes, error: typeError } = await supabase
         .from('expense_types')
         .select('id')
@@ -189,7 +306,6 @@ export const useExpenses = () => {
         console.error('Error finding expense type:', typeError);
       }
 
-      // Get the expense category ID from the database
       const { data: expenseCategories, error: categoryError } = await supabase
         .from('expense_categories')
         .select('id')
@@ -201,12 +317,17 @@ export const useExpenses = () => {
         console.error('Error finding expense category:', categoryError);
       }
 
-      // Calculate next payment date for recurring expenses
       let nextPaymentDate: string | null = null;
-      if (expenseData.is_recurring && expenseData.first_payment_date && expenseData.recurring_frequency) {
+      const isSettlementRow = !!expenseData.recurring_settlement_for_expense_id;
+      if (
+        !isSettlementRow &&
+        expenseData.is_recurring &&
+        expenseData.first_payment_date &&
+        expenseData.recurring_frequency
+      ) {
         const firstPayment = new Date(expenseData.first_payment_date);
         const nextPayment = new Date(firstPayment);
-        
+
         switch (expenseData.recurring_frequency) {
           case 'daily':
             nextPayment.setDate(nextPayment.getDate() + 1);
@@ -256,45 +377,42 @@ export const useExpenses = () => {
           is_recurring: expenseData.is_recurring,
           recurring_frequency: expenseData.recurring_frequency || null,
           first_payment_date: expenseData.first_payment_date || null,
-          next_payment_date: nextPaymentDate,
+          next_payment_date: isSettlementRow ? null : nextPaymentDate,
           description: expenseData.description || null,
           receipt_url: receiptUrl,
+          receipt_urls: receiptUrlsJson,
           created_by: userData.user.id,
           purchase_request_id: expenseData.purchase_request_id || null,
+          recurring_settlement_for_expense_id:
+            expenseData.recurring_settlement_for_expense_id || null,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      // Update bank account balance if bank_account_id is set
       if (expenseData.bank_account_id && data?.id) {
         try {
-          // Ensure balance exists first, then update
           await updateBalance(
             expenseData.bank_account_id,
-            -expenseData.amount, // Negative for expense
+            -expenseData.amount,
             'expense',
             data.id,
             `Expense: ${expenseData.expense_name}`
           );
         } catch (balanceError) {
           console.error('Error updating bank account balance:', balanceError);
-          // Don't fail the expense creation if balance update fails
         }
       }
 
       toast.success('Expense created successfully!');
-      
-      // Invalidate bank account balances to refresh the balance display
+
       queryClient.invalidateQueries({ queryKey: ['bank-account-balances', organizationId] });
-      
-      await fetchExpenses(); // Refresh the list
+      queryClient.invalidateQueries({ queryKey });
       return data;
     } catch (error: any) {
       console.error('Error creating expense:', error);
-      
-      // Handle specific error messages from trigger
+
       if (error?.message) {
         if (error.message.includes('Insufficient available limit')) {
           toast.error(error.message);
@@ -308,7 +426,7 @@ export const useExpenses = () => {
       } else {
         toast.error('Failed to create expense');
       }
-      
+
       return false;
     } finally {
       setIsCreating(false);
@@ -322,7 +440,6 @@ export const useExpenses = () => {
     }
 
     try {
-      // Soft delete by setting status to 'deleted'
       const { error } = await supabase
         .from('expenses')
         .update({ status: 'deleted' })
@@ -332,7 +449,7 @@ export const useExpenses = () => {
       if (error) throw error;
 
       toast.success('Expense deleted successfully!');
-      await fetchExpenses(); // Refresh the list
+      queryClient.invalidateQueries({ queryKey });
       return true;
     } catch (error: any) {
       console.error('Error deleting expense:', error);
@@ -341,9 +458,51 @@ export const useExpenses = () => {
     }
   };
 
-  useEffect(() => {
-    fetchExpenses();
-  }, [organizationId]);
+  const updateRecurringBillAfterPayNow = async (billId: string, paymentDate: string) => {
+    if (!organizationId) {
+      toast.error('Organization not found');
+      return false;
+    }
+
+    try {
+      const { data: sourceBill, error: sourceError } = await supabase
+        .from('expenses')
+        .select('id, organization_id, recurring_frequency, next_payment_date')
+        .eq('id', billId)
+        .eq('organization_id', organizationId)
+        .single();
+
+      if (sourceError || !sourceBill) {
+        throw sourceError || new Error('Source recurring bill not found');
+      }
+
+      const oldDueDate = sourceBill.next_payment_date ? new Date(sourceBill.next_payment_date) : null;
+      const currentPaymentDate = new Date(paymentDate);
+      const useOldDueDateAsBase = !!oldDueDate && currentPaymentDate.getTime() <= oldDueDate.getTime();
+      const baseDate = useOldDueDateAsBase && oldDueDate ? oldDueDate : currentPaymentDate;
+      const nextDate = addRecurringInterval(baseDate, sourceBill.recurring_frequency || undefined);
+      const nextPaymentDate = nextDate.toISOString().split('T')[0];
+
+      const { error: updateError } = await supabase
+        .from('expenses')
+        .update({
+          status: 'active',
+          next_payment_date: nextPaymentDate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', billId)
+        .eq('organization_id', organizationId);
+
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey });
+      return true;
+    } catch (error: any) {
+      console.error('Error updating recurring bill after paynow:', error);
+      toast.error(error?.message || 'Failed to update recurring bill');
+      return false;
+    }
+  };
 
   return {
     expenses,
@@ -351,6 +510,7 @@ export const useExpenses = () => {
     isCreating,
     createExpense,
     deleteExpense,
-    refetch: fetchExpenses,
+    updateRecurringBillAfterPayNow,
+    refetch,
   };
 };

@@ -250,6 +250,7 @@ function TasksTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
   const { pending, loading, fetchError, refresh } = useCompletionApprovals([]);
   const { notifications: dailyTaskNotifications, isLoading: dailyTaskLoading, markOneRead: markDailyTaskOneRead, markAllRead: markDailyTaskAllRead, refetch: refetchDailyTask } = useDailyTaskNotifications();
+  const unreadDailyTaskNotifications = dailyTaskNotifications.filter((n) => n.read_at == null);
   const { getOrCreate } = usePublicReviewToken();
   const [loadingRowId, setLoadingRowId] = useState<string | null>(null);
 
@@ -344,7 +345,7 @@ function TasksTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
           <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
           {t("dailyTask.approval.loading", "Loading...")}
         </p>
-      ) : pending.length === 0 && dailyTaskNotifications.length === 0 ? (
+      ) : pending.length === 0 && unreadDailyTaskNotifications.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("dailyTask.notificationsEmpty", "No task notifications.")}</p>
       ) : (
         <div className="space-y-4">
@@ -395,7 +396,7 @@ function TasksTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
               </ul>
             </>
           )}
-          {dailyTaskNotifications.length > 0 && (
+          {unreadDailyTaskNotifications.length > 0 && (
             <>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted-foreground">{t("dailyTask.notificationsUpdates", "Task updates")}</p>
@@ -404,7 +405,7 @@ function TasksTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
                 </Button>
               </div>
               <ul className="space-y-2">
-                {dailyTaskNotifications.map((item) => (
+                {unreadDailyTaskNotifications.map((item) => (
                   <li key={item.id}>
                     <div
                       className={cn(
@@ -457,6 +458,7 @@ function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void })
   const navigate = useNavigate();
   const { toast } = useToast();
   const { notifications, isLoading, error, markOneRead, markAllRead, refetch } = usePlanStatusChangeNotifications();
+  const unreadNotifications = notifications.filter((n) => n.read_at == null);
   const { getOrCreate } = usePublicReviewToken();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
@@ -513,7 +515,7 @@ function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void })
           <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
           {t("mobileHome.loading", "Loading...")}
         </p>
-      ) : notifications.length === 0 ? (
+      ) : unreadNotifications.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("mobileHome.notificationsNoUpdates", "No updates")}</p>
       ) : (
         <>
@@ -529,7 +531,7 @@ function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void })
             </Button>
           </div>
           <ul className="space-y-2">
-            {notifications.map((item) => (
+            {unreadNotifications.map((item) => (
               <li key={item.id}>
                 <div
                   className={cn(

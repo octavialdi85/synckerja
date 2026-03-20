@@ -42,6 +42,7 @@ export const CurrentSubscription = memo(({
     : (subscriptionStatus.subscription_end_date || subscriptionStatus.end_date);
   const daysRemaining = nextBillingOverride != null ? nextBillingOverride.daysRemaining : subscriptionStatus.days_until_expiry;
   const showNextBillingLoading = nextBillingLoading && nextBillingOverride == null;
+  const isExpired = subscriptionStatus.is_expired || daysRemaining < 0;
 
   return (
     <Card>
@@ -142,8 +143,22 @@ export const CurrentSubscription = memo(({
           )}
         </div>
 
-        {/* Warnings and Alerts */}
-        {(subscriptionStatus.needs_renewal || subscriptionStatus.over_limit) && (
+        {/* Warnings and Alerts: "expires soon" only when not yet expired; when expired show different message */}
+        {isExpired ? (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-red-800">
+                  {subscriptionStatus.is_trial ? t('subscription.overview.trialExpired', 'Trial has expired') : t('subscription.overview.subscriptionExpired', 'Subscription has expired')}
+                </p>
+                <p className="text-xs text-red-600">
+                  {t('subscription.overview.choosePlanRenew')}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (subscriptionStatus.needs_renewal || subscriptionStatus.over_limit) && (
           <div className="rounded-lg bg-orange-50 border border-orange-200 p-4">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />

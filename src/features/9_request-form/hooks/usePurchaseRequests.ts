@@ -95,6 +95,8 @@ export const usePurchaseRequests = () => {
 
   return useQuery({
     queryKey: ['purchase-requests', organizationId],
+    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000, // 2 min — avoid refetch on mount when revisiting; prevents flicker
     queryFn: async () => {
       if (!organizationId) {
         return [];

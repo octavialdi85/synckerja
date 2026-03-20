@@ -22,8 +22,47 @@ interface SafeAreaInsetsPlugin {
   getInsets(): Promise<{ top: number; bottom: number }>;
 }
 
-/** Fallback when platform reports 0,0 (e.g. some emulators or timing). Only used on native. */
-const NATIVE_FALLBACK_INSETS: SafeAreaInsets = { top: 24, bottom: 48 };
+/**
+ * Fallback when platform reports 0,0 (e.g. some emulators or timing).
+ * Android plugin returns dp-aligned values (physical px ÷ density) so these match CSS px.
+ */
+const NATIVE_FALLBACK_INSETS: SafeAreaInsets = { top: 28, bottom: 28 };
+
+/**
+ * Android often reports status-bar top = 0 while bottom (nav / gesture bar) > 0.
+ * Using raw values then leaves --safe-area-inset-top at 0 and headers sit under the status bar.
+ *
+ * When WindowInsets report full values, --safe-area-inset-top can jump vs the old fallback-only path.
+ * On Android, cap top to the same ceiling as NATIVE_FALLBACK.
+ *
+ * Bottom inset must stay on the CSS vars so footers, drawers, and modal-above-safe-area end above the
+ * system nav strip (layout), while index.css android rules use var-only (no env) to avoid doubling.
+ * When the plugin reports 0 for bottom, use NATIVE_FALLBACK_INSETS.bottom so layout matches the strip.
+ */
+function normalizeNativeInsets(raw: SafeAreaInsets): SafeAreaInsets {
+  const isAndroid = Capacitor.getPlatform() === "android";
+  let bottom = Math.max(0, raw.bottom ?? 0);
+  let top = Math.max(0, raw.top ?? 0);
+
+  if (isAndroid && top === 0) {
+    top = NATIVE_FALLBACK_INSETS.top;
+  }
+
+  if (top === 0 && bottom === 0) {
+    return { ...NATIVE_FALLBACK_INSETS };
+  }
+
+  if (isAndroid) {
+    top = Math.min(top, NATIVE_FALLBACK_INSETS.top);
+    if (bottom === 0) {
+      bottom = NATIVE_FALLBACK_INSETS.bottom;
+    } else {
+      bottom = Math.min(bottom, 48);
+    }
+  }
+
+  return { top, bottom };
+}
 
 /**
  * Provides safe area insets from the platform (Android WindowInsets API).
@@ -46,19 +85,19 @@ export function SafeAreaInsetsProvider({ children }: SafeAreaInsetsProviderProps
       }
     };
     const first = await tryFetch();
-    setInsets(first.top > 0 || first.bottom > 0 ? first : NATIVE_FALLBACK_INSETS);
+    setInsets(normalizeNativeInsets(first));
     if (first.top === 0 && first.bottom === 0) {
       const t1 = window.setTimeout(async () => {
         const retry = await tryFetch();
-        if (retry.top > 0 || retry.bottom > 0) setInsets(retry);
+        if (retry.top > 0 || retry.bottom > 0) setInsets(normalizeNativeInsets(retry));
       }, 300);
       const t2 = window.setTimeout(async () => {
         const retry = await tryFetch();
-        if (retry.top > 0 || retry.bottom > 0) setInsets(retry);
+        if (retry.top > 0 || retry.bottom > 0) setInsets(normalizeNativeInsets(retry));
       }, 800);
       const t3 = window.setTimeout(async () => {
         const retry = await tryFetch();
-        if (retry.top > 0 || retry.bottom > 0) setInsets(retry);
+        if (retry.top > 0 || retry.bottom > 0) setInsets(normalizeNativeInsets(retry));
       }, 1500);
       retryCleanupRef.current = () => {
         window.clearTimeout(t1);

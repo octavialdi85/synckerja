@@ -18,7 +18,7 @@ export interface DebtPaymentRecord {
 export const useDebtPayments = (debtId: string | null) => {
   const { organizationId } = useCurrentOrg();
 
-  const { data: payments = [], isLoading } = useQuery({
+  const { data: payments = [], isLoading, refetch } = useQuery({
     queryKey: ['debt-payments', organizationId, debtId],
     queryFn: async (): Promise<DebtPaymentRecord[]> => {
       if (!organizationId || !debtId) return [];
@@ -62,5 +62,5 @@ export const useDebtPayments = (debtId: string | null) => {
     enabled: !!organizationId && !!debtId,
   });
 
-  return { payments, isLoading };
+  return { payments, isLoading, refetch };
 };

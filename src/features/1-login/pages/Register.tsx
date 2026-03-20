@@ -68,7 +68,7 @@ const Register = () => {
   }, [searchParams]);
 
   return (
-    <div className="auth-page-fixed flex">
+    <div className="auth-page-fixed flex safe-area-top">
       {/* Left Panel - Testimonials */}
       <div className="hidden lg:flex lg:flex-1">
         <AuthTestimonialsPanel />

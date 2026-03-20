@@ -16,10 +16,12 @@ interface MobileConversationListProps {
   /** When true (pull-to-refresh), do not show skeleton so content stays visible (anti-flicker). */
   isRefreshing?: boolean;
   error?: Error | null;
+  /** When gesture locks to card swipe, parent should disable pull-to-refresh. */
+  onSwipeLockChange?: (locked: boolean) => void;
 }
 
 export function MobileConversationList(props: MobileConversationListProps) {
-  const { isRefreshing = false, ...rest } = props;
+  const { isRefreshing = false, onSwipeLockChange, ...rest } = props;
   const showSkeleton = rest.isLoading && !isRefreshing;
   if (showSkeleton) {
     return (
@@ -30,7 +32,7 @@ export function MobileConversationList(props: MobileConversationListProps) {
   }
   return (
     <div className="min-h-0">
-      <ConversationList {...rest} />
+      <ConversationList {...rest} onSwipeLockChange={onSwipeLockChange} />
     </div>
   );
 }

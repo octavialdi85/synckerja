@@ -15,7 +15,8 @@ Tujuan: konsistensi header, nav footer, safe area (status bar + pita hitam devic
 ### Checklist wajib (halaman baru / refactor halaman mobile)
 
 1. **Layout shell**
-   - `main`: `fixed inset-x-0 z-0`, style dari `useVisualViewport()` (`top`, `height`, `minHeight`).
+   - `const { mainFixedStyle } = useVisualViewport();` (atau tambahkan `height` / `offsetTop` bila perlu).
+   - `main`: `fixed inset-x-0 z-0`, **`style={mainFixedStyle}`** (bukan `height: visualViewport.height` mentah — di Android itu membuat kolom lebih pendek dan celah putih). `mainFixedStyle` memakai `top` + `bottom: 0` saat keyboard tertutup, dan `top` + `height` saat keyboard terbuka.
    - Urutan: **header** (`flex-shrink-0 sticky top-0 z-30` + `safe-area-top`) → **area scroll** (`flex-1 min-h-0 overflow-hidden flex flex-col` → dalamnya `flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col`) → **NavigationFooter** atau **ToolsNavigationFooter** dengan **`className="safe-area-bottom-lower"`**.
    - **Pengecualian (scroll dalam):** Jika halaman punya komponen dengan scroll dalam (mis. tab berisi `overflow-y-auto`), pakai pola **scroll-dalam saja** — area tengah tanpa overflow-y-auto, wrapper konten + komponen anak rantai `flex-1 min-h-0` sampai ke elemen scroll. Lihat **§1.1**.
 
@@ -41,7 +42,7 @@ Tujuan: konsistensi header, nav footer, safe area (status bar + pita hitam devic
 ## 1. Struktur halaman (layout shell)
 
 - **Container utama:** Elemen `main` dengan `flex flex-col`, **position fixed** (`fixed inset-x-0 z-0`), mengisi viewport.
-- **Viewport:** Wajib **`useVisualViewport()`** — pakai `height` dan `offsetTop` — agar saat keyboard atau inset berubah, layout tetap benar. Style: `top: viewportOffsetTop`, `height: viewportHeight > 0 ? viewportHeight : undefined`, `minHeight: viewportHeight > 0 ? undefined : '100dvh'`.
+- **Viewport:** Wajib **`useVisualViewport()`** — untuk `main`/`div` shell pakai **`mainFixedStyle`**. Di **Android native**, saat keyboard tertutup shell memakai **`top: 0; bottom: 0`**; deteksi keyboard ~**65%** tinggi layar (`KEYBOARD_VIEWPORT_MAX_HEIGHT_RATIO` — WebView sering melaporkan `visualViewport` terlalu pendek). **`min-h-[100dvh]`** pada `SidebarProvider`, bukan `min-h-svh`, agar tidak letterbox.
 - **Urutan vertikal (wajib):**
   1. **Header** — `flex-shrink-0`, `sticky top-0`, `z-30`
   2. **Area konten scroll** — wrapper `flex-1 min-h-0 overflow-hidden flex flex-col`, dalamnya `flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col`
@@ -52,11 +53,7 @@ Contoh struktur:
 ```tsx
 <main
   className="flex flex-col bg-background fixed inset-x-0 z-0"
-  style={{
-    top: viewportOffsetTop,
-    height: viewportHeight > 0 ? viewportHeight : undefined,
-    minHeight: viewportHeight > 0 ? undefined : '100dvh',
-  }}
+  style={mainFixedStyle}
 >
   <header className="flex-shrink-0 sticky top-0 z-30 ... safe-area-top">...</header>
   <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

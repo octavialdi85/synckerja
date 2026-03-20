@@ -52,9 +52,20 @@ public class SafeAreaInsetsPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /**
+     * WindowInsets return physical px; WebView CSS uses px ≈ dp. Convert with display density so
+     * JS/CSS heights match the real system bar thickness (avoids a ~density× overly thick strip).
+     */
     private void resolveWithInsets(PluginCall call, WindowInsetsCompat insets) {
-        int top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-        int bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+        Activity activity = (Activity) getContext();
+        float density = activity.getResources().getDisplayMetrics().density;
+        if (density <= 0f) {
+            density = 1f;
+        }
+        int topPx = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+        int bottomPx = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+        int top = Math.round(topPx / density);
+        int bottom = Math.round(bottomPx / density);
         JSObject ret = new JSObject();
         ret.put("top", top);
         ret.put("bottom", bottom);

@@ -1,0 +1,554 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/mobile/hooks/use-mobile";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/features/ui/dialog";
+import { Button } from "@/features/ui/button";
+import { Input } from "@/features/ui/input";
+import { Label } from "@/features/ui/label";
+import { Textarea } from "@/features/ui/textarea";
+import { Checkbox } from "@/features/ui/checkbox";
+import { useIncomeTransactions } from "@/features/4-1-dashboard/hooks";
+import { useIncomeMasterData } from "@/features/4-1-dashboard/hooks";
+import type { IncomeTransactionWithRelations } from "@/features/4-1-dashboard/types";
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/mobile/components/ui/drawer";
+import { Camera, Check, ChevronDown, FileText, Upload, X } from "lucide-react";
+import { CameraModal } from "@/mobile/components/CameraModal";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+
+const formSchema = z.object({
+  transaction_date: z.string().min(1, "Transaction date is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  customer_name: z.string().optional(),
+  payment_method: z.string().optional(),
+  income_type_id: z.string().optional(),
+  category_id: z.string().optional(),
+  service_id: z.string().optional(),
+  sub_service_id: z.string().optional(),
+  is_recurring: z.boolean().default(false),
+  recurring_frequency: z.string().optional(),
+  description: z.string().optional(),
+  receipt_file: z.instanceof(File).optional(),
+});
+
+type FormData = z.infer<typeof formSchema>;
+const MAX_RECEIPT_SIZE = 10 * 1024 * 1024;
+
+function validateReceiptFile(file: File): boolean {
+  const type = file.type.toLowerCase();
+  return type.startsWith("image/") || type === "application/pdf";
+}
+
+function dataUrlToImageFile(dataUrl: string, fileName: string): File {
+  const [meta, base64] = dataUrl.split(",");
+  const mimeMatch = /data:(.*?);base64/.exec(meta ?? "");
+  const mime = mimeMatch?.[1] || "image/jpeg";
+  const binary = atob(base64 ?? "");
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], fileName, { type: mime });
+}
+
+interface MobileEditIncomeTransactionModalProps {
+  income: IncomeTransactionWithRelations | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function MobileEditIncomeTransactionModal({
+  income,
+  open,
+  onOpenChange,
+}: MobileEditIncomeTransactionModalProps) {
+  const { t } = useAppTranslation();
+  const isMobile = useIsMobile();
+  const { updateIncomeTransaction, isUpdating } = useIncomeTransactions();
+  const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
+  const [receiptFile, setReceiptFile] = useState<File | undefined>(undefined);
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null);
+  const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
+  const [paymentMethodDrawerOpen, setPaymentMethodDrawerOpen] = useState(false);
+  const [incomeTypeDrawerOpen, setIncomeTypeDrawerOpen] = useState(false);
+  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
+  const [serviceDrawerOpen, setServiceDrawerOpen] = useState(false);
+  const [subServiceDrawerOpen, setSubServiceDrawerOpen] = useState(false);
+  const [frequencyDrawerOpen, setFrequencyDrawerOpen] = useState(false);
+  const receiptFileInputRef = useRef<HTMLInputElement>(null);
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      transaction_date: new Date().toISOString().split("T")[0],
+      amount: 0,
+      customer_name: "",
+      payment_method: "",
+      income_type_id: "",
+      category_id: "",
+      service_id: "",
+      sub_service_id: "",
+      is_recurring: false,
+      recurring_frequency: "",
+      description: "",
+    },
+  });
+
+  const watchedServiceId = form.watch("service_id");
+  const watchedIncomeTypeId = form.watch("income_type_id");
+  const watchedIsRecurring = form.watch("is_recurring");
+
+  const filteredSubServices = useMemo(
+    () => subServices.filter((subService) => subService.service_id === watchedServiceId),
+    [subServices, watchedServiceId]
+  );
+  const filteredIncomeCategories = useMemo(
+    () => incomeCategories.filter((category) => category.income_types_id === watchedIncomeTypeId),
+    [incomeCategories, watchedIncomeTypeId]
+  );
+
+  const paymentMethods = [
+    { value: "cash", label: "Cash" },
+    { value: "bank_transfer", label: "Bank Transfer" },
+    { value: "credit_card", label: "Credit Card" },
+    { value: "debit_card", label: "Debit Card" },
+    { value: "check", label: "Check" },
+    { value: "digital_wallet", label: "Digital Wallet" },
+    { value: "other", label: "Other" },
+  ];
+  const recurringFrequencies = [
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "quarterly", label: "Quarterly" },
+    { value: "yearly", label: "Yearly" },
+  ];
+
+  const selectedReceiptPreviewUrl = useMemo(
+    () => (receiptFile && receiptFile.type.startsWith("image/") ? URL.createObjectURL(receiptFile) : null),
+    [receiptFile]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (selectedReceiptPreviewUrl) URL.revokeObjectURL(selectedReceiptPreviewUrl);
+    };
+  }, [selectedReceiptPreviewUrl]);
+
+  useEffect(() => {
+    if (income) {
+      form.reset({
+        transaction_date: income.transaction_date,
+        amount: income.amount,
+        customer_name: income.customer_name || "",
+        payment_method: income.payment_method || "",
+        income_type_id: income.income_type_id || "",
+        category_id: income.category_id || "",
+        service_id: income.service_id || "",
+        sub_service_id: income.sub_service_id || "",
+        is_recurring: income.is_recurring,
+        recurring_frequency: income.recurring_frequency || "",
+        description: income.description || "",
+      });
+      setReceiptFile(undefined);
+    }
+  }, [income, form]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveExistingReceipt = async () => {
+      if (!open || !income?.receipt_file_path) {
+        setExistingReceiptUrl(null);
+        return;
+      }
+      const path = income.receipt_file_path as string;
+      if (path.startsWith("http")) {
+        setExistingReceiptUrl(path);
+        return;
+      }
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { data } = await supabase.storage.from("income-receipts").createSignedUrl(path, 60 * 30);
+        if (!cancelled) {
+          setExistingReceiptUrl(data?.signedUrl ?? null);
+        }
+      } catch {
+        if (!cancelled) setExistingReceiptUrl(null);
+      }
+    };
+
+    void resolveExistingReceipt();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, income?.receipt_file_path]);
+
+  const handleReceiptFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > MAX_RECEIPT_SIZE) return;
+      if (!validateReceiptFile(file)) return;
+      setReceiptFile(file);
+      form.setValue("receipt_file", file);
+      e.target.value = "";
+    },
+    [form]
+  );
+
+  const handleTakeReceiptPhoto = useCallback(() => {
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      receiptFileInputRef.current?.click();
+      return;
+    }
+    setReceiptCameraOpen(true);
+  }, []);
+
+  const handleReceiptCameraCapture = useCallback(
+    (imageData: string) => {
+      const file = dataUrlToImageFile(imageData, `income_receipt_${Date.now()}.jpg`);
+      if (file.size <= MAX_RECEIPT_SIZE && validateReceiptFile(file)) {
+        setReceiptFile(file);
+        form.setValue("receipt_file", file);
+      }
+      setReceiptCameraOpen(false);
+    },
+    [form]
+  );
+
+  const onSubmit = (values: FormData) => {
+    if (!income) return;
+    updateIncomeTransaction(
+      { id: income.id, ...values },
+      {
+        onSuccess: () => {
+          onOpenChange(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className={cn(
+          isMobile
+            ? "fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden"
+            : "max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
+        )}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+          <DialogTitle className="text-lg font-semibold">Edit Income Transaction</DialogTitle>
+          <DialogDescription>Update selected income transaction data</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Transaction Date</Label>
+                <Input type="date" className="text-sm" {...form.register("transaction_date")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Amount</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="text-sm"
+                  value={form.watch("amount") ?? 0}
+                  onChange={(e) => form.setValue("amount", parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Customer Name</Label>
+                <Input className="text-sm" placeholder="Enter customer name" {...form.register("customer_name")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <DrawerSelectField
+                  open={paymentMethodDrawerOpen}
+                  onOpenChange={setPaymentMethodDrawerOpen}
+                  title="Payment Method"
+                  value={form.watch("payment_method") || ""}
+                  placeholder="Select payment method"
+                  options={paymentMethods}
+                  onSelect={(value) => form.setValue("payment_method", value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Income Type</Label>
+                <DrawerSelectField
+                  open={incomeTypeDrawerOpen}
+                  onOpenChange={setIncomeTypeDrawerOpen}
+                  title="Income Type"
+                  value={form.watch("income_type_id") || ""}
+                  placeholder="Select income type"
+                  options={incomeTypes.map((type) => ({ value: type.id, label: type.name }))}
+                  onSelect={(value) => {
+                    form.setValue("income_type_id", value);
+                    form.setValue("category_id", "");
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <DrawerSelectField
+                  open={categoryDrawerOpen}
+                  onOpenChange={setCategoryDrawerOpen}
+                  title="Category"
+                  value={form.watch("category_id") || ""}
+                  placeholder="Select category"
+                  options={filteredIncomeCategories.map((category) => ({ value: category.id, label: category.name }))}
+                  onSelect={(value) => form.setValue("category_id", value)}
+                  disabled={!watchedIncomeTypeId}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <DrawerSelectField
+                  open={serviceDrawerOpen}
+                  onOpenChange={setServiceDrawerOpen}
+                  title="Service"
+                  value={form.watch("service_id") || ""}
+                  placeholder="Select service"
+                  options={services.map((service) => ({ value: service.id, label: service.name }))}
+                  onSelect={(value) => {
+                    form.setValue("service_id", value);
+                    form.setValue("sub_service_id", "");
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Sub Service</Label>
+                <DrawerSelectField
+                  open={subServiceDrawerOpen}
+                  onOpenChange={setSubServiceDrawerOpen}
+                  title="Sub Service"
+                  value={form.watch("sub_service_id") || ""}
+                  placeholder="Select sub service"
+                  options={filteredSubServices.map((subService) => ({ value: subService.id, label: subService.name }))}
+                  onSelect={(value) => form.setValue("sub_service_id", value)}
+                  disabled={!watchedServiceId}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  checked={watchedIsRecurring}
+                  onCheckedChange={(checked) => form.setValue("is_recurring", checked as boolean)}
+                />
+                <Label className="text-sm">Recurring Transaction</Label>
+              </div>
+            </div>
+
+            {watchedIsRecurring ? (
+              <div className="space-y-2">
+                <Label>Recurring Frequency</Label>
+                <DrawerSelectField
+                  open={frequencyDrawerOpen}
+                  onOpenChange={setFrequencyDrawerOpen}
+                  title="Recurring Frequency"
+                  value={form.watch("recurring_frequency") || ""}
+                  placeholder="Select frequency"
+                  options={recurringFrequencies}
+                  onSelect={(value) => form.setValue("recurring_frequency", value)}
+                />
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                className="text-sm resize-none"
+                placeholder="Enter transaction description"
+                {...form.register("description")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("incomes.receiptFile", "Receipt File")}</Label>
+              <input
+                ref={receiptFileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                onChange={handleReceiptFileInputChange}
+              />
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
+                {receiptFile ? (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="relative aspect-square rounded-md border border-border overflow-hidden bg-muted">
+                      {receiptFile.type.startsWith("image/") && selectedReceiptPreviewUrl ? (
+                        <img src={selectedReceiptPreviewUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-1">
+                          <FileText className="h-6 w-6 text-muted-foreground" />
+                          <span className="text-[9px] text-muted-foreground line-clamp-2 break-all mt-0.5">
+                            {receiptFile.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="absolute top-0.5 right-0.5 rounded-full bg-background/90 p-0.5 shadow"
+                        onClick={() => {
+                          setReceiptFile(undefined);
+                          form.setValue("receipt_file", undefined);
+                        }}
+                        aria-label={t("common.remove", "Remove")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : existingReceiptUrl ? (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="relative aspect-square rounded-md border border-border overflow-hidden bg-muted">
+                      {!/\.pdf$/i.test(existingReceiptUrl) ? (
+                        <img src={existingReceiptUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-1">
+                          <FileText className="h-6 w-6 text-muted-foreground" />
+                          <span className="text-[9px] text-muted-foreground mt-0.5">PDF</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {t("expenses.receiptPhotoHint", "Take a photo of your receipt")}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground/80 mb-3">
+                  {t("expenses.receiptPhotoFormatsExtended", "JPG / PNG / WEBP / PDF, max 10MB per file")}
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && (
+                    <Button type="button" variant="outline" size="sm" onClick={handleTakeReceiptPhoto}>
+                      <Camera className="h-4 w-4 mr-1.5" />
+                      {t("expenses.takePhoto", "Take photo")}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => receiptFileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-1.5" />
+                    {t("expenses.chooseFromFiles", "Choose file")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isUpdating}>
+              {t("common.cancel", "Cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={form.handleSubmit(onSubmit)}
+              disabled={isUpdating}
+              className="min-w-[120px] flex items-center justify-center gap-1.5"
+            >
+              {isUpdating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>{t("common.updating", "Updating...")}</span>
+                </>
+              ) : (
+                t("common.update", "Update")
+              )}
+            </Button>
+          </div>
+        </div>
+        <CameraModal
+          open={receiptCameraOpen}
+          onClose={() => setReceiptCameraOpen(false)}
+          onCapture={handleReceiptCameraCapture}
+          title={t("expenses.receiptCameraTitle", "Receipt photo")}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DrawerSelectField({
+  open,
+  onOpenChange,
+  title,
+  value,
+  placeholder,
+  options,
+  onSelect,
+  disabled = false,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  value: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  onSelect: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const selectedLabel = options.find((opt) => opt.value === value)?.label || placeholder;
+
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerTrigger asChild>
+        <Button type="button" variant="outline" className="w-full h-10 justify-between text-sm font-normal" disabled={disabled}>
+          <span className={cn("truncate", value ? "text-foreground" : "text-muted-foreground")}>{selectedLabel}</span>
+          <ChevronDown className="h-4 w-4 flex-shrink-0" />
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent overlayClassName="z-[60]" className="z-[60] max-h-[85dvh] flex flex-col">
+        <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+          <DrawerTitle className="text-base font-semibold">{title}</DrawerTitle>
+          <DrawerDescription className="sr-only">Select {title}</DrawerDescription>
+        </DrawerHeader>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4 seamless-scroll">
+          {options.map((opt) => {
+            const active = value === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onSelect(opt.value);
+                  onOpenChange(false);
+                }}
+                className={cn(
+                  "flex items-center justify-between w-full px-3 py-2.5 text-left text-sm border-b border-border last:border-b-0",
+                  active ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                )}
+              >
+                <span className="truncate">{opt.label}</span>
+                {active ? <Check className="h-4 w-4 text-primary flex-shrink-0" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}

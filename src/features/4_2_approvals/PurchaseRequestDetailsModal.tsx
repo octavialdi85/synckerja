@@ -66,7 +66,8 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
 
   if (!request) return null;
 
-  const canApprove = userRole && ['owner', 'admin', 'hr'].includes(userRole);
+  const normalizedUserRole = typeof userRole === 'string' ? userRole : null;
+  const canApprove = !!normalizedUserRole && ['owner', 'admin', 'hr'].includes(normalizedUserRole);
   const canTakeAction = canApprove && (request.status === 'submitted' || request.status === 'pending_approval');
 
   const getStatusBadge = (status: string) => {
@@ -477,7 +478,7 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
                   {/* Withdrawal From Balance (optional at approval) */}
                   <div className="space-y-2">
                     <Label htmlFor="withdrawal-from-balance" className="text-sm font-medium">
-                      {t('expenses.withdrawalFromBalanceOptional')}
+                      {t('expenses.withdrawalFromBalanceOptional', 'Withdrawal From Balance (Optional)')}
                     </Label>
                     <Select
                       value={
@@ -502,7 +503,7 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
                       disabled={debtsLoading || bankAccountsLoading || balancesLoading}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? t('expenses.loading') : t('expenses.selectSourceOptional')}>
+                        <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? t('expenses.loading', 'Loading...') : t('expenses.selectSourceOptional', 'Select Source (Optional)')}>
                           {selectedWithdrawalFromBalance
                             ? (() => {
                                 const debt = debtsForExpense.find(d => d.id === selectedWithdrawalFromBalance);
@@ -528,10 +529,10 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">{t('expenses.none')}</SelectItem>
+                        <SelectItem value="none">{t('expenses.none', 'None')}</SelectItem>
                         {bankAccounts.length > 0 && (
                           <>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.bankAccounts')}</div>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.bankAccounts', 'Bank Accounts')}</div>
                             {bankAccounts.map((bankAccount) => {
                               const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
                               const availableBalance = balance?.balance ?? 0;
@@ -548,7 +549,7 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
                         )}
                         {debtsForExpense.length > 0 && (
                           <>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.debts')}</div>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.debts', 'Debts')}</div>
                             {debtsForExpense.map((debt) => {
                               const availableLimit = debt.available_limit ?? 0;
                               return (

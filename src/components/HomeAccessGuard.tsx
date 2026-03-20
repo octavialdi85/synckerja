@@ -5,8 +5,8 @@ import { useAuth } from '@/features/1-login';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
-import { LoadingDots } from './LoadingDots';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
 import { MobileSplashScreen } from '@/mobile/components/MobileSplashScreen';
 import { logger } from '@/config/logger';
 
@@ -260,56 +260,21 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
         );
       }
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
-            <LoadingDots size="lg" />
-            <p className="text-sm text-gray-600">Loading page...</p>
-            {showSlowConnectionWarning && (
-              <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                <WifiOff className="h-6 w-6 text-yellow-600" />
-                <p className="text-sm text-yellow-800 text-center">
-                  Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
-                </p>
-                <p className="text-xs text-yellow-600 text-center">
-                  Sistem akan mencoba ulang hingga {((Date.now() - loadingStartTime) / 1000).toFixed(0)} detik
-                </p>
-              </div>
-            )}
-            {userDataError && (
-              <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
-                <p className="text-sm text-red-800 text-center">
-                  Terjadi kesalahan: {userDataError.message}
-                </p>
-                <button 
-                  onClick={() => window.location.reload()} 
-                  className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-                >
-                  Muat Ulang Halaman
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
-          <LoadingDots size="lg" />
-          <p className="text-sm text-gray-600">Loading page...</p>
+        <>
+          <RouteLoadingSkeleton />
           {showSlowConnectionWarning && (
-            <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <WifiOff className="h-6 w-6 text-yellow-600" />
+            <div className="fixed bottom-4 left-4 right-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 z-50">
+              <WifiOff className="h-6 w-6 text-yellow-600 mx-auto mb-2 block" />
               <p className="text-sm text-yellow-800 text-center">
                 Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
               </p>
-              <p className="text-xs text-yellow-600 text-center">
+              <p className="text-xs text-yellow-600 text-center mt-1">
                 Sistem akan mencoba ulang hingga {((Date.now() - loadingStartTime) / 1000).toFixed(0)} detik
               </p>
             </div>
           )}
           {userDataError && (
-            <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+            <div className="fixed bottom-4 left-4 right-4 p-4 bg-red-50 rounded-lg border border-red-200 z-50">
               <p className="text-sm text-red-800 text-center">
                 Terjadi kesalahan: {userDataError.message}
               </p>
@@ -321,8 +286,37 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
               </button>
             </div>
           )}
-        </div>
-      </div>
+        </>
+      );
+    }
+    return (
+      <>
+        <RouteLoadingSkeleton />
+        {showSlowConnectionWarning && (
+          <div className="fixed bottom-4 left-4 right-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 z-50">
+            <WifiOff className="h-6 w-6 text-yellow-600 mx-auto mb-2 block" />
+            <p className="text-sm text-yellow-800 text-center">
+              Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
+            </p>
+            <p className="text-xs text-yellow-600 text-center mt-1">
+              Sistem akan mencoba ulang hingga {((Date.now() - loadingStartTime) / 1000).toFixed(0)} detik
+            </p>
+          </div>
+        )}
+        {userDataError && (
+          <div className="fixed bottom-4 left-4 right-4 p-4 bg-red-50 rounded-lg border border-red-200 z-50">
+            <p className="text-sm text-red-800 text-center">
+              Terjadi kesalahan: {userDataError.message}
+            </p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+            >
+              Muat Ulang Halaman
+            </button>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -361,23 +355,9 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
         if (wasNull) setSplashMinElapsed(false);
         return <MobileSplashScreen />;
       }
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="flex flex-col items-center space-y-4">
-            <LoadingDots size="lg" />
-            <p className="text-sm text-gray-600">Loading page...</p>
-          </div>
-        </div>
-      );
+      return <RouteLoadingSkeleton />;
     }
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center space-y-4">
-          <LoadingDots size="lg" />
-          <p className="text-sm text-gray-600">Loading page...</p>
-        </div>
-      </div>
-    );
+    return <RouteLoadingSkeleton />;
   }
 
   // STRICT EXPIRY CHECK (LAYER 1): Check if subscription/trial expired based on dates
@@ -468,23 +448,9 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
           if (wasNull) setSplashMinElapsed(false);
           return <MobileSplashScreen />;
         }
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="flex flex-col items-center space-y-4">
-              <LoadingDots size="lg" />
-              <p className="text-sm text-gray-600">Loading page...</p>
-            </div>
-          </div>
-        );
+        return <RouteLoadingSkeleton />;
       }
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="flex flex-col items-center space-y-4">
-            <LoadingDots size="lg" />
-            <p className="text-sm text-gray-600">Loading page...</p>
-          </div>
-        </div>
-      );
+      return <RouteLoadingSkeleton />;
     }
     clearHomeSubscriptionCache(organization?.id);
     logger.debug('HomeAccessGuard: has_active_subscription is null and no subscription status found after retry, redirecting to create-plan');

@@ -317,7 +317,7 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const { error: msgErr } = await supabase.from("instagram_messages").insert({
+        const insertPayload: Record<string, unknown> = {
           conversation_id: conv.id,
           direction: "inbound",
           platform_message_id: mid,
@@ -325,7 +325,35 @@ Deno.serve(async (req: Request) => {
           message_type: messageType,
           raw_metadata: evt,
           created_at: ts,
-        });
+        };
+
+        // Inbound reply context: extract reply_to.mid so UI can show reply preview
+        const msgObj = (evt as Record<string, unknown>).message as { reply_to?: { mid?: string } } | undefined;
+        const replyToMid = msgObj?.reply_to?.mid != null ? String(msgObj.reply_to.mid).trim() : null;
+        if (replyToMid) {
+          insertPayload.reply_to_platform_message_id = replyToMid;
+          const { data: repliedToRow } = await supabase
+            .from("instagram_messages")
+            .select("body, message_type")
+            .eq("conversation_id", conv.id)
+            .eq("platform_message_id", replyToMid)
+            .maybeSingle();
+          if (repliedToRow) {
+            const repliedBody = repliedToRow.body;
+            const repliedType = (repliedToRow.message_type ?? "text") as string;
+            insertPayload.reply_to_body =
+              repliedBody != null && repliedBody !== ""
+                ? String(repliedBody).slice(0, 500)
+                : ["image", "video", "file"].includes((repliedType || "").toLowerCase())
+                  ? `[${repliedType}]`
+                  : "[Pesan]";
+            insertPayload.reply_to_message_type = repliedType;
+          } else {
+            insertPayload.reply_to_body = "[Pesan]";
+          }
+        }
+
+        const { error: msgErr } = await supabase.from("instagram_messages").insert(insertPayload);
         if (msgErr) {
           console.error("[instagram-webhook] instagram_messages insert error", msgErr);
           continue;

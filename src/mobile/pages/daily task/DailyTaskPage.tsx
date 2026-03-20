@@ -15,7 +15,7 @@ import { JobDescPage } from '@/mobile/pages/job-desc/JobDescPage';
 
 const DailyTaskPage = () => {
   useStatusBarStyle('light');
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { mainFixedStyle } = useVisualViewport();
   const [searchParams] = useSearchParams();
   const view = searchParams.get('view');
 
@@ -29,14 +29,7 @@ const DailyTaskPage = () => {
               <AppSidebar />
 
               {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc */}
-              <main
-                className="flex flex-col bg-background fixed inset-x-0 z-0"
-                style={{
-                  top: viewportOffsetTop,
-                  height: viewportHeight > 0 ? viewportHeight : undefined,
-                  minHeight: viewportHeight > 0 ? undefined : '100dvh',
-                }}
-              >
+              <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
                 {view === 'jobdesc' ? <JobDescPage /> : view === 'summary' ? <DailyTaskSummaryView /> : <DailyTaskLayout />}
                 <ToolsNavigationFooter className="safe-area-bottom-lower" />
               </main>

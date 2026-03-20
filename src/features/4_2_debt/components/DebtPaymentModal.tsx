@@ -7,9 +7,11 @@ import { Textarea } from '@/features/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { Drawer, DrawerClose, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/mobile/components/ui/drawer';
 import { Debt } from '../types';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { formatInputNumber, parseInputNumber } from '../utils/numberFormat';
@@ -40,6 +42,7 @@ export const DebtPaymentModal = ({
   isLoading = false
 }: DebtPaymentModalProps) => {
   const { t } = useAppTranslation();
+  const isMobile = useIsMobile();
   const { bankAccounts, isLoading: bankAccountsLoading } = useBankAccounts();
   const { balances, isLoading: balancesLoading } = useBankAccountBalances();
   const [selectedDebtId, setSelectedDebtId] = useState<string>('');
@@ -48,6 +51,8 @@ export const DebtPaymentModal = ({
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(new Date());
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [notes, setNotes] = useState('');
+  const [debtDrawerOpen, setDebtDrawerOpen] = useState(false);
+  const [paymentMethodDrawerOpen, setPaymentMethodDrawerOpen] = useState(false);
 
   // Filter debts that have remaining balance to pay OR interest to pay, and are active
   const payableDebts = debts.filter(debt => {
@@ -174,9 +179,20 @@ export const DebtPaymentModal = ({
 
   if (payableDebts.length === 0) {
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-[95vw] sm:w-[500px] max-w-[500px]">
-          <DialogHeader>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent
+          className={cn(
+            isMobile
+              ? "fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden"
+              : "w-[95vw] sm:w-[500px] max-w-[500px]"
+          )}
+          fullscreenAnimation={isMobile}
+        >
+          <DialogHeader className={cn(
+            isMobile
+              ? "flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3"
+              : ""
+          )}>
             <DialogTitle className="text-lg font-semibold">
               {t('debt.payment.title', 'Pay Debt')}
             </DialogTitle>
@@ -184,10 +200,15 @@ export const DebtPaymentModal = ({
               {t('debt.payment.noPayableDebts', 'No debts available for payment')}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
-              {t('debt.form.cancel', 'Cancel')}
-            </Button>
+          <DialogFooter className={cn(
+            "flex-shrink-0 border-t",
+            isMobile ? "px-4 pt-3 pb-3 bg-muted/30" : ""
+          )}>
+            <div className="flex items-center justify-end gap-2 w-full">
+              <Button type="button" variant="outline" size="sm" onClick={onClose}>
+                {t('debt.form.cancel', 'Cancel')}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -195,9 +216,14 @@ export const DebtPaymentModal = ({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        className="w-[95vw] sm:w-[500px] sm:h-[500px] max-w-[500px] max-h-[500px] p-0 overflow-hidden flex flex-col min-w-0"
+        className={cn(
+          isMobile
+            ? "fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden"
+            : "w-[95vw] sm:w-[500px] sm:h-[500px] max-w-[500px] max-h-[500px] p-0 overflow-hidden flex flex-col min-w-0"
+        )}
+        fullscreenAnimation={isMobile}
         onInteractOutside={(e) => {
           console.log('🔵 [DebtPaymentModal] Dialog onInteractOutside triggered');
           const target = e.target as HTMLElement;
@@ -223,7 +249,12 @@ export const DebtPaymentModal = ({
           }
         }}
       >
-        <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
+        <DialogHeader className={cn(
+          "flex-shrink-0 border-b",
+          isMobile
+            ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3"
+            : "p-4 pb-2"
+        )}>
           <DialogTitle className="text-lg font-semibold">
             {t('debt.payment.title', 'Pay Debt')}
           </DialogTitle>
@@ -238,111 +269,88 @@ export const DebtPaymentModal = ({
             <Label htmlFor="debt_select">
               {t('debt.payment.selectDebt', 'Select Debt')} <span className="text-red-500">*</span>
             </Label>
-            <Select 
-              value={selectedDebtId} 
-              onValueChange={(value) => {
-                console.log('🔵 [DebtPaymentModal] onValueChange triggered with value:', value);
-                console.log('🔵 [DebtPaymentModal] Current selectedDebtId:', selectedDebtId);
-                console.log('🔵 [DebtPaymentModal] Available payable debts:', payableDebts.map(d => ({ id: d.id, name: d.debt_name })));
-                console.log('🔵 [DebtPaymentModal] Available IDs:', payableDebts.map(d => d.id));
-                
-                if (!value) {
-                  console.error('❌ [DebtPaymentModal] Value is empty/null/undefined');
-                  return;
-                }
-                
-                const debtExists = payableDebts.some(d => d.id === value);
-                console.log('🔵 [DebtPaymentModal] Debt exists check:', debtExists);
-                console.log('🔵 [DebtPaymentModal] Value to check:', value, 'Type:', typeof value);
-                console.log('🔵 [DebtPaymentModal] PayableDebts IDs:', payableDebts.map(d => ({ id: d.id, type: typeof d.id, name: d.debt_name })));
-                
-                // Check if value exists in all debts (not just payableDebts)
-                const allDebtsMatch = debts.find(d => d.id === value);
-                console.log('🔵 [DebtPaymentModal] Value exists in all debts:', !!allDebtsMatch);
-                if (allDebtsMatch) {
-                  console.log('🔵 [DebtPaymentModal] Found debt in all debts:', {
-                    id: allDebtsMatch.id,
-                    name: allDebtsMatch.debt_name,
-                    status: allDebtsMatch.status,
-                    debt_type: allDebtsMatch.debt_type,
-                    debt_amount: allDebtsMatch.debt_amount,
-                    paid_amount: allDebtsMatch.paid_amount,
-                    available_limit: allDebtsMatch.available_limit
-                  });
-                }
-                
-                if (!debtExists) {
-                  console.error('❌ [DebtPaymentModal] Selected debt ID not found in payableDebts:', value);
-                  console.error('❌ [DebtPaymentModal] This means the debt was filtered out by payableDebts filter');
-                  console.error('❌ [DebtPaymentModal] Check the filtering logic above to see why this debt was excluded');
-                  // Still set it anyway - maybe the filter is wrong or needs adjustment
-                  console.warn('⚠️ [DebtPaymentModal] Setting anyway despite validation failure - debt exists in all debts');
-                  console.log('🔵 [DebtPaymentModal] About to call setSelectedDebtId with value:', value);
-                  setSelectedDebtId(value);
-                  console.log('🔵 [DebtPaymentModal] setSelectedDebtId called');
-                  return;
-                }
-                
-                console.log('✅ [DebtPaymentModal] Debt exists, setting selectedDebtId to:', value);
-                console.log('🔵 [DebtPaymentModal] About to call setSelectedDebtId');
-                console.log('🔵 [DebtPaymentModal] Current selectedDebtId before set:', selectedDebtId);
-                
-                // Force update immediately
-                setSelectedDebtId(value);
-                console.log('✅ [DebtPaymentModal] setSelectedDebtId called with value:', value);
-                
-                // Verify the update
-                setTimeout(() => {
-                  console.log('🔵 [DebtPaymentModal] After setSelectedDebtId, selectedDebtId should be:', value);
-                }, 0);
-              }}
-              onOpenChange={(open) => {
-                console.log('🔵 [DebtPaymentModal] Select open state changed:', open);
-              }}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder={t('debt.payment.selectDebtPlaceholder', 'Select a debt to pay')} />
-              </SelectTrigger>
-              <SelectContent 
-                className="z-[9999]" 
-                position="popper"
-                style={{ zIndex: 999999 }}
-                onPointerDownOutside={(e) => {
-                  console.log('🔵 [DebtPaymentModal] SelectContent onPointerDownOutside triggered');
-                  const target = e.target as HTMLElement;
-                  if (target.closest('[data-radix-select-content]')) {
-                    console.log('🔵 [DebtPaymentModal] Click inside SelectContent, preventing default');
-                    e.preventDefault();
-                  }
-                }}
-              >
-                {payableDebts.map((debt) => {
-                  // Ambil dari kolom remaining_debt di table debts; fallback ke debt_amount - paid_amount (termasuk saat remaining_debt = 0 tapi masih ada sisa)
-                  const fallback = Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
-                  const remaining = (debt.remaining_debt != null && debt.remaining_debt !== undefined)
-                    ? (debt.remaining_debt > 0 ? debt.remaining_debt : (fallback > 0 ? fallback : 0))
-                    : fallback;
-                  
-                  return (
-                    <SelectItem 
-                      key={debt.id} 
-                      value={debt.id}
-                      onSelect={(e) => {
-                        console.log('🔵 [DebtPaymentModal] SelectItem onSelect triggered for:', debt.debt_name, 'ID:', debt.id);
-                        console.log('🔵 [DebtPaymentModal] Event:', e);
-                      }}
-                      onClick={(e) => {
-                        console.log('🔵 [DebtPaymentModal] SelectItem onClick triggered for:', debt.debt_name, 'ID:', debt.id);
-                        console.log('🔵 [DebtPaymentModal] Click event:', e);
-                        e.stopPropagation();
-                      }}
-                    >
-                      {debt.debt_name} - {t('debt.payment.remainingDebt', 'Remaining Debt')}: {formatToRupiah(remaining)}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            {isMobile ? (
+              <Drawer open={debtDrawerOpen} onOpenChange={setDebtDrawerOpen}>
+                <DrawerTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "mt-1 w-full justify-between text-sm font-normal",
+                      !selectedDebtId && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate text-left">
+                      {selectedDebt
+                        ? `${selectedDebt.debt_name} - ${t('debt.payment.remainingDebt', 'Remaining Debt')}: ${formatToRupiah(remainingDebt)}`
+                        : t('debt.payment.selectDebtPlaceholder', 'Select a debt to pay')}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent overlayClassName="z-[60]" className="z-[60] max-h-[85dvh] flex flex-col">
+                  <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                    <DrawerTitle className="text-lg font-semibold">
+                      {t('debt.payment.selectDebt', 'Select Debt')}
+                    </DrawerTitle>
+                  </DrawerHeader>
+                  <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4 seamless-scroll">
+                    <div className="flex flex-col gap-0 rounded-md border bg-card">
+                      {payableDebts.map((debt) => {
+                        const fallback = Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
+                        const remaining = (debt.remaining_debt != null && debt.remaining_debt !== undefined)
+                          ? (debt.remaining_debt > 0 ? debt.remaining_debt : (fallback > 0 ? fallback : 0))
+                          : fallback;
+                        const label = `${debt.debt_name} - ${t('debt.payment.remainingDebt', 'Remaining Debt')}: ${formatToRupiah(remaining)}`;
+                        return (
+                          <button
+                            key={debt.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDebtId(debt.id);
+                              setDebtDrawerOpen(false);
+                            }}
+                            className={cn(
+                              "flex items-center justify-between w-full px-3 py-2.5 text-left text-sm border-b border-border last:border-b-0",
+                              selectedDebtId === debt.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                            )}
+                          >
+                            <span className="truncate">{label}</span>
+                            {selectedDebtId === debt.id ? <Check className="h-4 w-4 text-primary shrink-0" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3 flex items-center justify-end gap-2">
+                    <DrawerClose asChild>
+                      <Button size="sm" className="min-w-[100px]">
+                        {t('common.done', 'Done')}
+                      </Button>
+                    </DrawerClose>
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            ) : (
+              <Select value={selectedDebtId} onValueChange={setSelectedDebtId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder={t('debt.payment.selectDebtPlaceholder', 'Select a debt to pay')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {payableDebts.map((debt) => {
+                    const fallback = Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
+                    const remaining = (debt.remaining_debt != null && debt.remaining_debt !== undefined)
+                      ? (debt.remaining_debt > 0 ? debt.remaining_debt : (fallback > 0 ? fallback : 0))
+                      : fallback;
+                    return (
+                      <SelectItem key={debt.id} value={debt.id}>
+                        {debt.debt_name} - {t('debt.payment.remainingDebt', 'Remaining Debt')}: {formatToRupiah(remaining)}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Debt Information */}
@@ -427,37 +435,104 @@ export const DebtPaymentModal = ({
             <Label htmlFor="payment_method">
               {t('debt.payment.method', 'Payment Method')}
             </Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder={t('debt.payment.selectMethod', 'Select payment method')}>
-                  {paymentMethod && bankAccounts.length > 0 ? (
-                    (() => {
-                      const selectedAccount = bankAccounts.find(acc => acc.id === paymentMethod);
-                      return selectedAccount ? formatBankAccountDisplay(selectedAccount) : '';
-                    })()
-                  ) : ''}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent 
-                className="z-[9999]" 
-                position="popper"
-                style={{ zIndex: 999999 }}
-              >
-                {bankAccountsLoading ? (
-                  <SelectItem value="" disabled>Loading...</SelectItem>
-                ) : bankAccounts && bankAccounts.length > 0 ? (
-                  bankAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {formatBankAccountDisplay(account)}
+            {isMobile ? (
+              <Drawer open={paymentMethodDrawerOpen} onOpenChange={setPaymentMethodDrawerOpen}>
+                <DrawerTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "mt-1 w-full justify-between text-sm font-normal",
+                      !paymentMethod && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate text-left">
+                      {paymentMethod && bankAccounts.length > 0
+                        ? (() => {
+                            const selectedAccount = bankAccounts.find((acc) => acc.id === paymentMethod);
+                            return selectedAccount ? formatBankAccountDisplay(selectedAccount) : '';
+                          })()
+                        : t('debt.payment.selectMethod', 'Select payment method')}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent overlayClassName="z-[60]" className="z-[60] max-h-[85dvh] flex flex-col">
+                  <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                    <DrawerTitle className="text-lg font-semibold">
+                      {t('debt.payment.method', 'Payment Method')}
+                    </DrawerTitle>
+                  </DrawerHeader>
+                  <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4 seamless-scroll">
+                    <div className="flex flex-col gap-0 rounded-md border bg-card">
+                      {bankAccountsLoading ? (
+                        <div className="px-3 py-2.5 text-sm text-muted-foreground">Loading...</div>
+                      ) : bankAccounts && bankAccounts.length > 0 ? (
+                        bankAccounts.map((account) => {
+                          const label = formatBankAccountDisplay(account);
+                          return (
+                            <button
+                              key={account.id}
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod(account.id);
+                                setPaymentMethodDrawerOpen(false);
+                              }}
+                              className={cn(
+                                "flex items-center justify-between w-full px-3 py-2.5 text-left text-sm border-b border-border last:border-b-0",
+                                paymentMethod === account.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                              )}
+                            >
+                              <span className="truncate">{label}</span>
+                              {paymentMethod === account.id ? <Check className="h-4 w-4 text-primary shrink-0" /> : null}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-3 py-2.5 text-sm text-muted-foreground">
+                          {t('debt.payment.noBankAccounts', 'No bank accounts available')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3 flex items-center justify-end gap-2">
+                    <DrawerClose asChild>
+                      <Button size="sm" className="min-w-[100px]">
+                        {t('common.done', 'Done')}
+                      </Button>
+                    </DrawerClose>
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            ) : (
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder={t('debt.payment.selectMethod', 'Select payment method')}>
+                    {paymentMethod && bankAccounts.length > 0 ? (
+                      (() => {
+                        const selectedAccount = bankAccounts.find(acc => acc.id === paymentMethod);
+                        return selectedAccount ? formatBankAccountDisplay(selectedAccount) : '';
+                      })()
+                    ) : ''}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {bankAccountsLoading ? (
+                    <SelectItem value="" disabled>Loading...</SelectItem>
+                  ) : bankAccounts && bankAccounts.length > 0 ? (
+                    bankAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {formatBankAccountDisplay(account)}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      {t('debt.payment.noBankAccounts', 'No bank accounts available')}
                     </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="" disabled>
-                    {t('debt.payment.noBankAccounts', 'No bank accounts available')}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
             {insufficientBalance && (
               <p className="text-xs text-red-600 mt-1">
                 {t('debt.payment.insufficientBalance', 'Saldo metode pembayaran tidak mencukupi untuk jumlah pembayaran.')} ({t('debt.payment.balance', 'Balance')}: {formatToRupiah(selectedAccountBalance ?? 0)})
@@ -480,23 +555,37 @@ export const DebtPaymentModal = ({
           </div>
         </div>
 
-        <DialogFooter className="flex justify-end space-x-3 p-4 border-t flex-shrink-0 bg-white">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={isLoading}
-          >
-            {t('debt.form.cancel', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            className="bg-green-600 hover:bg-green-700 text-white"
-            onClick={handleSubmit}
-            disabled={isLoading || !selectedDebt || !paymentAmount || paymentAmount <= 0 || insufficientBalance}
-          >
-            {isLoading ? t('debt.form.saving', 'Saving...') : t('debt.payment.submit', 'Record Payment')}
-          </Button>
+        <DialogFooter className={cn(
+          "flex-shrink-0 border-t",
+          isMobile ? "px-4 pt-3 pb-3 bg-muted/30" : "flex justify-end space-x-3 p-4 bg-white"
+        )}>
+          <div className={cn("flex items-center gap-2", isMobile ? "justify-end" : "justify-end w-full")}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              {t('debt.form.cancel', 'Cancel')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="min-w-[120px] flex items-center justify-center gap-1.5"
+              onClick={handleSubmit}
+              disabled={isLoading || !selectedDebt || !paymentAmount || paymentAmount <= 0 || insufficientBalance}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>{t('debt.form.saving', 'Saving...')}</span>
+                </>
+              ) : (
+                t('debt.payment.submit', 'Record Payment')
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

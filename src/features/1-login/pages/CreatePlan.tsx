@@ -203,7 +203,7 @@ const CreatePlan = () => {
   // Also show loading if organization was just created but context hasn't updated yet
   if (userDataLoading || (organizationJustCreated && !hasOrganization && !orgLoading)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4 safe-area-top">
         <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
           <CardContent className="p-6 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
@@ -217,7 +217,7 @@ const CreatePlan = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="min-h-screen bg-background p-6 safe-area-top">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
@@ -239,7 +239,7 @@ const CreatePlan = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background safe-area-top">
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">

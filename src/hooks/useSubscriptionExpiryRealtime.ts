@@ -86,11 +86,30 @@ export const useSubscriptionExpiryRealtime = () => {
           });
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           logger.realtime('✅ Subscribed to subscription expiry realtime for org:', organizationId);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
+          return;
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          const detail =
+            err instanceof Error ? err.message : err != null ? String(err) : 'unknown';
+          logger.realtime(
+            '⚠️ Subscription expiry realtime unavailable (table may not be in Realtime publication or RLS). Org:',
+            organizationId,
+            'status:',
+            status,
+            'detail:',
+            detail
+          );
+          if (channelRef.current) {
+            try {
+              supabase.removeChannel(channelRef.current);
+            } catch {
+              /* ignore */
+            }
+            channelRef.current = null;
+          }
         }
       });
 

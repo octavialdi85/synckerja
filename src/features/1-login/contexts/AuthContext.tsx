@@ -92,7 +92,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               Math.random() < 0.1 &&
               (event === 'SIGNED_OUT' || event === 'USER_UPDATED')) {
             authDebounceRef.current = setTimeout(() => {
-              console.log('AuthContext: Auth state change:', event, session?.user?.id);
+              const authUserId = session?.user?.id ?? 'no-user';
+              console.log('AuthContext: Auth state change:', event, authUserId);
             }, 500);
           }
         }

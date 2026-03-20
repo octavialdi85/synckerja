@@ -364,7 +364,7 @@ const VerifyEmail = () => {
   // Show loading while checking access
   if (isLoading) {
     return (
-      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
+      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh] safe-area-top">
         {/* Left Panel - Testimonials */}
         <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
           <AuthTestimonialsPanel />
@@ -384,7 +384,7 @@ const VerifyEmail = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
+    <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh] safe-area-top">
       {/* Left Panel - Testimonials */}
       <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
         <AuthTestimonialsPanel />

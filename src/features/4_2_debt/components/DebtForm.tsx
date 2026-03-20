@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/features/ui/textarea';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { Drawer, DrawerClose, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/mobile/components/ui/drawer';
 import { Debt, CreateDebtData, DEBT_TYPES } from '../types';
 import { formatInputNumber, parseInputNumber } from '../utils/numberFormat';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -52,6 +54,7 @@ export const DebtForm = ({
   isLoading = false 
 }: DebtFormProps) => {
   const { t } = useAppTranslation();
+  const isMobile = useIsMobile();
   const isEditMode = !!initialData;
   
   // Create schema dynamically to use translation
@@ -99,6 +102,8 @@ export const DebtForm = ({
   const [minimumPaymentDisplay, setMinimumPaymentDisplay] = useState('');
   const [loanDurationDisplay, setLoanDurationDisplay] = useState('');
   const [monthlyPaymentDisplay, setMonthlyPaymentDisplay] = useState('');
+  const [debtTypeDrawerOpen, setDebtTypeDrawerOpen] = useState(false);
+  const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
   
   const form = useForm<DebtFormData>({
     resolver: zodResolver(debtSchema),
@@ -327,9 +332,23 @@ export const DebtForm = ({
     : undefined;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
-        <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className={cn(
+          isMobile
+            ? "fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden"
+            : "w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0"
+        )}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={cn(
+            "flex-shrink-0 border-b",
+            isMobile
+              ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3"
+              : "p-4 pb-2"
+          )}
+        >
           <DialogTitle className="text-lg font-semibold">
             {isEditMode ? t('debt.form.editTitle', 'Edit Debt') : t('debt.form.addTitle', 'Add New Debt')}
           </DialogTitle>
@@ -350,7 +369,7 @@ export const DebtForm = ({
                 id="debt_name"
                 {...form.register('debt_name')}
                 placeholder={t('debt.form.debtNamePlaceholder', 'Example: Credit Card Jenius')}
-                className="mt-1"
+                className="mt-1 text-sm placeholder:text-sm"
               />
               {form.formState.errors.debt_name && (
                 <p className="text-sm text-red-500 mt-1">
@@ -363,43 +382,123 @@ export const DebtForm = ({
               <Label htmlFor="debt_type">
                 {t('debt.form.debtType', 'Debt Type')} <span className="text-red-500">*</span>
               </Label>
-              <Select
-                value={form.watch('debt_type')}
-                onValueChange={(value) => {
-                  form.setValue('debt_type', value);
-                  // Auto-fill available_limit saat memilih tipe debt jika limit_amount sudah diisi
-                  const currentLimitAmount = form.getValues('limit_amount');
-                  if (currentLimitAmount > 0) {
-                    if (value === 'Pinjaman Online') {
-                      // Pinjaman Online: available_limit = limit_amount (sama ketika belum dipakai)
-                      form.setValue('available_limit', currentLimitAmount);
-                      form.setValue('debt_amount', 0);
-                      setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
-                      setDebtAmountDisplay('0');
-                    } else {
-                      // Non-online: available_limit = limit_amount (full limit) jika belum ada pemakaian
-                      form.setValue('available_limit', currentLimitAmount);
-                      setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+              {isMobile ? (
+                <Drawer open={debtTypeDrawerOpen} onOpenChange={setDebtTypeDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "mt-1 w-full justify-between text-sm font-normal",
+                        !form.watch('debt_type') && "text-muted-foreground"
+                      )}
+                    >
+                      <span className="truncate">
+                        {form.watch('debt_type')
+                          ? (
+                              form.watch('debt_type') === 'Kartu Kredit' ? t('debt.type.creditCard', 'Credit Card') :
+                              form.watch('debt_type') === 'Pinjaman Bank' ? t('debt.type.bankLoan', 'Bank Loan') :
+                              form.watch('debt_type') === 'Hutang Supplier' ? t('debt.type.supplierDebt', 'Supplier Debt') :
+                              form.watch('debt_type') === 'Pinjaman Online' ? t('debt.type.onlineLoan', 'Online Loan') :
+                              form.watch('debt_type') === 'Hutang Pribadi' ? t('debt.type.personalDebt', 'Personal Debt') :
+                              t('debt.type.other', 'Other')
+                            )
+                          : t('debt.form.selectDebtType', 'Select debt type')}
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent overlayClassName="z-[60]" className="z-[60] max-h-[85dvh] flex flex-col">
+                    <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                      <DrawerTitle className="text-lg font-semibold">
+                        {t('debt.form.debtType', 'Debt Type')}
+                      </DrawerTitle>
+                    </DrawerHeader>
+                    <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4 seamless-scroll">
+                      <div className="flex flex-col gap-0 rounded-md border bg-card">
+                        {DEBT_TYPES.map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => {
+                              form.setValue('debt_type', type);
+                              const currentLimitAmount = form.getValues('limit_amount');
+                              if (currentLimitAmount > 0) {
+                                if (type === 'Pinjaman Online') {
+                                  form.setValue('available_limit', currentLimitAmount);
+                                  form.setValue('debt_amount', 0);
+                                  setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                                  setDebtAmountDisplay('0');
+                                } else {
+                                  form.setValue('available_limit', currentLimitAmount);
+                                  setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                                }
+                              }
+                              setDebtTypeDrawerOpen(false);
+                            }}
+                            className={cn(
+                              "flex items-center justify-between w-full px-3 py-2.5 text-left text-sm border-b border-border last:border-b-0",
+                              form.watch('debt_type') === type ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                            )}
+                          >
+                            <span className="truncate">
+                              {type === 'Kartu Kredit' ? t('debt.type.creditCard', 'Credit Card') :
+                               type === 'Pinjaman Bank' ? t('debt.type.bankLoan', 'Bank Loan') :
+                               type === 'Hutang Supplier' ? t('debt.type.supplierDebt', 'Supplier Debt') :
+                               type === 'Pinjaman Online' ? t('debt.type.onlineLoan', 'Online Loan') :
+                               type === 'Hutang Pribadi' ? t('debt.type.personalDebt', 'Personal Debt') :
+                               t('debt.type.other', 'Other')}
+                            </span>
+                            {form.watch('debt_type') === type ? <Check className="h-4 w-4 text-primary shrink-0" /> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3 flex items-center justify-end gap-2">
+                      <DrawerClose asChild>
+                        <Button size="sm" className="min-w-[100px]">
+                          {t('common.done', 'Done')}
+                        </Button>
+                      </DrawerClose>
+                    </div>
+                  </DrawerContent>
+                </Drawer>
+              ) : (
+                <Select
+                  value={form.watch('debt_type')}
+                  onValueChange={(value) => {
+                    form.setValue('debt_type', value);
+                    const currentLimitAmount = form.getValues('limit_amount');
+                    if (currentLimitAmount > 0) {
+                      if (value === 'Pinjaman Online') {
+                        form.setValue('available_limit', currentLimitAmount);
+                        form.setValue('debt_amount', 0);
+                        setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                        setDebtAmountDisplay('0');
+                      } else {
+                        form.setValue('available_limit', currentLimitAmount);
+                        setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                      }
                     }
-                  }
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder={t('debt.form.selectDebtType', 'Select debt type')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEBT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type === 'Kartu Kredit' ? t('debt.type.creditCard', 'Credit Card') :
-                       type === 'Pinjaman Bank' ? t('debt.type.bankLoan', 'Bank Loan') :
-                       type === 'Hutang Supplier' ? t('debt.type.supplierDebt', 'Supplier Debt') :
-                       type === 'Pinjaman Online' ? t('debt.type.onlineLoan', 'Online Loan') :
-                       type === 'Hutang Pribadi' ? t('debt.type.personalDebt', 'Personal Debt') :
-                       t('debt.type.other', 'Other')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  }}
+                >
+                  <SelectTrigger className="mt-1 text-sm">
+                    <SelectValue placeholder={t('debt.form.selectDebtType', 'Select debt type')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEBT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type === 'Kartu Kredit' ? t('debt.type.creditCard', 'Credit Card') :
+                         type === 'Pinjaman Bank' ? t('debt.type.bankLoan', 'Bank Loan') :
+                         type === 'Hutang Supplier' ? t('debt.type.supplierDebt', 'Supplier Debt') :
+                         type === 'Pinjaman Online' ? t('debt.type.onlineLoan', 'Online Loan') :
+                         type === 'Hutang Pribadi' ? t('debt.type.personalDebt', 'Personal Debt') :
+                         t('debt.type.other', 'Other')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {form.formState.errors.debt_type && (
                 <p className="text-sm text-red-500 mt-1">
                   {form.formState.errors.debt_type.message}
@@ -413,7 +512,7 @@ export const DebtForm = ({
                 id="bank_name"
                 {...form.register('bank_name')}
                 placeholder={t('debt.form.bankPlaceholder', 'Example: Jenius, BCA, Mandiri')}
-                className="mt-1"
+                className="mt-1 text-sm placeholder:text-sm"
               />
             </div>
 
@@ -435,7 +534,7 @@ export const DebtForm = ({
                       form.setValue('limit_amount', parsed ?? 0, { shouldValidate: true });
                     }}
                     placeholder=""
-                    className="mt-1"
+                    className="mt-1 text-sm placeholder:text-sm"
                   />
                   {form.formState.errors.limit_amount && (
                     <p className="text-sm text-red-500 mt-1">
@@ -490,7 +589,7 @@ export const DebtForm = ({
                         }
                       }}
                       placeholder=""
-                      className="mt-1"
+                      className="mt-1 text-sm placeholder:text-sm"
                       min="1"
                     />
                     {form.formState.errors.loan_duration && (
@@ -518,7 +617,7 @@ export const DebtForm = ({
                         form.setValue('monthly_payment', parsed || undefined, { shouldValidate: true });
                       }}
                       placeholder=""
-                      className="mt-1"
+                      className="mt-1 text-sm placeholder:text-sm"
                     />
                     {form.formState.errors.monthly_payment && (
                       <p className="text-sm text-red-500 mt-1">
@@ -550,7 +649,7 @@ export const DebtForm = ({
                         form.setValue('limit_amount', parsed, { shouldValidate: true });
                       }}
                       placeholder=""
-                      className="mt-1"
+                      className="mt-1 text-sm placeholder:text-sm"
                     />
                     {form.formState.errors.limit_amount && (
                       <p className="text-sm text-red-500 mt-1">
@@ -574,7 +673,7 @@ export const DebtForm = ({
                         form.setValue('available_limit', parsed || undefined, { shouldValidate: true });
                       }}
                       placeholder=""
-                      className="mt-1"
+                      className="mt-1 text-sm placeholder:text-sm"
                     />
                     {form.formState.errors.available_limit && (
                       <p className="text-sm text-red-500 mt-1">
@@ -596,7 +695,7 @@ export const DebtForm = ({
                     type="text"
                     value={debtAmountDisplay}
                     placeholder="0"
-                    className="mt-1"
+                    className="mt-1 text-sm placeholder:text-sm"
                     readOnly
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -620,7 +719,7 @@ export const DebtForm = ({
                     form.setValue('interest_rate', parsed, { shouldValidate: true });
                   }}
                   placeholder="0"
-                  className="mt-1"
+                  className="mt-1 text-sm placeholder:text-sm"
                 />
               </div>
 
@@ -637,7 +736,7 @@ export const DebtForm = ({
                     form.setValue('minimum_payment', parsed || undefined, { shouldValidate: true });
                   }}
                   placeholder="0"
-                  className="mt-1"
+                  className="mt-1 text-sm placeholder:text-sm"
                 />
               </div>
             </div>
@@ -652,7 +751,7 @@ export const DebtForm = ({
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal mt-1",
+                          "w-full justify-start text-left font-normal mt-1 text-sm",
                           !selectedDueDate && "text-muted-foreground"
                         )}
                       >
@@ -696,7 +795,7 @@ export const DebtForm = ({
                         : "-"
                     }
                     readOnly
-                    className="mt-1 bg-gray-50"
+                    className="mt-1 bg-gray-50 text-sm placeholder:text-sm"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {loanDuration && loanDuration > 0
@@ -714,7 +813,7 @@ export const DebtForm = ({
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal mt-1",
+                        "w-full justify-start text-left font-normal mt-1 text-sm",
                         !selectedDueDate && "text-muted-foreground"
                       )}
                     >
@@ -740,21 +839,86 @@ export const DebtForm = ({
 
             <div>
               <Label htmlFor="status">{t('debt.form.status', 'Status')}</Label>
-              <Select
-                value={form.watch('status')}
-                onValueChange={(value: 'active' | 'paid_off' | 'closed') => 
-                  form.setValue('status', value)
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder={t('debt.form.selectStatus', 'Select status')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">{t('debt.status.active', 'Active')}</SelectItem>
-                  <SelectItem value="paid_off">{t('debt.status.paidOff', 'Paid Off')}</SelectItem>
-                  <SelectItem value="closed">{t('debt.status.closed', 'Closed')}</SelectItem>
-                </SelectContent>
-              </Select>
+              {isMobile ? (
+                <Drawer open={statusDrawerOpen} onOpenChange={setStatusDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "mt-1 w-full justify-between text-sm font-normal",
+                        !form.watch('status') && "text-muted-foreground"
+                      )}
+                    >
+                      <span className="truncate">
+                        {form.watch('status') === 'active'
+                          ? t('debt.status.active', 'Active')
+                          : form.watch('status') === 'paid_off'
+                            ? t('debt.status.paidOff', 'Paid Off')
+                            : form.watch('status') === 'closed'
+                              ? t('debt.status.closed', 'Closed')
+                              : t('debt.form.selectStatus', 'Select status')}
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent overlayClassName="z-[60]" className="z-[60] max-h-[85dvh] flex flex-col">
+                    <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                      <DrawerTitle className="text-lg font-semibold">
+                        {t('debt.form.status', 'Status')}
+                      </DrawerTitle>
+                    </DrawerHeader>
+                    <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4 seamless-scroll">
+                      <div className="flex flex-col gap-0 rounded-md border bg-card">
+                        {[
+                          { value: 'active' as const, label: t('debt.status.active', 'Active') },
+                          { value: 'paid_off' as const, label: t('debt.status.paidOff', 'Paid Off') },
+                          { value: 'closed' as const, label: t('debt.status.closed', 'Closed') },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              form.setValue('status', opt.value);
+                              setStatusDrawerOpen(false);
+                            }}
+                            className={cn(
+                              "flex items-center justify-between w-full px-3 py-2.5 text-left text-sm border-b border-border last:border-b-0",
+                              form.watch('status') === opt.value ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                            )}
+                          >
+                            <span>{opt.label}</span>
+                            {form.watch('status') === opt.value ? <Check className="h-4 w-4 text-primary shrink-0" /> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3 flex items-center justify-end gap-2">
+                      <DrawerClose asChild>
+                        <Button size="sm" className="min-w-[100px]">
+                          {t('common.done', 'Done')}
+                        </Button>
+                      </DrawerClose>
+                    </div>
+                  </DrawerContent>
+                </Drawer>
+              ) : (
+                <Select
+                  value={form.watch('status')}
+                  onValueChange={(value: 'active' | 'paid_off' | 'closed') => 
+                    form.setValue('status', value)
+                  }
+                >
+                  <SelectTrigger className="mt-1 text-sm">
+                    <SelectValue placeholder={t('debt.form.selectStatus', 'Select status')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">{t('debt.status.active', 'Active')}</SelectItem>
+                    <SelectItem value="paid_off">{t('debt.status.paidOff', 'Paid Off')}</SelectItem>
+                    <SelectItem value="closed">{t('debt.status.closed', 'Closed')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div>
@@ -763,27 +927,41 @@ export const DebtForm = ({
                 id="description"
                 {...form.register('description')}
                 placeholder={t('debt.form.descriptionPlaceholder', 'Additional notes about this debt...')}
-                className="mt-1 min-h-[80px] resize-none"
+                className="mt-1 min-h-[80px] resize-none text-sm placeholder:text-sm"
               />
             </div>
           </div>
 
-          <DialogFooter className="flex justify-end space-x-3 p-4 border-t flex-shrink-0 bg-white">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isLoading}
-            >
-              {t('debt.form.cancel', 'Cancel')}
-            </Button>
-            <Button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={isLoading}
-            >
-              {isLoading ? t('debt.form.saving', 'Saving...') : isEditMode ? t('debt.form.update', 'Update') : t('debt.form.save', 'Save')}
-            </Button>
+          <DialogFooter className={cn(
+            "flex-shrink-0 border-t",
+            isMobile ? "px-4 pt-3 pb-3 bg-muted/30" : "flex justify-end space-x-3 p-4 bg-white"
+          )}>
+            <div className={cn("flex items-center gap-2", isMobile ? "justify-end" : "justify-end w-full")}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                disabled={isLoading}
+              >
+                {t('debt.form.cancel', 'Cancel')}
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="min-w-[120px] flex items-center justify-center gap-1.5"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>{t('debt.form.saving', 'Saving...')}</span>
+                  </>
+                ) : (
+                  isEditMode ? t('debt.form.update', 'Update') : t('debt.form.save', 'Save')
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

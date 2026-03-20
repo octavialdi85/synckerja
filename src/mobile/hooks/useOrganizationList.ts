@@ -73,6 +73,9 @@ export function useOrganizationList() {
     queryKey,
     queryFn: fetchOrganizationList,
     staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 
   const organizations = data?.organizations ?? [];

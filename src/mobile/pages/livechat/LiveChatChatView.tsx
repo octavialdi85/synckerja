@@ -60,7 +60,7 @@ export function LiveChatChatView({
 }: LiveChatChatViewProps) {
   const { t } = useAppTranslation();
   const [quickActionOpen, setQuickActionOpen] = useState(false);
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { height: viewportHeight, mainFixedStyle } = useVisualViewport();
   const isKeyboardOpen =
     typeof window !== 'undefined' &&
     viewportHeight > 0 &&
@@ -105,14 +105,7 @@ export function LiveChatChatView({
   const hasNoConnectedWhatsAppAccount = waAccounts.length === 0;
 
   return (
-    <div
-      className="flex flex-col bg-background fixed inset-x-0 z-0"
-      style={{
-        top: viewportOffsetTop,
-        height: viewportHeight > 0 ? viewportHeight : undefined,
-        minHeight: viewportHeight > 0 ? undefined : '100dvh',
-      }}
-    >
+    <div className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
       <header className="flex-shrink-0 sticky top-0 z-20 flex items-center gap-1 pl-0 pr-3 py-2 min-h-[56px] border-b border-slate-700 bg-slate-800 safe-area-top">
         <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9 -ml-1 -mr-1 text-white hover:bg-slate-700 hover:text-white" onClick={onBack} aria-label={t('common.back', 'Back')}>
           <ArrowLeft className="h-5 w-5" />

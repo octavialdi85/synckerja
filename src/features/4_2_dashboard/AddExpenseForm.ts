@@ -13,6 +13,8 @@ export const addExpenseSchema = z.object({
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
   first_payment_date: z.string().optional(),
+  /** Link payment to existing recurring bill (Paynow / share); optional for brand-new recurring. */
+  linked_recurring_expense_id: z.string().optional(),
   description: z.string().optional(),
 }).refine(
   (data) => {

@@ -520,6 +520,38 @@ Deno.serve(async (req: Request) => {
                 };
                 if (mediaUrl) insertPayload.media_url = mediaUrl;
 
+                // Inbound reply context: extract context.reply_to so UI can show reply preview
+                const msgRaw = msg as Record<string, unknown>;
+                const context = msgRaw?.context as { reply_to?: { id?: string }; id?: string } | undefined;
+                const replyToId = context?.reply_to?.id ?? context?.id;
+                if (replyToId && typeof replyToId === "string") {
+                  const replyToWaMessageId = replyToId.trim();
+                  if (replyToWaMessageId) {
+                    insertPayload.reply_to_wa_message_id = replyToWaMessageId;
+                    const { data: repliedToRow } = await supabase
+                      .from("whatsapp_messages")
+                      .select("body, message_type, direction")
+                      .eq("conversation_id", conv.id)
+                      .eq("wa_message_id", replyToWaMessageId)
+                      .maybeSingle();
+                    if (repliedToRow) {
+                      const repliedBody = repliedToRow.body;
+                      const repliedType = (repliedToRow.message_type ?? "text") as string;
+                      insertPayload.reply_to_body =
+                        repliedBody != null && repliedBody !== ""
+                          ? String(repliedBody).slice(0, 500)
+                          : ["image", "video", "document", "audio"].includes(repliedType.toLowerCase())
+                            ? `[${repliedType}]`
+                            : "[Pesan]";
+                      insertPayload.reply_to_message_type = repliedType;
+                      insertPayload.reply_to_sender =
+                        repliedToRow.direction === "outbound" ? "You" : (customerName ?? customerWaId ?? "Contact");
+                    } else {
+                      insertPayload.reply_to_body = "[Pesan]";
+                    }
+                  }
+                }
+
                 await supabase.from("whatsapp_messages").insert(insertPayload);
                 // Sync last_message from actual latest message so preview is always correct
                 await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conv.id });

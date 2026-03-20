@@ -110,6 +110,20 @@
   touch-action: pan-y;
 }
 
+/* Horizontal scroll area (e.g. chart): allow horizontal pan so touch scroll works on Android */
+.nested-scroll-touch-chain-x {
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* Scroll area with both axes (e.g. table): allow horizontal and vertical pan */
+.nested-scroll-touch-chain-xy {
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
 /* Home OKR tab: scroll area dengan tinggi pasti dari viewport agar scroll selalu jalan.
    overscroll-behavior: auto agar saat list mentok (atas/bawah) scroll lanjut ke halaman utama. */
 .home-okr-tab-scroll {
@@ -276,17 +290,105 @@
 All colors MUST be HSL.
 */
 
-/* Safe area insets: set once in NativeSafeAreaWrapper on native; default 0 for web. */
-/* Use .safe-area-top on fixed/sticky headers, .safe-area-bottom on fixed/sticky footers/inputs. */
+/* Safe area insets: NativeSafeAreaWrapper sets --safe-area-inset-top/bottom on native (no wrapper padding — avoids double inset with .safe-area-top on headers). Bottom black strip: AndroidSystemNavBarStrip (portal + max z-index). */
+/* Use .safe-area-top on fixed/sticky headers (and auth/fullscreen roots without a header), .safe-area-bottom on fixed/sticky footers/inputs. */
 :root {
   --safe-area-inset-top: 0px;
   --safe-area-inset-bottom: 0px;
 }
 
-/* Use max() so env() from WebView/system is used when plugin value is 0 or missing.
-   Extra 4px so header sits slightly lower and not too close to status bar. */
+/* Web: max(plugin var if set, env). Native Capacitor: only --safe-area-inset-* from Java plugin on
+   <html> — env(safe-area-inset-*) in WebView can match the same inset and stack visually with the
+   plugin var in max(), roughly doubling top padding. */
 .safe-area-top {
-  padding-top: calc(max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px)) + 4px);
+  padding-top: calc(max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px)) + 2px);
+}
+
+html[data-capacitor-native="true"] .safe-area-top {
+  /* Extra gap below status bar; inset var comes from SafeAreaInsets plugin (+ normalize for Android top=0). */
+  padding-top: calc(var(--safe-area-inset-top, 0px) + 6px);
+}
+
+/* Android WebView: env(safe-area-inset-bottom) often matches the nav bar; max(var, env) can inflate
+   bottom padding. Use plugin-driven vars only on Android native (normalize sets --safe-area-inset-bottom). */
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .safe-area-bottom {
+  padding-bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .safe-area-bottom-equal {
+  padding-bottom: max(1rem, calc(var(--safe-area-inset-bottom, 0px) + 0.5rem));
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .safe-area-bottom-lower {
+  padding-bottom: max(0px, calc(var(--safe-area-inset-bottom, 0px) - 4px));
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .safe-area-padding-bottom {
+  padding-bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .modal-above-safe-area {
+  /* Top + bottom define height; Tailwind h-screen/h-dvh/max-h-* must not stretch past system nav. */
+  bottom: var(--safe-area-inset-bottom, 0px);
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav {
+  padding-bottom: calc(5rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-browser {
+  padding-bottom: calc(3.5rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-schedule {
+  padding-bottom: calc(3rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-schedule-browser {
+  padding-bottom: calc(3rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-meeting-notes {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-daily-task {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-default {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-daily-task-report {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-job-desc {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-home {
+  padding-bottom: calc(3rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-client-visit {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-leads-management {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-habits {
+  padding-bottom: calc(4rem + var(--safe-area-inset-bottom, 0px)) !important;
+}
+
+html[data-capacitor-native="true"][data-capacitor-platform="android"] .content-padding-above-nav-livechat {
+  padding-bottom: calc(5rem + max(48px, var(--safe-area-inset-bottom, 0px))) !important;
 }
 
 .safe-area-bottom {

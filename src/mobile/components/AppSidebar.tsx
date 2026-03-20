@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Clock, CreditCard, Home, MessageCircle } from "lucide-react";
+import { Clock, CreditCard, Home, MessageCircle, Receipt, Wallet } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import {
@@ -19,6 +19,8 @@ import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelect
 
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
+  { title: "Expense", url: "/expenses/dashboard", icon: Receipt },
+  { title: "Incomes", url: "/incomes/dashboard", icon: Wallet },
   { title: "CRM", url: "/operations/consultant/all/livechat", icon: MessageCircle },
   { title: "Daily Task", url: "/tools/daily-task", icon: Clock },
   { title: "Subscription", url: "/subscription/overview", icon: CreditCard },

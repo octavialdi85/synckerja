@@ -6,5 +6,8 @@
         <item name="android:windowSplashScreenBackground">#f5f5f5</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <!-- Setelah splash: pakai tema dengan nav bar hitam (bukan AppTheme Light default). -->
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

@@ -44,11 +44,11 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
   const IMMEDIATE_ROUTES = ['/auth/meta/callback'];
 
   // Routes that should be accessible even when expired (to allow renewal)
+  // Overview is locked when expired (desktop and mobile); only plans and management stay open
   const ALLOWED_EXPIRED_ROUTES = [
     '/login',
     '/create-plan',
     '/subscription/plans',
-    '/subscription/overview',
     '/subscription/management',
     '/register',
     '/verify-email',

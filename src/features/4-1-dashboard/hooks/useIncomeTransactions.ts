@@ -7,6 +7,48 @@ import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { IncomeTransactionWithRelations, CreateIncomeTransactionData } from '../types';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+
+function normalizeReceiptMetadata(file: File): { extension: string; mimeType: string } {
+  const rawType = (file.type || '').toLowerCase().trim();
+  const byType = MIME_TO_EXT[rawType];
+  if (byType) {
+    return {
+      extension: byType,
+      mimeType: rawType === 'image/jpg' ? 'image/jpeg' : rawType,
+    };
+  }
+
+  const name = (file.name || '').toLowerCase();
+  const byName = name.endsWith('.jpeg') || name.endsWith('.jpg')
+    ? 'jpg'
+    : name.endsWith('.png')
+      ? 'png'
+      : name.endsWith('.webp')
+        ? 'webp'
+        : name.endsWith('.pdf')
+          ? 'pdf'
+          : 'bin';
+
+  const mimeByExt = byName === 'jpg'
+    ? 'image/jpeg'
+    : byName === 'png'
+      ? 'image/png'
+      : byName === 'webp'
+        ? 'image/webp'
+        : byName === 'pdf'
+          ? 'application/pdf'
+          : (rawType || 'application/octet-stream');
+
+  return { extension: byName, mimeType: mimeByExt };
+}
+
 export const useIncomeTransactions = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -51,20 +93,23 @@ export const useIncomeTransactions = () => {
       // Handle file upload if present
       if (newTransaction.receipt_file) {
         const file = newTransaction.receipt_file;
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}.${fileExt}`;
+        const { extension, mimeType } = normalizeReceiptMetadata(file);
+        const fileName = `${Date.now()}.${extension}`;
         const filePath = `${user.id}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('income-receipts')
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            contentType: mimeType,
+            upsert: false,
+          });
 
         if (uploadError) throw uploadError;
 
         receipt_file_path = filePath;
         receipt_file_name = file.name;
         receipt_file_size = file.size;
-        receipt_mime_type = file.type;
+        receipt_mime_type = mimeType;
       } else if (newTransaction.receipt_url) {
         // Fallback: use existing receipt URL from sales activity
         const url = newTransaction.receipt_url.trim();
@@ -132,9 +177,15 @@ export const useIncomeTransactions = () => {
       });
     },
     onError: (error) => {
+      const rawMessage =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message?: unknown }).message ?? '')
+          : '';
+      const fallbackMessage = "Failed to create income transaction";
+      const detailedMessage = rawMessage.trim() || fallbackMessage;
       toast({
         title: "Error",
-        description: "Failed to create income transaction",
+        description: detailedMessage,
         variant: "destructive",
       });
       console.error('Error creating income transaction:', error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadByConversation';
 import { useEmailUnreadByConversation } from '../../hooks/useEmailUnreadByConversation';
@@ -109,6 +109,8 @@ interface ConversationListProps {
   waAccountsForHint?: WhatsAppAccountForHint[];
   isLoading?: boolean;
   error?: Error | null;
+  /** When gesture locks to horizontal swipe, call with true so parent can disable pull-to-refresh. Call with false when gesture ends. */
+  onSwipeLockChange?: (locked: boolean) => void;
 }
 
 function formatTime(iso: string | null) {
@@ -205,6 +207,7 @@ export function ConversationList({
   searchQuery = '',
   accountFilter = '',
   waAccountsForHint = [],
+  onSwipeLockChange,
 }: ConversationListProps) {
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
@@ -276,6 +279,82 @@ export function ConversationList({
     }
   }, [conversations, initialConversationId, initialTicketId, onSelect, organizationId, queryClient]);
 
+  const SWIPE_MAX = 220;
+  /** Min movement (px) before we lock direction. One decision only: swipe OR scroll OR pull-to-refresh. */
+  const DIRECTION_LOCK_PX = 8;
+  /** Horizontal must win by this margin (px) to count as swipe. Reduced from 10 to 5 so left-swipe feels responsive (logs showed margin 8–10 was locking vertical). */
+  const DIRECTION_LOCK_MARGIN_PX = 5;
+  const SNAP_TRANSITION = 'transform 0.25s cubic-bezier(0.33, 1, 0.68, 1)';
+  const [swipeState, setSwipeState] = useState<{ convId: string; offset: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const pointerStartRef = useRef<{ x: number; y: number; convId: string; lockHorizontal: boolean | null } | null>(null);
+  const touchStartRef = useRef<{ startX: number; startY: number; convId: string; lockHorizontal: boolean | null } | null>(null);
+  const lockHorizontalRef = useRef(false);
+  const swipeLockActiveRef = useRef(false);
+  const swipingCardRef = useRef<HTMLDivElement | null>(null);
+  const didSwipeRef = useRef(false);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  /** Android/touch: touchmove is passive by default so preventDefault() has no effect. Attach native listener with passive: false so horizontal swipe can block vertical scroll. */
+  const touchStartForNativeRef = useRef<{ startX: number; startY: number } | null>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const cards = list.querySelectorAll<HTMLDivElement>('[data-swipeable-card]');
+    const cleanups: Array<() => void> = [];
+    const handleTouchStart = (e: TouchEvent) => {
+      const target = e.target as Node;
+      if (!list.contains(target)) return;
+      const card = (target as Element).closest?.('[data-swipeable-card]');
+      if (!card) return;
+      touchStartForNativeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY };
+    };
+    const handleTouchEnd = () => {
+      touchStartForNativeRef.current = null;
+    };
+    list.addEventListener('touchstart', handleTouchStart, { passive: true });
+    list.addEventListener('touchend', handleTouchEnd, { passive: true });
+    list.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+    cleanups.push(() => {
+      list.removeEventListener('touchstart', handleTouchStart);
+      list.removeEventListener('touchend', handleTouchEnd);
+      list.removeEventListener('touchcancel', handleTouchEnd);
+    });
+    cards.forEach((el) => {
+      const convId = el.getAttribute('data-conv-id');
+      if (!convId) return;
+      const handleTouchMove = (e: TouchEvent) => {
+        const locked = lockHorizontalRef.current;
+        const start = touchStartForNativeRef.current;
+        let prevent = false;
+        let absX = 0, absY = 0;
+        if (start && e.touches.length > 0) {
+          const deltaX = e.touches[0].clientX - start.startX;
+          const deltaY = e.touches[0].clientY - start.startY;
+          absX = Math.abs(deltaX);
+          absY = Math.abs(deltaY);
+          if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+            const wouldLockH = absX > absY + DIRECTION_LOCK_MARGIN_PX;
+            if (wouldLockH) prevent = true;
+          }
+        }
+        if (prevent || locked) {
+          if (e.cancelable) e.preventDefault();
+        }
+      };
+      el.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+      cleanups.push(() => el.removeEventListener('touchmove', handleTouchMove, { capture: true }));
+    });
+    return () => cleanups.forEach((c) => c());
+  }, [filteredConversations]);
+
+  const getAccountLabel = useCallback((c: LiveChatConversation) => {
+    if (c.source === 'email') return (c as { email_connection_display?: string | null }).email_connection_display ?? '—';
+    if (c.source === 'instagram') return (c as { instagram_account_display_name?: string | null }).instagram_account_display_name ?? '';
+    const wa = c as WhatsAppConversation;
+    return wa.whatsapp_account_display_name ?? wa.channel ?? '';
+  }, []);
+
   const handleSelect = (conv: LiveChatConversation) => {
     if (conv.source === 'whatsapp') {
       if (unreadByConversation[conv.id] > 0) {
@@ -311,7 +390,9 @@ export function ConversationList({
       </div>
     );
   }
-  if (error) {
+  // Only show full error state when we have an error AND no conversations (e.g. all sources failed).
+  // If at least one source succeeded, show the list so user can use it without clicking "Coba lagi".
+  if (error && conversations.length === 0) {
     const handleRetry = () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
       queryClient.invalidateQueries({ queryKey: ['instagram-conversations'] });
@@ -374,7 +455,7 @@ export function ConversationList({
   }
 
   return (
-    <ul className="divide-y divide-gray-100">
+    <ul ref={listRef} className="divide-y divide-gray-100">
       {filteredConversations.map((conv) => {
         const isEmail = conv.source === 'email';
         const leadStatusName = (conv as { lead_status_name?: string | null }).lead_status_name ?? null;
@@ -385,78 +466,230 @@ export function ConversationList({
           : conv.source === 'instagram'
             ? (conv.customer_name || maskPhoneLast4(conv.customer_ig_id) || t('whatsappInbox.instagramContact', 'Kontak Instagram'))
             : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
+        const isSwiping = swipeState?.convId === conv.id;
+        const swipeOffset = isSwiping ? swipeState.offset : 0;
+        const useDomTransform = isDragging && isSwiping;
+        const accountLabel = getAccountLabel(conv);
+
+        const onPointerDown = (e: React.PointerEvent) => {
+          pointerStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            convId: conv.id,
+            lockHorizontal: null,
+          };
+          swipingCardRef.current = e.currentTarget as HTMLDivElement;
+          didSwipeRef.current = false;
+          setIsDragging(true);
+          setSwipeState({ convId: conv.id, offset: 0 });
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        };
+        const onPointerMove = (e: React.PointerEvent) => {
+          const start = pointerStartRef.current;
+          if (!start || start.convId !== conv.id) return;
+          const deltaX = e.clientX - start.x;
+          const deltaY = e.clientY - start.y;
+          if (start.lockHorizontal === null) {
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
+            if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+              start.lockHorizontal = absX > absY + DIRECTION_LOCK_MARGIN_PX;
+              if (start.lockHorizontal) {
+                swipeLockActiveRef.current = true;
+                onSwipeLockChange?.(true);
+              }
+            }
+          }
+          if (start.lockHorizontal === true) {
+            if (Math.abs(deltaX) > 10) didSwipeRef.current = true;
+            const offset = Math.max(-SWIPE_MAX, Math.min(0, deltaX));
+            const el = swipingCardRef.current;
+            if (el) {
+              el.style.transition = 'none';
+              el.style.transform = `translateX(${offset}px)`;
+            }
+          }
+        };
+        const endSwipe = () => {
+          const isThisCard = pointerStartRef.current?.convId === conv.id || touchStartRef.current?.convId === conv.id;
+          if (!isThisCard) return;
+          const wasLocked = swipeLockActiveRef.current;
+          pointerStartRef.current = null;
+          touchStartRef.current = null;
+          lockHorizontalRef.current = false;
+          swipeLockActiveRef.current = false;
+          setIsDragging(false);
+          if (wasLocked) onSwipeLockChange?.(false);
+          const el = swipingCardRef.current;
+          if (el) {
+            el.style.transition = SNAP_TRANSITION;
+            el.style.transform = 'translateX(0)';
+          }
+          setSwipeState({ convId: conv.id, offset: 0 });
+          window.setTimeout(() => {
+            setSwipeState(null);
+            swipingCardRef.current = null;
+          }, 250);
+        };
+        const onPointerUp = (e: React.PointerEvent) => {
+          (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+          endSwipe();
+        };
+        const onPointerLeave = () => {
+          if (pointerStartRef.current?.convId === conv.id) endSwipe();
+        };
+        const onTouchStart = (e: React.TouchEvent) => {
+          pointerStartRef.current = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            convId: conv.id,
+            lockHorizontal: null,
+          };
+          touchStartRef.current = {
+            startX: e.touches[0].clientX,
+            startY: e.touches[0].clientY,
+            convId: conv.id,
+            lockHorizontal: null,
+          };
+          swipingCardRef.current = e.currentTarget as HTMLDivElement;
+          didSwipeRef.current = false;
+          setIsDragging(true);
+          setSwipeState({ convId: conv.id, offset: 0 });
+        };
+        const onTouchMove = (e: React.TouchEvent) => {
+          const start = touchStartRef.current;
+          if (!start || start.convId !== conv.id) return;
+          const currentX = e.touches[0].clientX;
+          const currentY = e.touches[0].clientY;
+          const deltaX = currentX - start.startX;
+          const deltaY = currentY - start.startY;
+          if (start.lockHorizontal === null) {
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
+            if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+              start.lockHorizontal = absX > absY + DIRECTION_LOCK_MARGIN_PX;
+              lockHorizontalRef.current = start.lockHorizontal;
+              if (start.lockHorizontal) {
+                swipeLockActiveRef.current = true;
+                onSwipeLockChange?.(true);
+              }
+            }
+          }
+          if (start.lockHorizontal === true) {
+            if (Math.abs(deltaX) > 10) didSwipeRef.current = true;
+            const offset = Math.max(-SWIPE_MAX, Math.min(0, deltaX));
+            const el = swipingCardRef.current;
+            if (el) {
+              el.style.transition = 'none';
+              el.style.transform = `translateX(${offset}px)`;
+            }
+          }
+        };
+        const onTouchEnd = () => {
+          lockHorizontalRef.current = false;
+          endSwipe();
+        };
+        const onRowClick = () => {
+          if (didSwipeRef.current) {
+            didSwipeRef.current = false;
+            return;
+          }
+          handleSelect(conv);
+        };
+
         return (
           <li
             key={conv.id}
-            onClick={() => handleSelect(conv)}
-            className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-              selectedId === conv.id ? (isEmail ? 'bg-blue-50 border-l-2 border-blue-500' : 'bg-[#25D366]/10 border-l-2 border-[#25D366]') : ''
-            }`}
+            className="overflow-hidden list-none"
           >
-            <div className="flex gap-3 items-start">
-              <LivechatAvatar conv={conv} displayName={displayName} />
-              <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-start gap-2">
-              <span className="font-medium text-gray-900 truncate min-w-0">
-                {displayName}
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                {isResolved && (
-                  <span className="text-blue-600 shrink-0" title={t('whatsappInbox.chatResolvedNoActions', 'Chat sudah di-resolve')}>
-                    <ListChecks className="w-4 h-4" />
+            <div className="relative overflow-hidden">
+              {/* Layer 1: opaque background + account name (visible on swipe); strip width = SWIPE_MAX so full name fits when revealed */}
+              <div
+                className="absolute inset-0 bg-gray-200 flex items-center"
+                aria-hidden
+              >
+                <div className="ml-auto w-[220px] flex items-center justify-end pr-3 pl-2 min-w-0">
+                  <span className="text-xs text-gray-600 text-right truncate max-w-full" title={accountLabel || undefined}>
+                    {accountLabel || '—'}
                   </span>
-                )}
-                {unread > 0 && (
-                  <span className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-xs font-medium flex items-center justify-center ${isEmail ? 'bg-blue-600' : 'bg-green-600'}`}>
-                    {unread > 99 ? '99+' : unread}
-                  </span>
-                )}
-                <span className="text-xs text-gray-500">
-                  {formatTime(conv.last_message_at)}
-                </span>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2 min-h-0 mt-0.5">
-              {!isEmail && conv.last_message_direction === 'outbound' && (
-                <span className="shrink-0 text-gray-500" title={conv.last_message_status === 'read' ? 'Dibaca' : conv.last_message_status === 'delivered' ? 'Terkirim' : 'Terkirim'}>
-                  {conv.last_message_status === 'read' ? (
-                    <CheckCheck className="w-3.5 h-3.5 text-[#25D366]" />
-                  ) : conv.last_message_status === 'delivered' ? (
-                    <CheckCheck className="w-3.5 h-3.5" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                </span>
-              )}
-              {(() => {
-                const preview = isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body);
-                const subject = isEmail ? (conv as { thread_subject?: string | null }).thread_subject?.trim() ?? '' : '';
-                const displayText = preview !== '' ? preview : (subject !== '' ? subject : '');
-                const showSomething = (conv.last_message_body != null && conv.last_message_body !== '' && preview !== '') || (isEmail && subject !== '');
-                return showSomething ? (
-                  <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={displayText}>
-                    {displayText}
-                  </span>
-                ) : (
-                  <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
-                );
-              })()}
-              {isEmail ? (
-                <span className="text-xs text-gray-400 truncate max-w-[140px] shrink-0 min-w-0 text-right" title={conv.email_connection_display ?? undefined}>
-                  {conv.email_connection_display ?? '—'}
-                </span>
-              ) : conv.source === 'instagram'
-                ? (conv.instagram_account_display_name ? (
-                    <span className="text-xs text-gray-400 truncate max-w-[100px] shrink-0 min-w-0" title={conv.instagram_account_display_name}>
-                      {conv.instagram_account_display_name}
+              {/* Layer 2: card (slides with swipe) */}
+              <div
+                data-swipeable-card
+                data-conv-id={conv.id}
+                role="button"
+                tabIndex={0}
+                onClick={onRowClick}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onRowClick(); }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerLeave={onPointerLeave}
+                onPointerCancel={onPointerUp}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onTouchCancel={onTouchEnd}
+                className={`flex gap-3 items-start px-4 py-3 cursor-pointer hover:bg-gray-50 select-none ${
+                  selectedId === conv.id ? (isEmail ? 'bg-blue-50 border-l-2 border-blue-500' : 'bg-[#25D366]/10 border-l-2 border-[#25D366]') : 'bg-white'
+                }`}
+                style={{
+                  ...(useDomTransform
+                    ? { transition: 'none', willChange: 'transform' as const }
+                    : { transform: `translateX(${swipeOffset}px)`, transition: SNAP_TRANSITION }),
+                  touchAction: 'pan-y',
+                }}
+              >
+                <LivechatAvatar conv={conv} displayName={displayName} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="font-medium text-gray-900 truncate min-w-0">
+                      {displayName}
                     </span>
-                  ) : null)
-                : (conv.whatsapp_account_display_name ?? conv.channel) ? (
-                    <span className="text-xs text-gray-400 truncate max-w-[100px] shrink-0 min-w-0" title={conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
-                      {conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
-                    </span>
-                  ) : null}
-            </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isResolved && (
+                        <span className="text-blue-600 shrink-0" title={t('whatsappInbox.chatResolvedNoActions', 'Chat sudah di-resolve')}>
+                          <ListChecks className="w-4 h-4" />
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {formatTime(conv.last_message_at)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 min-h-0 mt-0.5">
+                    {!isEmail && conv.last_message_direction === 'outbound' && (
+                      <span className="shrink-0 text-gray-500" title={conv.last_message_status === 'read' ? 'Dibaca' : conv.last_message_status === 'delivered' ? 'Terkirim' : 'Terkirim'}>
+                        {conv.last_message_status === 'read' ? (
+                          <CheckCheck className="w-3.5 h-3.5 text-[#25D366]" />
+                        ) : conv.last_message_status === 'delivered' ? (
+                          <CheckCheck className="w-3.5 h-3.5" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </span>
+                    )}
+                    {(() => {
+                      const preview = isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body);
+                      const subject = isEmail ? (conv as { thread_subject?: string | null }).thread_subject?.trim() ?? '' : '';
+                      const displayText = preview !== '' ? preview : (subject !== '' ? subject : '');
+                      const showSomething = (conv.last_message_body != null && conv.last_message_body !== '' && preview !== '') || (isEmail && subject !== '');
+                      return showSomething ? (
+                        <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={displayText}>
+                          {displayText}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
+                      );
+                    })()}
+                    {unread > 0 && (
+                      <span className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-xs font-medium flex items-center justify-center shrink-0 ${isEmail ? 'bg-blue-600' : 'bg-green-600'}`}>
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </li>

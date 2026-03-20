@@ -9,7 +9,7 @@
  *
  * Does not use useAppTranslation so it can run outside LanguageProvider (e.g. during HMR or at app shell).
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import type { PluginListenerHandle } from "@capacitor/core";
@@ -35,39 +35,38 @@ export function useAppNotificationsFCM() {
   const userSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTokenRef = useRef<string | null>(null);
 
+  const saveToken = useCallback(async (token: string) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const platform = Capacitor.getPlatform() as "android" | "ios";
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      };
+      // Save for both "general" (app notifications) and "livechat" so one device gets all push types.
+      for (const context of ["general", "livechat"] as const) {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-fcm-token`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ token, platform, context }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          devLog.error(`FCM token save failed (${context})`, res.status, err);
+          toast.error(FALLBACK.fcmTokenSaveFailed);
+        }
+      }
+    } catch (e) {
+      devLog.error("app-notifications FCM token save error", e);
+      toast.error(FALLBACK.fcmTokenSaveError);
+    }
+  }, []);
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-
-    const saveToken = async (token: string) => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
-        const platform = Capacitor.getPlatform() as "android" | "ios";
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        };
-        // Save for both "general" (app notifications: plan status, daily task, approvals, review comments)
-        // and "livechat" (WhatsApp/Instagram/email inbound) so one device gets all push types
-        for (const context of ["general", "livechat"] as const) {
-          const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-fcm-token`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ token, platform, context }),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            devLog.error(`FCM token save failed (${context})`, res.status, err);
-            toast.error(FALLBACK.fcmTokenSaveFailed);
-          }
-        }
-      } catch (e) {
-        devLog.error("app-notifications FCM token save error", e);
-        toast.error(FALLBACK.fcmTokenSaveError);
-      }
-    };
 
     const run = async () => {
       try {
@@ -132,12 +131,6 @@ export function useAppNotificationsFCM() {
       // Satu kali re-register setelah app ready agar token pasti di-save untuk user yang login
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(handleAppActive, 2000);
-
-      // Saat user ganti (switch akun), re-save token untuk user baru agar notif tidak ke device user lama
-      if (user?.id && lastTokenRef.current) {
-        if (userSaveTimeoutRef.current) clearTimeout(userSaveTimeoutRef.current);
-        userSaveTimeoutRef.current = setTimeout(() => saveToken(lastTokenRef.current!), 500);
-      }
     };
 
     setup();
@@ -154,5 +147,21 @@ export function useAppNotificationsFCM() {
         userSaveTimeoutRef.current = null;
       }
     };
-  }, [queryClient, user?.id]);
+  }, [queryClient, saveToken]);
+
+  // Saat user ganti (switch akun), re-save token untuk user baru agar notif tidak ke device user lama
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (!user?.id || !lastTokenRef.current) return;
+    if (userSaveTimeoutRef.current) clearTimeout(userSaveTimeoutRef.current);
+    userSaveTimeoutRef.current = setTimeout(() => {
+      if (lastTokenRef.current) void saveToken(lastTokenRef.current);
+    }, 500);
+    return () => {
+      if (userSaveTimeoutRef.current) {
+        clearTimeout(userSaveTimeoutRef.current);
+        userSaveTimeoutRef.current = null;
+      }
+    };
+  }, [user?.id, saveToken]);
 }

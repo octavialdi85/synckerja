@@ -13,7 +13,7 @@ export default function LeadsManagementPage() {
   useStatusBarStyle('light');
   const [searchParams] = useSearchParams();
   const view = searchParams.get('view');
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { mainFixedStyle } = useVisualViewport();
 
   const isReportView = view === 'report';
 
@@ -22,14 +22,7 @@ export default function LeadsManagementPage() {
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
-          <main
-            className="flex flex-col bg-background fixed inset-x-0 z-0"
-            style={{
-              top: viewportOffsetTop,
-              height: viewportHeight > 0 ? viewportHeight : undefined,
-              minHeight: viewportHeight > 0 ? undefined : '100dvh',
-            }}
-          >
+            <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
             {isReportView ? <LeadsReportSummaryView /> : <LeadsManagementLayout />}
             <NavigationFooter hideItems className="safe-area-bottom-lower" />
           </main>

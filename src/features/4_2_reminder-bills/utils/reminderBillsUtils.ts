@@ -1,6 +1,25 @@
 import { Expense } from '@/features/4_2_dashboard/hooks/useExpenses';
 import { ReminderBillsFiltersType } from '../section/ReminderBillsFilters';
 
+/** For Paynow / recurring-link dropdown: expense-origin bills only, overdue or due within 7 days. */
+export type RecurringBillPayNowEligibilityInput = {
+  next_payment_date?: string | null;
+  bill_source?: 'expense' | 'purchase_request';
+};
+
+export function isRecurringBillPayNowEligible(
+  bill: RecurringBillPayNowEligibilityInput
+): boolean {
+  if (bill.bill_source === 'purchase_request') return false;
+  if (!bill.next_payment_date) return false;
+  const dueDate = new Date(bill.next_payment_date);
+  const today = new Date();
+  dueDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return diffDays <= 7;
+}
+
 // Helper function to calculate next payment date for recurring expenses
 export const calculateNextPaymentDate = (
   lastPaymentDate: string,
@@ -50,8 +69,11 @@ export const filterReminderBills = (
   expenses: Expense[],
   filters: ReminderBillsFiltersType
 ): Expense[] => {
-  // First filter only recurring expenses (bills)
-  const recurringBills = expenses.filter(expense => expense.is_recurring);
+  // First filter only recurring expenses (bills), exclude settlement payment rows
+  const recurringBills = expenses.filter(
+    (expense) =>
+      expense.is_recurring && !expense.recurring_settlement_for_expense_id
+  );
   
   return recurringBills.filter((bill) => {
     // Search filter

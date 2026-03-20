@@ -10,7 +10,7 @@ import { LeadsInsights } from '@/features/5-3-dashboard/LeadsInsights';
 import { generateLeadsPDF } from '@/features/5-3-dashboard/LeadsPDFGenerator';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import type { LeadsFilters } from '@/features/5-3-dashboard/LeadsFilters';
-import { LoadingDots } from '@/components/LoadingDots';
+import { LeadsReportSummarySkeleton } from './LeadsReportSummarySkeleton';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/mobile/components/ui/sheet';
 import { Separator } from '@/mobile/components/ui/separator';
@@ -194,26 +194,7 @@ export function LeadsReportSummaryView() {
   }, [handlePullRefresh]);
 
   if (loading && !isRefreshing) {
-    return (
-      <>
-        <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="md:hidden" />
-            <div>
-              <h1 className="text-base font-semibold text-foreground">
-                {t('leadsManagement.reportSummary.title', 'Report Summary')}
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                {t('leadsManagement.reportSummary.subtitle', 'Data summary based on filters')}
-              </p>
-            </div>
-          </div>
-        </header>
-        <div className="flex-1 flex items-center justify-center min-h-0">
-          <LoadingDots size="lg" />
-        </div>
-      </>
-    );
+    return <LeadsReportSummarySkeleton />;
   }
 
   return (

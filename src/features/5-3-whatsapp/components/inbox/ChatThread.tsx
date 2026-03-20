@@ -9,6 +9,7 @@ import type { LiveChatConversation, WhatsAppConversation, WhatsAppMessage, Insta
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
+import { isBlockedImageUrl } from '@/features/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -22,6 +23,8 @@ import { Check, CheckCheck, Paperclip, FileText, X, Download, ChevronDown, Trash
 import { messageContainsContactRequest } from '../../constants/contactRequestBlockPhrases';
 import { isLikelyInstagramId } from '../../constants/instagramId';
 import { isResolvedStatus, isOutside24hWindow } from '../../constants/leadStatus';
+import { format } from 'date-fns';
+import type { Locale } from 'date-fns';
 
 /** Bucket yang sama dipakai untuk kirim (outbound) dan terima (webhook/resolve) media */
 const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
@@ -92,6 +95,40 @@ interface ChatThreadProps {
 
 function formatMessageTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+/** YYYY-MM-DD in local timezone for comparing message days. */
+function getDateKey(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Label for date separator: "Hari ini", "Kemarin", or full date (e.g. "9 Maret 2026"). */
+function formatDateSeparator(
+  iso: string,
+  t: (key: string, fallback: string) => string,
+  dateLocale: Locale
+): string {
+  const key = getDateKey(iso);
+  const today = getDateKey(new Date().toISOString());
+  if (key === today) return t('whatsappInbox.today', 'Hari ini');
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === getDateKey(yesterday.toISOString())) return t('whatsappInbox.yesterday', 'Kemarin');
+  return format(new Date(iso), 'd MMMM yyyy', { locale: dateLocale });
+}
+
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <div className="flex justify-center py-2" data-date-separator data-date-label={label}>
+      <span className="rounded-full bg-gray-800 px-3 py-1.5 text-[10px] text-white">
+        {label}
+      </span>
+    </div>
+  );
 }
 
 /** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
@@ -389,6 +426,12 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const [isUploading, setIsUploading] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [stickyDateLabel, setStickyDateLabel] = useState<string | null>(null);
+  const [stickyDateExiting, setStickyDateExiting] = useState(false);
+  const [stickyDateAnimateIn, setStickyDateAnimateIn] = useState(false);
+  const scrollEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stickyDateExitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [replyTo, setReplyTo] = useState<{
     id: string;
     body: string | null;
@@ -403,10 +446,129 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const chatInputBarRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const touchStartRef = useRef<{ msgId: string; startX: number; thresholdVibrated?: boolean } | null>(null);
+  const touchStartRef = useRef<{ msgId: string; startX: number; startY: number; intent?: 'reply' | 'scroll' } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<{ msgId: string; translateX: number } | null>(null);
+  const [isDraggingReply, setIsDraggingReply] = useState(false);
+  /** During drag we update this element's transform directly for 60fps smoothness (no React re-renders). */
+  const swipeBubbleElRef = useRef<HTMLDivElement | null>(null);
   const knownInboundIdsRef = useRef<Set<string>>(new Set());
   const hasScrollTargetRef = useRef(false);
+
+  /** Threshold (px) to lock direction: one decision only — scroll OR reply (no diagonal). Same as ConversationList. */
+  const DIRECTION_LOCK_PX = 8;
+  const DIRECTION_LOCK_MARGIN_PX = 10;
+  const SNAP_TRANSITION = 'transform 0.25s cubic-bezier(0.33, 1, 0.68, 1)';
+
+  /** Decide once: reply-swipe OR scroll. Lock vertical scroll only when intent is reply (mobile). Needs passive: false so preventDefault works. */
+  useEffect(() => {
+    if (!hideHeader) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+      const handleTouchMove = (e: TouchEvent) => {
+      const start = touchStartRef.current;
+      if (!start || !e.touches[0]) return;
+      const t = e.touches[0];
+      const deltaX = t.clientX - start.startX;
+      const deltaY = t.clientY - start.startY;
+      if (start.intent === undefined) {
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+        if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+          start.intent = absX > absY + DIRECTION_LOCK_MARGIN_PX ? 'reply' : 'scroll';
+        }
+      }
+      if (start.intent === 'reply' && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    return () => el.removeEventListener('touchmove', handleTouchMove, { capture: true });
+  }, [hideHeader]);
+
+  /** Sticky date: show at top while scrolling. Label = date separator that is topmost in the visible area (so when scrolled past 26 Feb, show 25 Feb). */
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const SCROLL_END_MS = 1500;
+    const FADEOUT_MS = 220;
+
+    /** Sticky = date of the section we're currently viewing at the top of the viewport.
+     * That is the section we've "entered" = the topmost separator that is at or above the top edge (the one we just passed). Pick the one with largest top among those = closest to top = e.g. "16 February" when 17 Feb is below. */
+    const updateStickyDateFromVisible = () => {
+      const containerRect = el.getBoundingClientRect();
+      const containerTop = containerRect.top;
+      const separators = el.querySelectorAll<HTMLElement>('[data-date-separator]');
+      let bestLabelAtOrAbove: string | null = null;
+      let bestTopAtOrAbove = -Infinity;
+      let fallbackLabel: string | null = null;
+      let fallbackTop = Infinity;
+      for (const node of separators) {
+        const label = node.getAttribute('data-date-label');
+        if (!label) continue;
+        const rect = node.getBoundingClientRect();
+        if (rect.top <= containerTop) {
+          if (rect.top > bestTopAtOrAbove) {
+            bestTopAtOrAbove = rect.top;
+            bestLabelAtOrAbove = label;
+          }
+        } else {
+          if (rect.top < fallbackTop) {
+            fallbackTop = rect.top;
+            fallbackLabel = label;
+          }
+        }
+      }
+      if (bestLabelAtOrAbove != null) setStickyDateLabel(bestLabelAtOrAbove);
+      else if (fallbackLabel != null) setStickyDateLabel(fallbackLabel);
+    };
+
+    const handleScroll = () => {
+      setIsScrolling(true);
+      setStickyDateExiting(false);
+      if (stickyDateExitingTimeoutRef.current) {
+        clearTimeout(stickyDateExitingTimeoutRef.current);
+        stickyDateExitingTimeoutRef.current = null;
+      }
+      if (scrollEndTimeoutRef.current) clearTimeout(scrollEndTimeoutRef.current);
+      updateStickyDateFromVisible();
+      scrollEndTimeoutRef.current = setTimeout(() => {
+        scrollEndTimeoutRef.current = null;
+        setStickyDateExiting(true);
+        stickyDateExitingTimeoutRef.current = setTimeout(() => {
+          stickyDateExitingTimeoutRef.current = null;
+          setIsScrolling(false);
+          setStickyDateExiting(false);
+        }, FADEOUT_MS);
+      }, SCROLL_END_MS);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    const observer = new IntersectionObserver(
+      () => updateStickyDateFromVisible(),
+      { root: el, rootMargin: '0px', threshold: 0 }
+    );
+    const observeSeparators = () => {
+      el.querySelectorAll<HTMLElement>('[data-date-separator]').forEach((node) => observer.observe(node));
+    };
+    observeSeparators();
+    const mo = new MutationObserver(observeSeparators);
+    mo.observe(el, { childList: true, subtree: true });
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (scrollEndTimeoutRef.current) clearTimeout(scrollEndTimeoutRef.current);
+      if (stickyDateExitingTimeoutRef.current) clearTimeout(stickyDateExitingTimeoutRef.current);
+      observer.disconnect();
+      mo.disconnect();
+    };
+  }, [conversation?.id]);
+
+  /** Sticky date badge: trigger fade-in after mount, reset when hidden */
+  const stickyDateVisible = (isScrolling || stickyDateExiting) && stickyDateLabel;
+  useLayoutEffect(() => {
+    if (!stickyDateVisible) {
+      setStickyDateAnimateIn(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setStickyDateAnimateIn(true));
+    return () => cancelAnimationFrame(id);
+  }, [stickyDateVisible]);
 
   /** Mobile (hideHeader): auto-expand textarea with Enter/newlines, fixed max height with vertical scroll */
   const MOBILE_INPUT_MIN_HEIGHT_PX = 44;
@@ -442,7 +604,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       return null;
     });
   }, []);
-  const { t } = useAppTranslation();
+  const { t, dateLocale } = useAppTranslation();
   const queryClient = useQueryClient();
   const isInstagram = (conversation as LiveChatConversation)?.source === 'instagram';
   const waMessagesQuery = useWhatsAppMessages(!isInstagram ? conversation?.id ?? null : null);
@@ -532,13 +694,22 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const hasMatchingRealMessage = useCallback(
     (list: typeof messages, entry: NonNullable<typeof optimisticEntry>) => {
       const cutoff = Date.now() - 15000;
-      return list.some(
-        (m) =>
-          m.direction === 'outbound' &&
-          m.body === entry.body &&
-          (entry.reply_to_body == null ? m.reply_to_body == null : m.reply_to_body === entry.reply_to_body) &&
-          new Date(m.created_at).getTime() >= cutoff
-      );
+      return list.some((m) => {
+        if (m.direction !== 'outbound' || m.body !== entry.body) return false;
+        if (new Date(m.created_at).getTime() < cutoff) return false;
+        const entryReplyId = entry.reply_to_wa_message_id ?? null;
+        const mReplyId = m.reply_to_wa_message_id ?? null;
+        if (entryReplyId !== mReplyId) return false;
+        const entryBody = entry.reply_to_body ?? null;
+        const mBody = m.reply_to_body ?? null;
+        if (entryBody == null && mBody == null) return true;
+        if (entryBody == null || mBody == null) return false;
+        return (
+          entryBody === mBody ||
+          entryBody.slice(0, 500) === mBody ||
+          mBody === entryBody.slice(0, 500)
+        );
+      });
     },
     []
   );
@@ -972,9 +1143,35 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             </p>
           </div>
         )}
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        {stickyDateVisible && (
+          <div
+            className="absolute top-2 left-0 right-0 z-20 flex justify-center items-center pointer-events-none transition-all duration-200 ease-out pl-4 pr-2"
+            style={{
+              opacity: stickyDateExiting || !stickyDateAnimateIn ? 0 : 1,
+              transform: stickyDateExiting || !stickyDateAnimateIn ? 'translateY(-6px)' : 'translateY(0)',
+            }}
+          >
+            <span className="rounded-full bg-gray-800 px-3 py-1.5 text-[10px] text-white shadow min-w-0">
+              {stickyDateLabel}
+            </span>
+          </div>
+        )}
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-[4rem]' : 'pb-[calc(3.5rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${
+          replyTo
+            ? hideHeader
+              ? keyboardOpen
+                ? 'pb-[7rem]'
+                : 'pb-[calc(7rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]'
+              : 'pb-[140px]'
+            : hideHeader
+              ? keyboardOpen
+                ? 'pb-[4rem]'
+                : 'pb-[calc(3.5rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]'
+              : 'pb-[84px]'
+        }`}
         {...(hideHeader ? { onTouchStart: unlockInboundNotificationAudio } : {})}
       >
         {isLoading ? (
@@ -982,7 +1179,10 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         ) : (
           (() => {
             const reversedMessages = [...displayMessages].reverse();
-            return reversedMessages.map((msg) => {
+            return reversedMessages.map((msg, index) => {
+            const nextMsg = reversedMessages[index + 1];
+            /** Show date separator *after* this message in DOM so it appears *above* it in flex-col-reverse (date first, then chat). */
+            const showDateSeparatorAfter = nextMsg && getDateKey(nextMsg.created_at) !== getDateKey(msg.created_at);
             const marginBetween = 'mb-0';
             const CheckboxBtn = () =>
               selectionMode ? (
@@ -1149,9 +1349,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             ) : null;
 
             return (
+            <React.Fragment key={msg.id}>
             <div
               id={`msg-${msg.id}`}
-              key={msg.id}
               className={`flex items-start gap-2 shrink-0 ${marginBetween} ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
               onClick={
                 effectiveScrollToMessageId === msg.id
@@ -1182,41 +1382,70 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                 className="relative max-w-[80%]"
                 style={
                   hideHeader && swipeOffset?.msgId === msg.id
-                    ? {
-                        transform: `translateX(${swipeOffset.translateX}px)`,
-                        transition: swipeOffset.translateX === 0 ? 'transform 0.2s ease-out' : 'none',
-                      }
+                    ? isDraggingReply
+                      ? { transition: 'none', willChange: 'transform' as const, touchAction: 'pan-y' as const }
+                      : {
+                          transform: `translateX(${swipeOffset.translateX}px)`,
+                          transition: SNAP_TRANSITION,
+                          willChange: 'transform',
+                          touchAction: 'pan-y' as const,
+                        }
                     : undefined
                 }
                 {...(hideHeader && !selectionMode
                   ? {
                       onTouchStart: (e: React.TouchEvent) => {
                         e.stopPropagation();
-                        touchStartRef.current = { msgId: msg.id, startX: e.touches[0].clientX, thresholdVibrated: false };
+                        const touch = e.touches[0];
+                        touchStartRef.current = { msgId: msg.id, startX: touch.clientX, startY: touch.clientY };
+                        swipeBubbleElRef.current = e.currentTarget as HTMLDivElement;
+                        setIsDraggingReply(true);
                         setSwipeOffset({ msgId: msg.id, translateX: 0 });
                       },
                       onTouchMove: (e: React.TouchEvent) => {
                         const start = touchStartRef.current;
                         if (!start || start.msgId !== msg.id) return;
                         const currentX = e.touches[0].clientX;
-                        const delta = currentX - start.startX;
-                        const translateX = Math.min(Math.max(0, delta), 80);
-                        if (!start.thresholdVibrated) {
-                          const pastThreshold = translateX >= 50;
-                          if (pastThreshold) {
-                            start.thresholdVibrated = true;
-                            vibrate(30);
+                        const currentY = e.touches[0].clientY;
+                        const deltaX = currentX - start.startX;
+                        const deltaY = currentY - start.startY;
+                        if (start.intent === undefined) {
+                          const absX = Math.abs(deltaX);
+                          const absY = Math.abs(deltaY);
+                          if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+                            start.intent = absX > absY + DIRECTION_LOCK_MARGIN_PX ? 'reply' : 'scroll';
+                            if (start.intent === 'scroll') {
+                              const el = swipeBubbleElRef.current;
+                              if (el) {
+                                el.style.transition = '';
+                                el.style.transform = '';
+                                swipeBubbleElRef.current = null;
+                              }
+                              setIsDraggingReply(false);
+                              setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                              setTimeout(() => setSwipeOffset(null), 250);
+                              touchStartRef.current = null;
+                              return;
+                            }
                           }
                         }
-                        setSwipeOffset({ msgId: msg.id, translateX });
+                        if (start.intent !== 'reply') return;
+                        const translateX = Math.min(Math.max(0, deltaX), 80);
+                        const el = swipeBubbleElRef.current;
+                        if (el) {
+                          el.style.transition = 'none';
+                          el.style.transform = `translateX(${translateX}px)`;
+                        }
                       },
                       onTouchEnd: (e: React.TouchEvent) => {
                         const start = touchStartRef.current;
                         if (!start || start.msgId !== msg.id) return;
+                        if (start.intent === 'scroll') return;
                         const endX = e.changedTouches[0].clientX;
                         const swipeDistance = endX - start.startX;
                         const triggeredReply = swipeDistance > 50;
                         if (triggeredReply) {
+                          vibrate(30);
                           setReplyTo({
                             id: msg.id,
                             body: getMessageCaptionForReply(msg) ?? msg.body ?? null,
@@ -1226,9 +1455,138 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                             media_url: msg.media_url ?? null,
                           });
                         }
+                        const el = swipeBubbleElRef.current;
+                        if (el) {
+                          el.style.transition = SNAP_TRANSITION;
+                          el.style.transform = 'translateX(0)';
+                        }
+                        setIsDraggingReply(false);
                         setSwipeOffset({ msgId: msg.id, translateX: 0 });
-                        setTimeout(() => setSwipeOffset(null), 200);
+                        setTimeout(() => {
+                          setSwipeOffset(null);
+                          swipeBubbleElRef.current = null;
+                        }, 250);
                         touchStartRef.current = null;
+                      },
+                      onTouchCancel: () => {
+                        if (touchStartRef.current?.msgId === msg.id) {
+                          const el = swipeBubbleElRef.current;
+                          if (el) {
+                            el.style.transition = SNAP_TRANSITION;
+                            el.style.transform = 'translateX(0)';
+                          }
+                          setIsDraggingReply(false);
+                          setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                          setTimeout(() => {
+                            setSwipeOffset(null);
+                            swipeBubbleElRef.current = null;
+                          }, 250);
+                          touchStartRef.current = null;
+                        }
+                      },
+                      onPointerDown: (e: React.PointerEvent) => {
+                        e.stopPropagation();
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                        touchStartRef.current = { msgId: msg.id, startX: e.clientX, startY: e.clientY };
+                        swipeBubbleElRef.current = e.currentTarget as HTMLDivElement;
+                        setIsDraggingReply(true);
+                        setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                      },
+                      onPointerMove: (e: React.PointerEvent) => {
+                        const start = touchStartRef.current;
+                        if (!start || start.msgId !== msg.id) return;
+                        const deltaX = e.clientX - start.startX;
+                        const deltaY = e.clientY - start.startY;
+                        if (start.intent === undefined) {
+                          const absX = Math.abs(deltaX);
+                          const absY = Math.abs(deltaY);
+                          if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+                            start.intent = absX > absY + DIRECTION_LOCK_MARGIN_PX ? 'reply' : 'scroll';
+                            if (start.intent === 'scroll') {
+                              const el = swipeBubbleElRef.current;
+                              if (el) {
+                                el.style.transition = '';
+                                el.style.transform = '';
+                                swipeBubbleElRef.current = null;
+                              }
+                              setIsDraggingReply(false);
+                              setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                              setTimeout(() => setSwipeOffset(null), 250);
+                              touchStartRef.current = null;
+                              return;
+                            }
+                          }
+                        }
+                        if (start.intent !== 'reply') return;
+                        const translateX = Math.min(Math.max(0, deltaX), 80);
+                        const el = swipeBubbleElRef.current;
+                        if (el) {
+                          el.style.transition = 'none';
+                          el.style.transform = `translateX(${translateX}px)`;
+                        }
+                      },
+                      onPointerUp: (e: React.PointerEvent) => {
+                        const start = touchStartRef.current;
+                        if (!start || start.msgId !== msg.id) return;
+                        if (start.intent === 'scroll') return;
+                        const swipeDistance = e.clientX - start.startX;
+                        const triggeredReply = swipeDistance > 50;
+                        if (triggeredReply) {
+                          vibrate(30);
+                          setReplyTo({
+                            id: msg.id,
+                            body: getMessageCaptionForReply(msg) ?? msg.body ?? null,
+                            wa_message_id: msg.wa_message_id ?? null,
+                            message_type: msg.message_type ?? undefined,
+                            direction: msg.direction,
+                            media_url: msg.media_url ?? null,
+                          });
+                        }
+                        const el = swipeBubbleElRef.current;
+                        if (el) {
+                          el.style.transition = SNAP_TRANSITION;
+                          el.style.transform = 'translateX(0)';
+                        }
+                        setIsDraggingReply(false);
+                        setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                        setTimeout(() => {
+                          setSwipeOffset(null);
+                          swipeBubbleElRef.current = null;
+                        }, 250);
+                        touchStartRef.current = null;
+                      },
+                      onPointerLeave: () => {
+                        if (touchStartRef.current?.msgId === msg.id) {
+                          const el = swipeBubbleElRef.current;
+                          if (el) {
+                            el.style.transition = SNAP_TRANSITION;
+                            el.style.transform = 'translateX(0)';
+                          }
+                          setIsDraggingReply(false);
+                          setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                          setTimeout(() => {
+                            setSwipeOffset(null);
+                            swipeBubbleElRef.current = null;
+                          }, 250);
+                          touchStartRef.current = null;
+                        }
+                      },
+                      onPointerCancel: (e: React.PointerEvent) => {
+                        (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+                        if (touchStartRef.current?.msgId === msg.id) {
+                          const el = swipeBubbleElRef.current;
+                          if (el) {
+                            el.style.transition = SNAP_TRANSITION;
+                            el.style.transform = 'translateX(0)';
+                          }
+                          setIsDraggingReply(false);
+                          setSwipeOffset({ msgId: msg.id, translateX: 0 });
+                          setTimeout(() => {
+                            setSwipeOffset(null);
+                            swipeBubbleElRef.current = null;
+                          }, 250);
+                          touchStartRef.current = null;
+                        }
                       },
                     }
                   : {})}
@@ -1279,7 +1637,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                       title={t('whatsappInbox.scrollToRepliedMessage', 'Click to go to the replied message')}
                       aria-label={t('whatsappInbox.scrollToRepliedMessage', 'Click to go to the replied message')}
                     >
-                      {replyThumbUrl && (
+                      {replyThumbUrl && !isBlockedImageUrl(replyThumbUrl) && (
                         <img src={replyThumbUrl} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
                       )}
                       <div className="min-w-0 flex-1">
@@ -1306,22 +1664,24 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                     </div>
                     );
                   })()}
-                  <div className={`relative pb-1 min-h-[1.25rem] ${msg.direction === 'outbound' ? 'pr-16' : 'pr-12'}`}>
-                    <MediaPreview
-                      messageType={msg.message_type ?? 'text'}
-                      mediaUrl={msg.media_url}
-                      body={msg.body}
-                      rawMetadata={msg.raw_metadata}
-                      isOutbound={msg.direction === 'outbound'}
-                      messageId={msg.id}
-                      direction={msg.direction}
-                      onResolve={resolveMedia}
-                      isResolving={isResolvingMedia && resolvingMessageId === msg.id}
-                      topRightAction={isInboundMedia ? inboundDropdown : undefined}
-                      onMediaClick={(url, type) => setMediaViewer({ url, type })}
-                    />
+                  <div className="flex flex-col gap-0.5">
+                    <div className="w-full min-w-0">
+                      <MediaPreview
+                        messageType={msg.message_type ?? 'text'}
+                        mediaUrl={msg.media_url}
+                        body={msg.body}
+                        rawMetadata={msg.raw_metadata}
+                        isOutbound={msg.direction === 'outbound'}
+                        messageId={msg.id}
+                        direction={msg.direction}
+                        onResolve={resolveMedia}
+                        isResolving={isResolvingMedia && resolvingMessageId === msg.id}
+                        topRightAction={isInboundMedia ? inboundDropdown : undefined}
+                        onMediaClick={(url, type) => setMediaViewer({ url, type })}
+                      />
+                    </div>
                     <p
-                      className={`absolute right-2 bottom-0 text-[10px] flex items-center gap-1 shrink-0 ${
+                      className={`text-[10px] flex items-center justify-end gap-1 shrink-0 ${
                         msg.direction === 'outbound' ? 'text-white/80' : 'text-gray-500'
                       }`}
                     >
@@ -1340,10 +1700,15 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
               </div>
               {msg.direction === 'outbound' && <CheckboxBtn />}
             </div>
+              {showDateSeparatorAfter && (
+                <DateSeparator key={`date-${getDateKey(msg.created_at)}`} label={formatDateSeparator(msg.created_at, t, dateLocale)} />
+              )}
+            </React.Fragment>
             );
           });
           })()
         )}
+      </div>
       </div>
       <div
         ref={chatInputBarRef}
@@ -1386,44 +1751,6 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
           className="hidden"
           onChange={handleFileSelect}
         />
-        {replyTo && (
-          <div className="flex items-start gap-2 mb-2 px-3 py-2 rounded-lg bg-gray-100 border-l-4 border-[#128C7E]">
-            {(replyTo.media_url && (replyTo.message_type === 'image' || replyTo.message_type === 'video')) ? (
-              <img
-                src={replyTo.media_url}
-                alt=""
-                className="w-12 h-12 object-cover rounded shrink-0"
-              />
-            ) : replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) ? (
-              <div className="w-12 h-12 rounded bg-gray-200 flex items-center justify-center shrink-0">
-                <ReplyMediaIcon messageType={replyTo.message_type} className="w-6 h-6 text-gray-500" />
-              </div>
-            ) : null}
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium text-[#128C7E]">
-                {replyTo.direction === 'inbound'
-                  ? (isInstagramConversation && !displayName?.trim()
-                    ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-                    : (displayName ?? (customerId ? maskPhoneLast4(customerId) : null) ?? 'Contact'))
-                  : t('whatsappInbox.you', 'You')}
-              </div>
-              <div className="flex items-center gap-1.5 mt-0.5 text-sm text-gray-700 min-w-0">
-                {replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) && !(replyTo.media_url && (replyTo.message_type === 'image' || replyTo.message_type === 'video')) && (
-                  <span className="shrink-0 text-gray-500">
-                    <ReplyMediaIcon messageType={replyTo.message_type} className="w-4 h-4" />
-                  </span>
-                )}
-                <span className={replyTo.body ? 'truncate flex-1 min-w-0' : 'flex-1 min-w-0 text-gray-500'}>
-                  {replyTo.body?.slice(0, 80) ?? (replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) ? `[${replyTo.message_type}]` : '[Pesan]')}
-                  {(replyTo.body?.length ?? 0) > 80 ? '...' : ''}
-                </span>
-              </div>
-            </div>
-            <Button type="button" variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setReplyTo(null)} aria-label={t('whatsappInbox.cancelReply', 'Cancel reply')}>
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
         {pendingMedia && (
           <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-gray-100 border border-gray-200">
             {pendingMedia.previewUrl ? (
@@ -1453,7 +1780,48 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             </Button>
           </div>
         )}
-        <div className={`flex rounded-xl border-2 border-border bg-background shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-primary/50 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[44px]' : 'min-h-[44px]'}`}>
+        <div className={`flex flex-col rounded-xl border-2 border-border bg-background shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-primary/50 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[44px]' : 'min-h-[44px]'}`}>
+          {replyTo && (
+            <div className="flex items-start gap-2 px-2 pt-2 pb-1.5 border-b border-border bg-muted/50">
+              <div className="flex items-start gap-2 min-w-0 flex-1">
+                {(replyTo.media_url && (replyTo.message_type === 'image' || replyTo.message_type === 'video')) ? (
+                  <img
+                    src={replyTo.media_url}
+                    alt=""
+                    className="w-10 h-10 object-cover rounded shrink-0"
+                  />
+                ) : replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) ? (
+                  <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0">
+                    <ReplyMediaIcon messageType={replyTo.message_type} className="w-5 h-5 text-gray-500" />
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-[#128C7E]">
+                    {replyTo.direction === 'inbound'
+                      ? (isInstagramConversation && !displayName?.trim()
+                        ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
+                        : (displayName ?? (customerId ? maskPhoneLast4(customerId) : null) ?? 'Contact'))
+                      : t('whatsappInbox.you', 'You')}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-sm text-muted-foreground min-w-0">
+                    {replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) && !(replyTo.media_url && (replyTo.message_type === 'image' || replyTo.message_type === 'video')) && (
+                      <span className="shrink-0 text-gray-500">
+                        <ReplyMediaIcon messageType={replyTo.message_type} className="w-4 h-4" />
+                      </span>
+                    )}
+                    <span className={replyTo.body ? 'truncate flex-1 min-w-0' : 'flex-1 min-w-0 text-gray-500'}>
+                      {replyTo.body?.slice(0, 80) ?? (replyTo.message_type && MEDIA_TYPES.includes(replyTo.message_type.toLowerCase()) ? `[${replyTo.message_type}]` : '[Pesan]')}
+                      {(replyTo.body?.length ?? 0) > 80 ? '...' : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setReplyTo(null)} aria-label={t('whatsappInbox.cancelReply', 'Cancel reply')}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+          <div className="flex min-h-[44px]">
           <button
             type="button"
             className={`shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50 self-end ${hideHeader ? 'p-2 pb-2.5' : 'p-2.5'}`}
@@ -1495,6 +1863,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
           >
             <Send className={hideHeader ? 'w-4 h-4' : 'w-4 h-4'} strokeWidth={2.5} />
           </button>
+          </div>
         </div>
       </div>
       <Dialog open={!!mediaViewer} onOpenChange={(open) => !open && setMediaViewer(null)}>

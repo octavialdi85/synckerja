@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Badge } from '@/features/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
-import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX, DollarSign } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX, DollarSign, CheckCircle } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -334,6 +334,7 @@ export function ExpenseDashboard() {
       is_recurring: false,
       recurring_frequency: '',
       first_payment_date: '',
+      linked_recurring_expense_id: '',
       description: '',
     },
   });
@@ -365,6 +366,14 @@ export function ExpenseDashboard() {
     }
 
     // Find the selected expense type to get its ID
+    const linkedRecurringRaw = (data.linked_recurring_expense_id ?? '').trim();
+    if (data.is_recurring && linkedRecurringRaw) {
+      if (!data.recurring_frequency?.trim() || !data.first_payment_date?.trim()) {
+        toast.error('Select frequency and first payment date when paying an existing recurring bill.');
+        return;
+      }
+    }
+
     const selectedExpenseType = expenseTypes.find(type => type.name === data.expense_type);
     
     const expenseData: CreateExpenseData = {
@@ -383,6 +392,8 @@ export function ExpenseDashboard() {
         ? data.withdrawal_from_balance 
         : undefined,
       bank_account_id: data.bank_account_id || undefined,
+      recurring_settlement_for_expense_id:
+        data.is_recurring && linkedRecurringRaw ? linkedRecurringRaw : undefined,
     };
 
     const success = await createExpense(expenseData);
@@ -402,6 +413,7 @@ export function ExpenseDashboard() {
         is_recurring: false,
         recurring_frequency: '',
         first_payment_date: '',
+        linked_recurring_expense_id: '',
         description: '',
       });
       setAmountDisplay('');
@@ -629,6 +641,34 @@ export function ExpenseDashboard() {
     return filtered;
   }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, categoryFilter, withdrawalFilter]);
 
+  // YTD = Year-To-Date: from January 1 of current year through today (independent of user date filter)
+  const { totalExpensesYTD, ytdTransactionCount } = useMemo(() => {
+    const now = new Date();
+    const ytdStart = startOfYear(now);
+    const ytdEnd = endOfDay(now);
+    const ytdStartT = ytdStart.getTime();
+    const ytdEndT = ytdEnd.getTime();
+    let total = 0;
+    let count = 0;
+    expenses.forEach(exp => {
+      const t = new Date(exp.create_date).getTime();
+      if (t >= ytdStartT && t <= ytdEndT) {
+        total += exp.amount;
+        count += 1;
+      }
+    });
+    paidPurchaseRequests.forEach(pr => {
+      if (expenses.some(e => e.purchase_request_id === pr.id)) return;
+      const lastPayment = pr.paid_at || pr.approved_at || pr.created_at;
+      const t = new Date(lastPayment).getTime();
+      if (t >= ytdStartT && t <= ytdEndT) {
+        total += pr.amount_idr;
+        count += 1;
+      }
+    });
+    return { totalExpensesYTD: total, ytdTransactionCount: count };
+  }, [expenses, paidPurchaseRequests]);
+
   // Data untuk tab "Expense Category" saja: filter date/type/dept, TANPA filter kategori.
   // Tab Expense Category tidak merespon filter kategori agar breakdown per kategori tetap tampil penuh.
   const allExpensesForCategoryBreakdown = useMemo(() => {
@@ -837,8 +877,8 @@ export function ExpenseDashboard() {
         <Card className="min-w-0">
         <CardContent className="p-3 min-w-0">
             <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Total Expenses YTD</div>
-            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">{formatCurrency(totalExpenses)}</div>
-            <div className="text-xs text-gray-500 truncate">{expenses.length} transactions</div>
+            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">{formatCurrency(totalExpensesYTD)}</div>
+            <div className="text-xs text-gray-500 truncate">{ytdTransactionCount} transactions</div>
             <div className="flex items-center mt-1">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 flex-shrink-0"></div>
             </div>
@@ -1284,19 +1324,20 @@ export function ExpenseDashboard() {
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request By</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Recurring</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Status</th>
+                  <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm" title={t('expenses.receipt', 'Receipt')}>{t('expenses.receipt', 'Receipt')}</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {(isLoading || isLoadingPurchaseRequests) ? (
                   <tr>
-                    <td colSpan={13} className="py-8 text-center text-gray-500">
+                    <td colSpan={14} className="py-8 text-center text-gray-500">
                       Loading expenses...
                     </td>
                   </tr>
                 ) : allExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-8 text-center text-gray-500">
+                    <td colSpan={14} className="py-8 text-center text-gray-500">
                       No expenses found. Click "Add Expense" to create your first expense.
                     </td>
                   </tr>
@@ -1374,6 +1415,15 @@ export function ExpenseDashboard() {
                           <Badge variant="default" className="text-xs">
                             Berhasil
                           </Badge>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
+                          <div className="flex justify-center items-center">
+                            {expense.receipt_url ? (
+                              <CheckCircle className="h-5 w-5 text-green-600 shrink-0" aria-label={t('expenses.hasReceipt', 'Has receipt')} />
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
                           <DropdownMenu>

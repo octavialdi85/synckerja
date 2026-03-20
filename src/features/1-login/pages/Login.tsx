@@ -320,7 +320,7 @@ const Login = () => {
 
   // Show loading while checking authentication status
   if (checkingAuth) {
-    return <div className="auth-page-fixed flex">
+    return <div className="auth-page-fixed flex safe-area-top">
       <div className="hidden lg:flex lg:flex-1">
         <AuthTestimonialsPanel />
       </div>
@@ -335,7 +335,7 @@ const Login = () => {
     </div>;
   }
 
-  return <div className="auth-page-fixed flex">
+  return <div className="auth-page-fixed flex safe-area-top">
       {/* Left Panel - Testimonials */}
       <div className="hidden lg:flex lg:flex-1">
         <AuthTestimonialsPanel />

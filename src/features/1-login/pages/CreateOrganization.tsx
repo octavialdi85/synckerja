@@ -61,7 +61,7 @@ const CreateOrganization = () => {
   // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4 safe-area-top">
         <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
           <CardContent className="p-6 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
@@ -74,7 +74,7 @@ const CreateOrganization = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4 safe-area-top">
       <Card className="w-full max-w-2xl shadow border rounded-2xl bg-white">
         <CardHeader>
           <div className="flex items-center gap-3 mb-2">

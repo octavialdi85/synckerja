@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import {
@@ -26,6 +27,8 @@ const PULL_THRESHOLD = 52;
 const MAX_PULL = 72;
 const INDICATOR_HEIGHT = 56;
 const PULL_RESISTANCE = 0.55;
+/** Snap transition (same as TaskCard / ConversationList) for pull indicator snap-back. */
+const SNAP_TRANSITION = '0.25s cubic-bezier(0.33, 1, 0.68, 1)';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
@@ -77,8 +80,11 @@ export function LiveChatListView({
   const [isPulling, setIsPulling] = useState(false);
   const touchStartY = useRef(0);
   const pullDistanceRef = useRef(0);
+  const swipeGestureActiveRef = useRef(false);
   const listScrollRef = useRef<HTMLDivElement>(null);
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { height: viewportHeight, offsetTop: viewportOffsetTop, mainFixedStyle } =
+    useVisualViewport();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     pullDistanceRef.current = pullDistance;
@@ -88,8 +94,11 @@ export function LiveChatListView({
     if (!onRefetch || isRefreshing) return;
     setIsRefreshing(true);
     setPullDistance(0);
+    pullDistanceRef.current = 0;
     try {
       await onRefetch();
+    } catch {
+      // Refetch failed; keep isRefreshing false so user can try again
     } finally {
       setIsRefreshing(false);
     }
@@ -103,6 +112,7 @@ export function LiveChatListView({
 
   const onTouchMove = useCallback(
     (e: React.TouchEvent) => {
+      if (swipeGestureActiveRef.current) return;
       const el = listScrollRef.current;
       if (!el || isRefreshing) return;
       if (el.scrollTop > 2) {
@@ -133,6 +143,15 @@ export function LiveChatListView({
     if (d >= PULL_THRESHOLD) handlePullRefresh();
   }, [handlePullRefresh]);
 
+  const onSwipeLockChange = useCallback((locked: boolean) => {
+    swipeGestureActiveRef.current = locked;
+    if (locked) {
+      setIsPulling(false);
+      setPullDistance(0);
+      pullDistanceRef.current = 0;
+    }
+  }, []);
+
   const accountLabel = accountFilter
     ? accountOptions.find((o) => o.value === accountFilter)?.label ?? t('whatsappInbox.filterAllAccounts', 'All accounts')
     : t('whatsappInbox.filterAllAccounts', 'All accounts');
@@ -151,14 +170,7 @@ export function LiveChatListView({
           <AppSidebar />
 
           {/* Same structure as LiveChatChatView: fixed viewport container, header first (sticky + safe-area-top), then scrollable content */}
-          <main
-            className="flex flex-col bg-background fixed inset-x-0 z-0"
-            style={{
-              top: viewportOffsetTop,
-              height: viewportHeight > 0 ? viewportHeight : undefined,
-              minHeight: viewportHeight > 0 ? undefined : '100dvh',
-            }}
-          >
+          <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
             <header className="flex-shrink-0 sticky top-0 z-30 flex flex-col gap-2 p-2 bg-slate-800 border-b border-slate-700 safe-area-top">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden text-white hover:bg-slate-700 hover:text-white" />
@@ -274,10 +286,16 @@ export function LiveChatListView({
 
               <Dialog open={searchPopupOpen} onOpenChange={(open) => { setSearchPopupOpen(open); if (!open) setSearchQuery(''); }}>
                 <DialogContent
-                  className="dialog-search-instant sm:max-w-md overflow-hidden flex flex-col p-4"
+                  className={cn(
+                    'overflow-hidden flex flex-col',
+                    isMobile
+                      ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area p-0 gap-0'
+                      : 'dialog-search-instant sm:max-w-md p-4'
+                  )}
                   overlayClassName="dialog-search-overlay-instant"
+                  fullscreenAnimation={isMobile}
                   style={
-                    viewportHeight > 0
+                    !isMobile && viewportHeight > 0
                       ? isKeyboardLikelyOpen
                         ? {
                             top: viewportOffsetTop + 8,
@@ -289,10 +307,19 @@ export function LiveChatListView({
                       : undefined
                   }
                 >
-                  <DialogHeader className="flex-shrink-0">
-                    <DialogTitle>{t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}</DialogTitle>
+                  <DialogHeader
+                    className={cn(
+                      'flex-shrink-0',
+                      isMobile
+                        ? 'safe-area-top px-4 pt-4 pb-3 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left'
+                        : ''
+                    )}
+                  >
+                    <DialogTitle className={cn(isMobile && 'text-lg font-semibold')}>
+                      {t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}
+                    </DialogTitle>
                   </DialogHeader>
-                  <div className="min-h-0 flex flex-col overflow-hidden flex-1 overflow-y-auto">
+                  <div className={cn('min-h-0 flex flex-col overflow-hidden flex-1 overflow-y-auto seamless-scroll', isMobile && 'px-4 pb-4')}>
                     <MobileSearchConversationPopup
                       searchQuery={searchQuery}
                       onSearchChange={setSearchQuery}
@@ -340,7 +367,7 @@ export function LiveChatListView({
                     style={{
                       height: pullDistance > 0 ? Math.min(pullDistance, MAX_PULL) : isRefreshing ? INDICATOR_HEIGHT : 0,
                       minHeight: 0,
-                      transition: isPulling ? 'none' : 'height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94), min-height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      transition: isPulling ? 'none' : `height ${SNAP_TRANSITION}, min-height ${SNAP_TRANSITION}`,
                     }}
                   >
                     {isRefreshing ? (
@@ -354,7 +381,7 @@ export function LiveChatListView({
                         className="h-5 w-5 opacity-80 shrink-0 text-slate-300"
                         style={{
                           transform: `rotate(${Math.min((pullDistance / PULL_THRESHOLD) * 180, 180)}deg)`,
-                          transition: isPulling ? 'none' : 'transform 0.2s ease-out',
+                          transition: isPulling ? 'none' : `transform ${SNAP_TRANSITION}`,
                         }}
                         aria-hidden
                       />
@@ -374,6 +401,7 @@ export function LiveChatListView({
                     searchQuery={searchQuery}
                     accountFilter={accountFilter || undefined}
                     waAccountsForHint={waAccountsForHint}
+                    onSwipeLockChange={onSwipeLockChange}
                   />
                 </div>
               </div>

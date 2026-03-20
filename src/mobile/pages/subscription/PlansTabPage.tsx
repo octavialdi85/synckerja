@@ -20,7 +20,7 @@ const PlansTabPage = () => {
   useOptimizedPerformanceMonitor("PlansTabPageMobile");
   const { t } = useAppTranslation();
   const { activeTab, handleTabChange } = useSubscriptionTabs("plans");
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { mainFixedStyle } = useVisualViewport();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -89,14 +89,7 @@ const PlansTabPage = () => {
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
 
-          <main
-            className="flex flex-col bg-background fixed inset-x-0 z-0"
-            style={{
-              top: viewportOffsetTop,
-              height: viewportHeight > 0 ? viewportHeight : undefined,
-              minHeight: viewportHeight > 0 ? undefined : "100dvh",
-            }}
-          >
+            <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
             <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />

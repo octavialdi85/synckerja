@@ -3,7 +3,7 @@ import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { CurrentOrgProvider } from "@/features/1-login/contexts/CurrentOrgContext";
@@ -17,6 +17,8 @@ import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
 import VerifyEmail from "./features/1-login/pages/VerifyEmail";
 import EmailVerified from "./features/1-login/pages/EmailVerified";
+import ForgotPassword from "./features/1-login/pages/ForgotPassword";
+import ResetPassword from "./features/1-login/pages/ResetPassword";
 import CreateOrganization from "./features/1-login/pages/CreateOrganization";
 import MobileCreateOrganization from "./mobile/login/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
@@ -24,6 +26,8 @@ import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
 import { TermsOfServicePage, PrivacyPolicyPage } from "./features/policy";
 import NotFound from "./features/1-login/pages/NotFound";
+import { Capacitor } from "@capacitor/core";
+import { tryConsumeShareBack } from "@/mobile/shareIntent/shareBackGuard";
 import { useDesktopLayout } from "./mobile/hooks/use-device-orientation";
 import ModernHomePage from "./features/1_home/pages/ModernHomePage";
 import MobileHome from "./mobile/pages/home/Absensi";
@@ -111,11 +115,19 @@ import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { LeadsManagementPage } from "./mobile/pages/leads-management";
+import {
+  IncomeBankAccountPage as MobileIncomeBankAccountPage,
+  IncomeDashboardPage as MobileIncomeDashboardPage,
+  IncomeTransactionPage as MobileIncomeTransactionPage,
+} from "./mobile/pages/incomes";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
 import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, EmailConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
 import { ExpenseDashboard } from "./features/4_2_dashboard";
+import ExpenseDashboardPageMobile from "./mobile/pages/expenses/ExpenseDashboardPage";
+import ShareReceiptValidationPage from "./mobile/pages/share/ShareReceiptValidationPage";
+import { ShareIntentBootstrap } from "./mobile/shareIntent/ShareIntentBootstrap";
 import { DebtPage } from "./features/4_2_debt";
 import { ApprovalsPage } from "./features/4_2_approvals";
 import { PaymentProcessPage } from "./features/4_2_payment-process/PaymentProcessPage";
@@ -169,6 +181,47 @@ const NativePushSetup = () => {
   useAppNotificationsFCM();
   useLiveChatFCM();
   usePushNotificationHandlers();
+  return null;
+};
+
+// Android hardware back button: go back in-app instead of exiting (only when running in Capacitor native).
+// Use window.history.back() so the WebView history and React Router stay in sync; navigate(-1)
+// can leave the WebView in a state where the next route render is blank on some devices.
+const NativeBackButtonHandler = () => {
+  useEffect(() => {
+    let remove: (() => void) | undefined;
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return;
+      import('@capacitor/app').then(({ App }) => {
+        remove = App.addListener('backButton', () => {
+          if (tryConsumeShareBack()) return;
+          if (window.history.length > 1) {
+            window.history.back();
+          }
+        });
+      });
+    });
+    return () => {
+      remove?.();
+    };
+  }, []);
+  return null;
+};
+
+// Ensure native splash is always dismissed, regardless of initial route (e.g. cold-start from share intent).
+const NativeSplashBootstrap = () => {
+  useEffect(() => {
+    let cancelled = false;
+    import("@capacitor/core").then(({ Capacitor }) => {
+      if (cancelled || !Capacitor.isNativePlatform()) return;
+      import("@capacitor/splash-screen").then(({ SplashScreen }) => {
+        if (!cancelled) void SplashScreen.hide();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return null;
 };
 
@@ -278,8 +331,99 @@ const SubscriptionManagementRouteElement = () => {
   return isMobile ? <ManagementTabPageMobile /> : <ManagementTabPageDesktop />;
 };
 
+const ExpenseRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <ExpenseDashboardPageMobile />
+  ) : (
+    <StandardLayout>
+      <ExpenseDashboard />
+    </StandardLayout>
+  );
+};
+
+const ExpenseDebtRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <ExpenseDashboardPageMobile />
+  ) : (
+    <StandardLayout>
+      <DebtPage />
+    </StandardLayout>
+  );
+};
+
+const ExpenseApprovalsRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <ExpenseDashboardPageMobile />
+  ) : (
+    <StandardLayout>
+      <ApprovalsPage />
+    </StandardLayout>
+  );
+};
+
+const ExpensePaymentProcessRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <ExpenseDashboardPageMobile />
+  ) : (
+    <StandardLayout>
+      <PaymentProcessPage />
+    </StandardLayout>
+  );
+};
+
+const ExpenseReminderBillsRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <ExpenseDashboardPageMobile />
+  ) : (
+    <StandardLayout>
+      <ReminderBillsPage />
+    </StandardLayout>
+  );
+};
+
+const IncomeDashboardRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <MobileIncomeDashboardPage />
+  ) : (
+    <StandardLayout>
+      <IncomeDashboard />
+    </StandardLayout>
+  );
+};
+
+const IncomeTransactionRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <MobileIncomeTransactionPage />
+  ) : (
+    <StandardLayout>
+      <IncomeTransactionPage />
+    </StandardLayout>
+  );
+};
+
+const IncomeBankAccountRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? (
+    <MobileIncomeBankAccountPage />
+  ) : (
+    <StandardLayout>
+      <IncomeTransactionPage />
+    </StandardLayout>
+  );
+};
+
 const LivechatRouteElement = () => {
   const isMobile = useMobileDetection();
+  // In native app (Capacitor/emulator), always use mobile layout to avoid blank page when
+  // useDesktopLayout() misreports viewport (e.g. large initial width in WebView).
+  if (Capacitor.isNativePlatform()) return <MobileLiveChatPage />;
   return isMobile ? <MobileLiveChatPage /> : <WhatsAppInboxPage />;
 };
 
@@ -304,6 +448,9 @@ const App = () => (
               }}
             >
               <NativePushSetup />
+              <NativeBackButtonHandler />
+              <NativeSplashBootstrap />
+              <ShareIntentBootstrap />
               <NativeSafeAreaWrapper>
                 <SecurityWrapper>
                   <SubscriptionExpiryGuard>
@@ -344,6 +491,14 @@ const App = () => (
               } />
               <Route path="/email-verified" element={
                 <EmailVerified />
+              } />
+              <Route path="/forgot-password" element={
+                <PublicRoute>
+                  <ForgotPassword />
+                </PublicRoute>
+              } />
+              <Route path="/reset-password" element={
+                <ResetPassword />
               } />
               
               {/* Semi-Protected Routes - Have their own authentication logic */}
@@ -414,51 +569,47 @@ const App = () => (
               {/* Finance Routes */}
               <Route path="/incomes/dashboard" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <IncomeDashboard />
-                  </StandardLayout>
+                  <IncomeDashboardRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/incomes/transaction" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <IncomeTransactionPage />
-                  </StandardLayout>
+                  <IncomeTransactionRouteElement />
+                </ProtectedRoute>
+              } />
+              <Route path="/incomes/transaction/bank-account" element={
+                <ProtectedRoute>
+                  <IncomeBankAccountRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/expenses/dashboard" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <ExpenseDashboard />
-                  </StandardLayout>
+                  <ExpenseRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/expenses/debt" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <DebtPage />
-                  </StandardLayout>
+                  <ExpenseDebtRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/expenses/approvals" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <ApprovalsPage />
-                  </StandardLayout>
+                  <ExpenseApprovalsRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/expenses/payment-process" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <PaymentProcessPage />
-                  </StandardLayout>
+                  <ExpensePaymentProcessRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/expenses/reminder-bills" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <ReminderBillsPage />
-                  </StandardLayout>
+                  <ExpenseReminderBillsRouteElement />
+                </ProtectedRoute>
+              } />
+              <Route path="/share/receipt-validation" element={
+                <ProtectedRoute>
+                  <ShareReceiptValidationPage />
                 </ProtectedRoute>
               } />
               

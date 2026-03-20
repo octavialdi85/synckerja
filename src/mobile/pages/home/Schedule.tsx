@@ -110,7 +110,7 @@ const Schedule = () => {
     }
   }, [handlePullRefresh]);
 
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { mainFixedStyle } = useVisualViewport();
 
   return (
     <DesktopWarning>
@@ -119,14 +119,7 @@ const Schedule = () => {
         <AppSidebar />
 
         {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc */}
-        <main
-          className="flex flex-col bg-background fixed inset-x-0 z-0"
-          style={{
-            top: viewportOffsetTop,
-            height: viewportHeight > 0 ? viewportHeight : undefined,
-            minHeight: viewportHeight > 0 ? undefined : "100dvh",
-          }}
-        >
+        <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
           <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="md:hidden" />
