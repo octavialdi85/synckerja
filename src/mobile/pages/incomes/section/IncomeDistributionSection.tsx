@@ -435,7 +435,7 @@ function BarsArea({
           >
             <div className="w-full bg-gray-100 rounded flex flex-col justify-end h-48 p-1 min-h-[12rem]">
               <div
-                className={`w-full ${item.colorClass} rounded-t min-h-[4px] transition-[height] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]`}
+                className={`w-full ${item.colorClass} rounded-t min-h-[4px] transition-[height] duration-300 ease-in-out`}
                 style={{ height: `${Math.max(item.heightPercentage, 8)}%` }}
                 title={`${item.name}: ${formatToRupiah(item.amount)}`}
               />
