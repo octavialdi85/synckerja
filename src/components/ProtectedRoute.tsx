@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import React, { ReactNode, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/features/1-login';
 import { Navigate, useLocation } from 'react-router-dom';
 import { XCircle } from 'lucide-react';

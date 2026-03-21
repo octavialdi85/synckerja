@@ -54,13 +54,6 @@ export const AttendanceErrorBoundary: React.FC<AttendanceErrorBoundaryProps> = (
                 Try Again
               </Button>
             )}
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline" 
-              size="sm"
-            >
-              Refresh Page
-            </Button>
           </div>
         </Alert>
       </div>

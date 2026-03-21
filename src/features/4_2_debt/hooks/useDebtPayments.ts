@@ -9,6 +9,7 @@ export interface DebtPaymentRecord {
   payment_date: string;
   payment_method: string | null;
   notes: string | null;
+  transaction_reference: string | null;
   principal_amount: number | null;
   interest_amount: number | null;
   created_at: string;
@@ -24,7 +25,9 @@ export const useDebtPayments = (debtId: string | null) => {
       if (!organizationId || !debtId) return [];
       const { data, error } = await supabase
         .from('debt_payments')
-        .select('id, debt_id, payment_amount, payment_date, payment_method, notes, principal_amount, interest_amount, created_at')
+        .select(
+          'id, debt_id, payment_amount, payment_date, payment_method, notes, transaction_reference, principal_amount, interest_amount, created_at'
+        )
         .eq('organization_id', organizationId)
         .eq('debt_id', debtId)
         .order('payment_date', { ascending: false })
@@ -52,6 +55,7 @@ export const useDebtPayments = (debtId: string | null) => {
         payment_date: row.payment_date,
         payment_method: row.payment_method,
         notes: row.notes,
+        transaction_reference: row.transaction_reference ?? null,
         principal_amount: row.principal_amount ?? null,
         interest_amount: row.interest_amount ?? null,
         created_at: row.created_at,

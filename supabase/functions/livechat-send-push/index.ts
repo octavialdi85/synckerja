@@ -250,18 +250,6 @@ Deno.serve(async (req: Request) => {
       .select("user_id")
       .eq("active_organization_id", organizationId);
     const userIds = (profiles ?? []).map((p: { user_id: string }) => p.user_id);
-    // #region agent log
-    console.log("livechat-send-push:debug H1 userIds=" + userIds.length + " org=" + (organizationId ?? ""));
-    console.log("livechat-send-push:debug", JSON.stringify({
-      hypothesisId: "H1",
-      message: "userIds from profiles (active_organization_id = org)",
-      data: {
-        organizationId,
-        userIdsLength: userIds.length,
-        userIdsSample: userIds.slice(0, 5).map((u) => u.slice(0, 8) + "..."),
-      },
-    }));
-    // #endregion
     if (userIds.length === 0) {
       console.log("livechat-send-push: skipped no_users_in_org", { organizationId });
       return new Response(JSON.stringify({ ok: true, skipped: "no_users_in_org" }), {
@@ -347,29 +335,10 @@ Deno.serve(async (req: Request) => {
       .in("user_id", userIds)
       .eq("context", "livechat");
     const fcmTokensList = (fcmRows ?? []) as { id: string; token: string }[];
-    // #region agent log
-    console.log("livechat-send-push:debug H2-H3 hasFcm=" + !!fcmServiceAccountJson + " fcmTokens=" + fcmTokensList.length);
-    console.log("livechat-send-push:debug", JSON.stringify({
-      hypothesisId: "H2-H3",
-      message: "FCM config and token query result",
-      data: {
-        hasFcmSecret: Boolean(fcmServiceAccountJson),
-        fcmTokensListLength: fcmTokensList.length,
-        userIdsLength: userIds.length,
-      },
-    }));
-    // #endregion
     if (fcmServiceAccountJson && fcmTokensList.length > 0) {
       try {
         const sa = JSON.parse(fcmServiceAccountJson) as { project_id?: string };
         const projectId = sa.project_id ?? Deno.env.get("FCM_PROJECT_ID") ?? "";
-        // #region agent log
-        console.log("livechat-send-push:debug", JSON.stringify({
-          hypothesisId: "H4",
-          message: "projectId for FCM",
-          data: { hasProjectId: Boolean(projectId), projectIdLength: (projectId ?? "").length },
-        }));
-        // #endregion
         if (projectId) {
           const accessToken = await getFcmAccessToken(fcmServiceAccountJson);
           const fcmToDelete: string[] = [];
@@ -380,13 +349,6 @@ Deno.serve(async (req: Request) => {
             if (result.ok) {
               fcmSent++;
             } else {
-              // #region agent log
-              console.log("livechat-send-push:debug", JSON.stringify({
-                hypothesisId: "H5b",
-                message: "FCM API returned error",
-                data: { status: result.status, errorBody: (result.errorBody ?? "").slice(0, 500) },
-              }));
-              // #endregion
               if (result.status === 404 || result.status === 400) {
                 fcmToDelete.push(row.id);
               }
@@ -397,13 +359,6 @@ Deno.serve(async (req: Request) => {
           }
         }
       } catch (fcmErr) {
-        // #region agent log
-        console.log("livechat-send-push:debug", JSON.stringify({
-          hypothesisId: "H5",
-          message: "FCM send threw",
-          data: { errorName: fcmErr instanceof Error ? fcmErr.name : "unknown", errorMessage: fcmErr instanceof Error ? fcmErr.message : String(fcmErr) },
-        }));
-        // #endregion
         console.error("livechat-send-push: FCM error", fcmErr);
       }
     }

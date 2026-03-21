@@ -5,7 +5,7 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
 import { useDebtPayments, DebtPaymentRecord } from '../hooks/useDebtPayments';
-import { Calendar, Receipt, CreditCard } from 'lucide-react';
+import { Calendar, Receipt, CreditCard, Hash } from 'lucide-react';
 
 interface DebtPaymentHistoryModalProps {
   debt: Debt | null;
@@ -110,6 +110,13 @@ function PaymentHistoryItem({
         <CreditCard className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
         <span>
           {t('debt.payment.method', 'Payment Method')}: {payment.bank_account_name ?? t('debt.paymentHistory.notSelected', '—')}
+        </span>
+      </div>
+      <div className="mt-2 flex gap-2 text-xs text-gray-600">
+        <Hash className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+        <span className="min-w-0 break-all font-mono">
+          {t('debt.paymentHistory.transactionId', 'Transaction ID')}:{' '}
+          {payment.transaction_reference?.trim() || '—'}
         </span>
       </div>
       <div className="mt-2 flex gap-2 text-xs text-gray-500">

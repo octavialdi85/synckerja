@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
-import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { PermissionConfigurationProvider } from "@/features/1-layouts/sidebar/usePermissionConfiguration";
 import { CurrentOrgProvider } from "@/features/1-login/contexts/CurrentOrgContext";
 import { LanguageProvider } from "@/features/share/i18n/LanguageProvider";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
@@ -153,11 +154,17 @@ focusManager.setEventListener((handleFocus) => {
 // Opsi: kunci state "focused" agar tidak ada transisi yang memicu refetch
 focusManager.setFocused(true);
 
+// Matikan listener online/offline bawaan TanStack (transisi jaringan saat app dibuka lagi tidak memicu refetch)
+onlineManager.setEventListener(() => {
+  return () => {};
+});
+
 // Konfigurasi QueryClient: refetch on window focus dihilangkan secara global
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false, // Dihilangkan: tidak refetch saat pindah window/tab
+      refetchOnReconnect: false, // Tidak refetch otomatis saat jaringan online lagi / pemulihan tab
       refetchOnMount: false,
       staleTime: 30 * 1000,
       gcTime: 5 * 60 * 1000,
@@ -437,6 +444,7 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <CentralizedUserDataProvider>
+          <PermissionConfigurationProvider>
           <CurrentOrgProvider>
           <LanguageProvider>
             <Toaster />
@@ -1139,6 +1147,7 @@ const App = () => (
             </BrowserRouter>
           </LanguageProvider>
           </CurrentOrgProvider>
+          </PermissionConfigurationProvider>
         </CentralizedUserDataProvider>
       </AuthProvider>
     </TooltipProvider>

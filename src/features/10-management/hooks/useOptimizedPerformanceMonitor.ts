@@ -79,7 +79,7 @@ export const createOptimizedQueryConfig = () => ({
       retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10000),
       refetchOnWindowFocus: false,
       refetchOnMount: true,
-      refetchOnReconnect: true,
+      refetchOnReconnect: false,
       // Enhanced performance settings
       networkMode: 'online' as const,
       notifyOnChangeProps: ['data', 'error', 'isLoading'] as const,

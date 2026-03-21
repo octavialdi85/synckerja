@@ -134,9 +134,6 @@ Deno.serve(async (req: Request) => {
           "\nFORBIDDEN — do NOT add any text that is not in the three fields above. Only the headline, sub headline, and text strings above may be shown.\n\n"
         : "";
     const aspectRatio = parseAspectRatio(body.aspectRatio);
-    // #region agent log
-    console.log("[debug] body.aspectRatio:", body.aspectRatio, "parsed aspectRatio:", aspectRatio);
-    // #endregion
     const referenceImageBase64 = body.referenceImageBase64 != null ? String(body.referenceImageBase64).trim() : "";
     const referenceImageMimeType =
       body.referenceImageMimeType != null && String(body.referenceImageMimeType).trim() !== ""
@@ -611,10 +608,6 @@ Deno.serve(async (req: Request) => {
         aspectRatioReminder,
     });
     parts.unshift({ text: outputFormatFirstPart });
-
-    // #region agent log
-    console.log("[debug] orientationLabel:", orientationLabel, "firstPartPreview:", (outputFormatFirstPart || "").slice(0, 120), "compositionLen:", compositionRuleForOrientation.length, "parts[0].textPreview:", (parts[0] as { text?: string })?.text?.slice(0, 100));
-    // #endregion
 
     // Enforce aspect ratio via API when supported (gemini-2.5-flash-image, gemini-3.x image models use generationConfig.imageConfig.aspectRatio).
     const geminiAspectRatioValue =

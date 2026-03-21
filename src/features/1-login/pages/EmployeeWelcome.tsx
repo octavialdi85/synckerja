@@ -200,9 +200,9 @@ const EmployeeWelcome = () => {
       <CreateOrganizationModal
         open={showCreateOrgModal}
         onOpenChange={setShowCreateOrgModal}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowCreateOrgModal(false);
-          window.location.reload();
+          await refreshUserData();
         }}
       />
     </div>

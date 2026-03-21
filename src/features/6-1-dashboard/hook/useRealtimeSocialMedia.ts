@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useSyncPicProduction } from './useSyncPicProduction';
-import { getBriefModalOpenPlanId } from './briefModalOpenRef';
+import { shouldDeferSocialMediaPlansRefetch } from './briefModalOpenRef';
 
 export const useRealtimeSocialMedia = () => {
   const queryClient = useQueryClient();
@@ -35,8 +35,8 @@ export const useRealtimeSocialMedia = () => {
         (payload) => {
           // Refetch so STATUS/APPROVED (Concept + Production) stay in sync when changed from
           // modal Preview, /review/ page, or another tab/device.
-          // Skip refetch while Brief modal is open to avoid closing it / wiping user edits.
-          if (getBriefModalOpenPlanId()) return;
+          // Skip full-table refetch while Brief / Preview (Drive) / Title modal is open.
+          if (shouldDeferSocialMediaPlansRefetch()) return;
           if (organizationId) {
             queryClient.refetchQueries({
               queryKey: ['social-media-plans', organizationId],

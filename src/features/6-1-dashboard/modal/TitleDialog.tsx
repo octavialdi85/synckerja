@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
 import { useSyncPicProduction } from '../hook/useSyncPicProduction';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { setTitleModalOpenPlanId } from '../hook/briefModalOpenRef';
 import {
   Tooltip,
   TooltipContent,
@@ -41,6 +42,15 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   const { organizationId } = useCurrentOrg();
   const { syncPicProduction } = useSyncPicProduction();
   const { language } = useAppTranslation();
+
+  useEffect(() => {
+    if (isOpen && socialMediaPlanId) {
+      setTitleModalOpenPlanId(socialMediaPlanId);
+      return () => setTitleModalOpenPlanId(null);
+    }
+    setTitleModalOpenPlanId(null);
+    return undefined;
+  }, [isOpen, socialMediaPlanId]);
 
   // ===== OPTIMIZATION 1: Cache planData with React Query =====
   // Always fetch planData for service/content_type/post_date (needed for formattedTitle)

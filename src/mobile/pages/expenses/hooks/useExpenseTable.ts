@@ -375,7 +375,8 @@ export function useExpenseTable() {
     return allExpenses.filter(
       (expense) =>
         expense.expense_name.toLowerCase().includes(q) ||
-        (expense.category || "").toLowerCase().includes(q)
+        (expense.category || "").toLowerCase().includes(q) ||
+        (expense.transaction_reference || "").toLowerCase().includes(q)
     );
   }, [allExpenses, searchQuery]);
 

@@ -12,8 +12,10 @@ import { useIncomeTransactions } from './hooks';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
 import { AddIncomeForm } from './AddIncomeForm';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export function IncomeTransactionTable() {
+  const { t } = useAppTranslation();
   const { incomeTransactions, isLoading } = useIncomeTransactions();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -21,9 +23,12 @@ export function IncomeTransactionTable() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const filteredTransactions = incomeTransactions.filter((transaction) => {
-    const matchesSearch = transaction.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    const matchesSearch =
+      transaction.customer_name?.toLowerCase().includes(q) ||
+      transaction.description?.toLowerCase().includes(q) ||
+      transaction.id.toLowerCase().includes(q) ||
+      (transaction.transaction_reference || '').toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'all' || transaction.status === statusFilter;
     const matchesType = typeFilter === 'all' || transaction.income_types?.name === typeFilter;
     
@@ -146,6 +151,9 @@ export function IncomeTransactionTable() {
               <TableHead className="h-8 px-3 text-xs font-medium">Recurring</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Receipt</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium max-w-[10rem]">
+                {t('incomes.tableTransactionId', 'Transaction ID')}
+              </TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
             </TableRow>
@@ -153,7 +161,7 @@ export function IncomeTransactionTable() {
           <TableBody>
             {filteredTransactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-16 text-center text-xs text-gray-500">
+                <TableCell colSpan={12} className="h-16 text-center text-xs text-gray-500">
                   No transactions found
                 </TableCell>
               </TableRow>
@@ -290,6 +298,14 @@ export function IncomeTransactionTable() {
                     <Badge variant={getStatusBadgeVariant(transaction.status)} className="text-xs">
                       {transaction.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs max-w-[10rem] min-w-0">
+                    <div
+                      className="truncate font-mono text-xs"
+                      title={transaction.transaction_reference?.trim() || undefined}
+                    >
+                      {transaction.transaction_reference?.trim() || '—'}
+                    </div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}

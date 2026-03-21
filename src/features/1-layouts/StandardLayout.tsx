@@ -33,9 +33,9 @@ export const StandardLayout = ({ children }: StandardLayoutProps) => {
     <div className="min-h-screen flex flex-col w-full">
       <Header />
       
-      <SidebarProvider className="flex flex-1 w-full mt-16">
+      <SidebarProvider className="flex flex-1 min-h-0 w-full mt-16">
         <AppSidebar />
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col">
           {/* Trial/Subscription Banner - positioned inside sidebar inset for proper layout */}
           {showBanner && (
             <div className="w-full bg-white border-b shadow-sm relative z-10">

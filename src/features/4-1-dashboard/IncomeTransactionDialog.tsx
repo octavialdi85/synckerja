@@ -13,18 +13,20 @@ import * as z from 'zod';
 import { useIncomeTransactions } from './hooks';
 import { IncomeTransactionWithRelations, CreateIncomeTransactionData } from './types';
 import { useIncomeMasterData } from './hooks';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
 import { CalendarIcon, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { cn } from '@/lib/utils';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, 'Transaction date is required'),
   amount: z.number().min(0.01, 'Amount must be greater than 0'),
   customer_name: z.string().optional(),
   payment_method: z.string().optional(),
+  bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
   service_id: z.string().optional(),
@@ -33,6 +35,17 @@ const formSchema = z.object({
   recurring_frequency: z.string().optional(),
   description: z.string().optional(),
   receipt_file: z.instanceof(File).optional(),
+}).superRefine((data, ctx) => {
+  if (data.payment_method === 'bank_transfer') {
+    const id = data.bank_account_id?.trim();
+    if (!id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a bank account for bank transfer',
+        path: ['bank_account_id'],
+      });
+    }
+  }
 });
 
 interface IncomeTransactionDialogProps {
@@ -48,6 +61,25 @@ export const IncomeTransactionDialog = ({
 }: IncomeTransactionDialogProps) => {
   const { createIncomeTransaction, updateIncomeTransaction, isCreating, isUpdating } = useIncomeTransactions();
   const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
+  const { bankAccounts } = useBankAccounts({ includeInactive: true });
+
+  /** Ensures the linked account appears in the Select (inactive or missing from list still shows a matching SelectItem). */
+  const bankAccountSelectOptions = useMemo(() => {
+    const rows = bankAccounts.map((b) => ({
+      id: b.id,
+      label: `${b.name}${b.account_number ? ` (${b.account_number})` : ''}`,
+    }));
+    const linkedId = income?.bank_account_id?.trim();
+    if (!linkedId || rows.some((r) => r.id === linkedId)) {
+      return rows;
+    }
+    const rel = income?.bank_accounts;
+    const label =
+      rel?.name != null && String(rel.name).length > 0
+        ? `${rel.name}${rel.account_number ? ` (${rel.account_number})` : ''}`
+        : 'Previously selected account';
+    return [{ id: linkedId, label }, ...rows];
+  }, [bankAccounts, income]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -56,6 +88,7 @@ export const IncomeTransactionDialog = ({
       amount: 0,
       customer_name: '',
       payment_method: '',
+      bank_account_id: '',
       income_type_id: '',
       category_id: '',
       service_id: '',
@@ -66,14 +99,20 @@ export const IncomeTransactionDialog = ({
     },
   });
 
-  // Update form when income data changes
+  // Reset when dialog opens or the selected transaction changes (so Edit always shows saved bank_account_id)
   useEffect(() => {
+    if (!open) return;
     if (income) {
+      const txDate =
+        typeof income.transaction_date === 'string' && income.transaction_date.length >= 10
+          ? income.transaction_date.slice(0, 10)
+          : income.transaction_date;
       form.reset({
-        transaction_date: income.transaction_date,
+        transaction_date: txDate,
         amount: income.amount,
         customer_name: income.customer_name || '',
         payment_method: income.payment_method || '',
+        bank_account_id: income.bank_account_id?.trim() || '',
         income_type_id: income.income_type_id || '',
         category_id: income.category_id || '',
         service_id: income.service_id || '',
@@ -88,6 +127,7 @@ export const IncomeTransactionDialog = ({
         amount: 0,
         customer_name: '',
         payment_method: '',
+        bank_account_id: '',
         income_type_id: '',
         category_id: '',
         service_id: '',
@@ -97,19 +137,22 @@ export const IncomeTransactionDialog = ({
         description: '',
       });
     }
-  }, [income, form]);
+  }, [income, open, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      const bankId = values.bank_account_id?.trim() || null;
       if (income) {
-        // Update existing transaction
         updateIncomeTransaction({
           id: income.id,
           ...values,
+          bank_account_id: bankId,
         });
       } else {
-        // Create new transaction
-        createIncomeTransaction(values as CreateIncomeTransactionData);
+        createIncomeTransaction({
+          ...(values as CreateIncomeTransactionData),
+          bank_account_id: bankId ?? undefined,
+        });
       }
       onOpenChange(false);
     } catch (error) {
@@ -207,7 +250,15 @@ export const IncomeTransactionDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment Method</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        if (v !== 'bank_transfer') {
+                          form.setValue('bank_account_id', '');
+                        }
+                      }}
+                      value={field.value || undefined}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select payment method" />
@@ -226,6 +277,34 @@ export const IncomeTransactionDialog = ({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="bank_account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bank Account</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v)}
+                    value={field.value || undefined}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select bank account" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {bankAccountSelectOptions.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>
+                          {row.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Categories */}
             <div className="grid grid-cols-2 gap-4">

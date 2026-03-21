@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { toast } from 'sonner';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 
@@ -38,6 +39,7 @@ export interface Expense {
   bill_source?: 'expense' | 'purchase_request';
   /** Payment row linked to master recurring expense; excluded from reminder bills list. */
   recurring_settlement_for_expense_id?: string | null;
+  transaction_reference?: string | null;
 }
 
 export interface CreateExpenseData {
@@ -59,6 +61,7 @@ export interface CreateExpenseData {
   purchase_request_id?: string; // Link to purchase request when created from payment-process
   /** When set, inserts a recurring settlement payment (no own next_payment_date schedule). */
   recurring_settlement_for_expense_id?: string | null;
+  transaction_reference?: string | null;
 }
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -210,6 +213,7 @@ async function fetchExpensesForOrg(organizationId: string): Promise<Expense[]> {
 }
 
 export const useExpenses = () => {
+  const { t } = useAppTranslation();
   const { updateBalance } = useBankAccountBalances();
   const [isCreating, setIsCreating] = useState(false);
   const { organizationId } = useCurrentOrg();
@@ -294,6 +298,10 @@ export const useExpenses = () => {
       const receiptUrl = receiptUrls[0] ?? null;
       const receiptUrlsJson =
         receiptUrls.length > 1 ? receiptUrls : null;
+
+      const refTrimmed = expenseData.transaction_reference?.trim() ?? null;
+      const refForDb =
+        refTrimmed && refTrimmed.length > 0 ? refTrimmed : null;
 
       const { data: expenseTypes, error: typeError } = await supabase
         .from('expense_types')
@@ -385,6 +393,7 @@ export const useExpenses = () => {
           purchase_request_id: expenseData.purchase_request_id || null,
           recurring_settlement_for_expense_id:
             expenseData.recurring_settlement_for_expense_id || null,
+          transaction_reference: refForDb,
         })
         .select()
         .single();
@@ -412,6 +421,23 @@ export const useExpenses = () => {
       return data;
     } catch (error: any) {
       console.error('Error creating expense:', error);
+
+      const code = error?.code as string | undefined;
+      const msg = String(error?.message ?? '');
+      if (
+        code === '23505' ||
+        /duplicate key/i.test(msg) ||
+        /unique constraint/i.test(msg) ||
+        /idx_expenses_org_transaction_ref/i.test(msg)
+      ) {
+        toast.error(
+          t(
+            'expenses.duplicateTransactionReference',
+            'An expense with this Transaction ID already exists in your organization.'
+          )
+        );
+        return false;
+      }
 
       if (error?.message) {
         if (error.message.includes('Insufficient available limit')) {

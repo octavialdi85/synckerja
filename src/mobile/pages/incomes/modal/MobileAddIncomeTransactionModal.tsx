@@ -21,8 +21,11 @@ import { formatInputNumber, parseInputNumber } from "@/features/8_2_pricing-tool
 import type { CreateIncomeTransactionData } from "@/features/4-1-dashboard/types";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { CameraModal } from "@/mobile/components/CameraModal";
+import { MobileIncomeTransactionDateField } from "../components/MobileIncomeTransactionDateField";
 import { toast } from "sonner";
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { format } from "date-fns";
+import type { ExpenseReceiptAutofillData } from "@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI";
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, "Transaction date is required"),
@@ -49,6 +52,17 @@ const formSchema = z.object({
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
   description: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.payment_method === "bank_transfer") {
+    const id = data.bank_account_id?.trim();
+    if (!id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "bank_account_required",
+        path: ["bank_account_id"],
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -93,8 +107,13 @@ interface MobileAddIncomeTransactionModalProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   initialReceiptFile?: File | null;
+  /** Change when shared files change (e.g. name:size). */
+  initialReceiptFilesKey?: string;
   shareFlowLocked?: boolean;
   onShareFlowSuccess?: () => void | Promise<void>;
+  aiAutofillStatus?: "idle" | "loading" | "success" | "error";
+  aiAutofillData?: ExpenseReceiptAutofillData;
+  aiAutofillRequestId?: number;
 }
 
 export function MobileAddIncomeTransactionModal({
@@ -102,8 +121,12 @@ export function MobileAddIncomeTransactionModal({
   onOpenChange,
   onSuccess,
   initialReceiptFile = null,
+  initialReceiptFilesKey,
   shareFlowLocked = false,
   onShareFlowSuccess,
+  aiAutofillStatus = "idle",
+  aiAutofillData,
+  aiAutofillRequestId = 0,
 }: MobileAddIncomeTransactionModalProps) {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
@@ -122,6 +145,9 @@ export function MobileAddIncomeTransactionModal({
   const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const receiptSectionRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
+  const lastAppliedAiRequestRef = useRef<number | null>(null);
+  const [transactionRefDisplay, setTransactionRefDisplay] = useState("");
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -145,6 +171,13 @@ export function MobileAddIncomeTransactionModal({
     () => incomeCategories.filter((category) => category.income_types_id === watchedIncomeTypeId),
     [incomeCategories, watchedIncomeTypeId]
   );
+
+  const shareSubmitBlocked =
+    shareFlowLocked &&
+    (aiAutofillStatus === "loading" ||
+      !transactionRefDisplay.trim() ||
+      !receiptFile);
+
   const paymentMethodOptions = useMemo(
     () => [
       { value: "cash", label: t("incomes.paymentMethod.cash", "Cash") },
@@ -169,19 +202,68 @@ export function MobileAddIncomeTransactionModal({
 
   useEffect(() => {
     if (!open) {
+      wasOpenRef.current = false;
+      lastAppliedAiRequestRef.current = null;
       form.reset({
         transaction_date: new Date().toISOString().split("T")[0],
         amount: "" as never,
         is_recurring: false,
       });
       setReceiptFile(null);
+      setTransactionRefDisplay("");
+      return;
     }
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (!justOpened) return;
+    setTransactionRefDisplay("");
+    lastAppliedAiRequestRef.current = null;
   }, [open, form]);
 
   useEffect(() => {
     if (!open || !shareFlowLocked) return;
     setReceiptFile(initialReceiptFile ?? null);
-  }, [open, shareFlowLocked, initialReceiptFile]);
+  }, [open, shareFlowLocked, initialReceiptFilesKey, initialReceiptFile]);
+
+  useEffect(() => {
+    if (!shareFlowLocked || !open || aiAutofillStatus === "loading") return;
+    if (lastAppliedAiRequestRef.current === aiAutofillRequestId) return;
+    lastAppliedAiRequestRef.current = aiAutofillRequestId;
+    const d = aiAutofillData;
+    if (!d) return;
+    if (d.transactionId) setTransactionRefDisplay(d.transactionId.trim());
+  }, [shareFlowLocked, open, aiAutofillStatus, aiAutofillRequestId, aiAutofillData]);
+
+  useEffect(() => {
+    if (!open || !aiAutofillData || aiAutofillStatus !== "success") return;
+    const dirtyFields = form.formState.dirtyFields;
+
+    if (
+      !dirtyFields.customer_name &&
+      !form.getValues("customer_name")?.trim() &&
+      aiAutofillData.expenseName
+    ) {
+      form.setValue("customer_name", aiAutofillData.expenseName, { shouldDirty: false });
+    }
+
+    if (!dirtyFields.amount && !form.getValues("amount") && typeof aiAutofillData.amount === "number") {
+      const normalizedAmount = Math.max(0, Math.round(aiAutofillData.amount));
+      if (normalizedAmount > 0) {
+        form.setValue("amount", normalizedAmount, { shouldValidate: true, shouldDirty: false });
+      }
+    }
+
+    if (!dirtyFields.transaction_date && aiAutofillData.createDate) {
+      const parsedDate = new Date(aiAutofillData.createDate);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        form.setValue("transaction_date", format(parsedDate, "yyyy-MM-dd"), { shouldDirty: false });
+      }
+    }
+
+    if (!dirtyFields.description && !form.getValues("description")?.trim() && aiAutofillData.description) {
+      form.setValue("description", aiAutofillData.description, { shouldDirty: false });
+    }
+  }, [open, aiAutofillData, aiAutofillStatus, aiAutofillRequestId, form]);
 
   const handleOpenChange = (next: boolean) => {
     if (!next && shareFlowLocked) {
@@ -265,6 +347,23 @@ export function MobileAddIncomeTransactionModal({
   }, [t]);
 
   const onSubmit = (data: FormData) => {
+    if (shareFlowLocked) {
+      if (aiAutofillStatus === "loading") return;
+      if (!transactionRefDisplay.trim()) {
+        toast.error(
+          t(
+            "incomes.shareTransactionIdRequired",
+            "Transaction ID was not detected on the receipt. Try again or choose another destination."
+          )
+        );
+        return;
+      }
+      if (!receiptFile) {
+        toast.error(t("incomes.shareReceiptRequired", "Add at least one receipt file."));
+        return;
+      }
+    }
+
     const amountValue =
       typeof data.amount === "string" && data.amount !== ""
         ? parseInputNumber(data.amount)
@@ -289,6 +388,10 @@ export function MobileAddIncomeTransactionModal({
       recurring_frequency: data.recurring_frequency || undefined,
       description: data.description || undefined,
       receipt_file: receiptFile || undefined,
+      transaction_reference:
+        shareFlowLocked && transactionRefDisplay.trim()
+          ? transactionRefDisplay.trim()
+          : undefined,
     };
 
     createIncomeTransaction(transactionData, {
@@ -296,6 +399,7 @@ export function MobileAddIncomeTransactionModal({
         refetchBalances();
         form.reset();
         setReceiptFile(null);
+        setTransactionRefDisplay("");
         if (shareFlowLocked) {
           await onShareFlowSuccess?.();
         } else {
@@ -327,14 +431,40 @@ export function MobileAddIncomeTransactionModal({
 
         <div ref={scrollBodyRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 py-4">
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            {shareFlowLocked && aiAutofillStatus === "loading" ? (
+              <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-700 dark:text-blue-200 flex items-center gap-2">
+                <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>{t("expenses.aiAnalyzingReceipt", "Menganalisis receipt dengan AI...")}</span>
+              </div>
+            ) : null}
+            {shareFlowLocked ? (
               <div className="space-y-2">
-                <Label htmlFor="transaction_date">{t("incomes.transactionDate", "Transaction Date")}</Label>
-                <Input id="transaction_date" type="date" {...form.register("transaction_date")} className="text-sm" />
-                {form.formState.errors.transaction_date ? (
-                  <p className="text-xs text-red-600">{form.formState.errors.transaction_date.message}</p>
+                <Label htmlFor="income_transaction_ref_display">{t("incomes.transactionIdLabel", "Transaction ID")}</Label>
+                <Input
+                  id="income_transaction_ref_display"
+                  value={transactionRefDisplay}
+                  readOnly
+                  disabled
+                  className="text-sm bg-muted"
+                  placeholder={t("incomes.transactionIdPlaceholder", "Detected from receipt by AI")}
+                />
+                {!transactionRefDisplay.trim() && aiAutofillStatus !== "loading" ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    {t(
+                      "incomes.transactionIdMissingHint",
+                      "No reference found yet. Wait for analysis to finish or choose another destination."
+                    )}
+                  </p>
                 ) : null}
               </div>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3">
+              <MobileIncomeTransactionDateField
+                label={t("incomes.transactionDate", "Transaction Date")}
+                value={form.watch("transaction_date")}
+                onChange={(v) => form.setValue("transaction_date", v, { shouldValidate: true })}
+                errorMessage={form.formState.errors.transaction_date?.message}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="amount">{t("incomes.amount", "Amount")}</Label>
@@ -388,7 +518,12 @@ export function MobileAddIncomeTransactionModal({
                   value={form.watch("payment_method") || ""}
                   placeholder={t("incomes.selectPaymentMethod", "Select payment method")}
                   options={paymentMethodOptions}
-                  onSelect={(value) => form.setValue("payment_method", value)}
+                  onSelect={(value) => {
+                    form.setValue("payment_method", value, { shouldValidate: true });
+                    if (value !== "bank_transfer") {
+                      form.setValue("bank_account_id", undefined);
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -405,8 +540,18 @@ export function MobileAddIncomeTransactionModal({
                   value: bankAccount.id,
                   label: `${bankAccount.name}${bankAccount.account_number ? ` (${bankAccount.account_number})` : ""}`,
                 }))}
-                onSelect={(value) => form.setValue("bank_account_id", value)}
+                onSelect={(value) => form.setValue("bank_account_id", value, { shouldValidate: true })}
               />
+              {form.formState.errors.bank_account_id ? (
+                <p className="text-xs text-red-600">
+                  {form.formState.errors.bank_account_id.message === "bank_account_required"
+                    ? t(
+                        "incomes.bankAccountRequiredForTransfer",
+                        "Select a bank account for bank transfer"
+                      )
+                    : form.formState.errors.bank_account_id.message}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -580,7 +725,7 @@ export function MobileAddIncomeTransactionModal({
               type="button"
               size="sm"
               onClick={form.handleSubmit(onSubmit)}
-              disabled={isCreating}
+              disabled={isCreating || shareSubmitBlocked}
               className="min-w-[120px] flex items-center justify-center gap-1.5"
             >
               {isCreating ? (

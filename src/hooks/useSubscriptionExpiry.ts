@@ -140,7 +140,10 @@ export const useSubscriptionExpiry = () => {
 
   return {
     expiryStatus,
-    isLoading: isLoading || orgLoading,
+    // Jangan gabung orgLoading: saat refetch profile, CurrentOrg set loading=true tanpa clear
+    // organizationId → SubscriptionExpiryGuard mem-unmount seluruh <Routes> (terasa reload tab).
+    // Kasus "belum punya org" sudah ditangkap guard lewat waitingForOrg (orgId null + orgLoading).
+    isLoading,
     error
   };
 };

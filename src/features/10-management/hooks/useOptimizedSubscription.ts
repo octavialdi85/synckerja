@@ -187,7 +187,7 @@ export const useOptimizedSubscription = () => {
     gcTime: 10 * 60 * 1000, // 10 minutes cache - keep longer for better performance
     refetchOnWindowFocus: false, // Disabled - use staleTime instead to reduce unnecessary refetches
     refetchOnMount: false, // Disabled - use staleTime instead, real-time updates will handle critical changes
-    refetchOnReconnect: true, // Keep enabled for network recovery
+    refetchOnReconnect: false, // Selaraskan global: tidak refetch massal saat reconnect
     retry: (failureCount, error: any) => {
       // Don't retry on 4xx errors
       if (error?.status >= 400 && error?.status < 500) {

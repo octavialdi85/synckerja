@@ -158,17 +158,6 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
     };
   }, [organizationId, currentEmployee?.id]);
 
-  // Refetch when user returns to tab (fallback if realtime missed)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        refresh();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [refresh]);
-
   const approve = useCallback(
     async (approvalId: string) => {
       if (!currentEmployee?.id) return { error: new Error('Not logged in') };

@@ -7,8 +7,7 @@ import { DebtDashboardCarousel } from "@/mobile/pages/expenses/debt/section/Debt
 import { DebtTableSection } from "@/mobile/pages/expenses/debt/section/DebtTableSection";
 import { MobileDebtPaymentHistoryModal } from "@/mobile/pages/expenses/debt/modal/MobileDebtPaymentHistoryModal";
 import { useBankAccountBalances } from "@/hooks/organized/useBankAccountBalances";
-import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { submitDebtPayment } from "@/features/4_2_debt/services/submitDebtPayment";
 import { useCurrentOrg } from "@/features/share/hooks/useCurrentOrg";
 import { useCurrentUser } from "@/features/share/hooks/useCurrentUser";
 import { ExpenseDashboardRefreshContext } from "@/mobile/pages/expenses/ExpenseDashboardRefreshContext";
@@ -24,7 +23,6 @@ export function DebtTabContent() {
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [paymentHistoryDebt, setPaymentHistoryDebt] = useState<Debt | null>(null);
   const { updateBalance } = useBankAccountBalances();
-  const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
 
@@ -80,46 +78,35 @@ export function DebtTabContent() {
     paymentDate: string;
     paymentMethod?: string;
     notes?: string;
+    transactionReference?: string;
+    receiptFile?: File;
   }): Promise<boolean> => {
     const debt = debts.find((d) => d.id === paymentData.debtId);
     if (!debt) return false;
     if (!organizationId || !user?.id) return false;
 
-    try {
-      const { error: paymentError } = await supabase
-        .from("debt_payments")
-        .insert({
-          organization_id: organizationId,
-          debt_id: paymentData.debtId,
-          created_by: user.id,
-          payment_amount: paymentData.paymentAmount,
-          payment_date: paymentData.paymentDate,
-          payment_method: paymentData.paymentMethod || null,
-          notes: paymentData.notes || null,
-        });
-
-      if (paymentError) return false;
-
-      await refetchDebts();
-
-      if (paymentData.paymentMethod) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (uuidRegex.test(paymentData.paymentMethod)) {
-          await updateBalance(
-            paymentData.paymentMethod,
-            -paymentData.paymentAmount,
-            "expense",
-            paymentData.debtId,
-            `Debt Payment: ${debt.debt_name}`
-          );
-          queryClient.invalidateQueries({ queryKey: ["bank-account-balances"] });
-        }
-      }
-
-      return true;
-    } catch {
-      return false;
-    }
+    return submitDebtPayment({
+      organizationId,
+      userId: user.id,
+      debtId: paymentData.debtId,
+      paymentAmount: paymentData.paymentAmount,
+      paymentDate: paymentData.paymentDate,
+      paymentMethod: paymentData.paymentMethod,
+      notes: paymentData.notes ?? null,
+      transactionReference: paymentData.transactionReference ?? null,
+      receiptFile: paymentData.receiptFile ?? null,
+      debtDisplayName: debt.debt_name,
+      updateBalance,
+      onAfterSuccess: refetchDebts,
+      messages: {
+        duplicateTransactionRef: t(
+          "debt.payment.duplicateTransactionRef",
+          "This transaction ID is already recorded for this organization."
+        ),
+        receiptUploadFailed: t("debt.payment.receiptUploadFailed", "Failed to upload receipt."),
+        paymentInsertFailed: t("debt.payment.insertFailed", "Failed to record payment."),
+      },
+    });
   };
 
   const handleFormSubmit = async (data: CreateDebtData): Promise<boolean> => {

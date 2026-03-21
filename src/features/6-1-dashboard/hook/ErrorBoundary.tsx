@@ -27,6 +27,10 @@ export class SocialMediaErrorBoundary extends React.Component<ErrorBoundaryProps
     console.error('Social Media Error Boundary caught an error:', error, errorInfo);
   }
 
+  private handleRetry = () => {
+    this.setState({ hasError: false, error: undefined });
+  };
+
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
@@ -43,10 +47,10 @@ export class SocialMediaErrorBoundary extends React.Component<ErrorBoundaryProps
             </p>
             <button 
               type="button"
-              onClick={() => window.location.reload()} 
+              onClick={this.handleRetry} 
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
-              Refresh Page
+              Try again
             </button>
           </CardContent>
         </Card>

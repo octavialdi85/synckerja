@@ -3,15 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 /**
- * GLOBAL INDIVIDUAL OBJECTIVES SUBSCRIPTION MANAGER
+ * Satu channel realtime `individual_objectives` per organisasi untuk seluruh app.
  *
- * Manages a single real-time subscription for individual objectives
- * across ALL components and hooks.
- *
- * Features:
- * - Single subscription for entire app per organization
- * - Reference counting (auto cleanup when no subscribers)
- * - Works across all provider instances
+ * Channel **tidak** ditutup saat jumlah subscriber sementara 0 (remount / Strict Mode / banyak baris
+ * tabel) — itu yang memicu log CLOSED/SUBSCRIBED berulang dan getar UI. Hanya dibuang saat **ganti org**.
  */
 
 class GlobalIndividualObjectivesManager {
@@ -20,37 +15,36 @@ class GlobalIndividualObjectivesManager {
   private currentOrgId: string | null = null;
   private queryClient: QueryClient | null = null;
 
-  /**
-   * Subscribe to individual objectives real-time updates
-   * Returns unsubscribe function
-   */
+  private disposeChannelImmediate(): void {
+    if (this.channel) {
+      supabase.removeChannel(this.channel);
+      this.channel = null;
+    }
+    this.currentOrgId = null;
+    this.subscriberCount = 0;
+  }
+
   subscribe(organizationId: string, queryClient: QueryClient): () => void {
     const isDev = import.meta.env?.DEV;
-
-    if (!this.queryClient) {
-      this.queryClient = queryClient;
-    }
+    this.queryClient = queryClient;
 
     if (this.channel && this.currentOrgId === organizationId) {
       this.subscriberCount++;
-      if (isDev) {
-        console.log(`Global Individual Objectives: Subscriber #${this.subscriberCount} joined (reusing existing subscription)`);
-      }
       return this.createUnsubscriber(organizationId);
     }
 
     if (this.channel && this.currentOrgId !== organizationId) {
       if (isDev) {
-        console.log('Global Individual Objectives: Switching to new organization, cleaning up old subscription');
+        console.log('Global Individual Objectives: Switching organization — closing previous channel');
       }
-      this.cleanup();
+      this.disposeChannelImmediate();
     }
 
     this.currentOrgId = organizationId;
     this.subscriberCount = 1;
 
     if (isDev) {
-      console.log('Global Individual Objectives: Creating SINGLE global subscription for org:', organizationId);
+      console.log('Global Individual Objectives: Subscribed for org:', organizationId);
     }
 
     this.channel = supabase
@@ -61,74 +55,41 @@ class GlobalIndividualObjectivesManager {
           event: '*',
           schema: 'public',
           table: 'individual_objectives',
-          filter: `organization_id=eq.${organizationId}`
+          filter: `organization_id=eq.${organizationId}`,
         },
         (payload) => {
-          if (isDev) {
-            console.log('Global Individual Objectives: Real-time update received', {
-              event: payload.eventType,
-              table: payload.table
-            });
-          }
-
           if (this.queryClient) {
             this.queryClient.invalidateQueries({
               queryKey: ['individual-objectives'],
-              exact: false
+              exact: false,
             });
             this.queryClient.invalidateQueries({
               queryKey: ['individual-objectives', organizationId],
-              exact: false
+              exact: false,
             });
           }
         }
       )
-      .subscribe((status) => {
-        if (isDev) {
-          console.log('Global Individual Objectives: Subscription status:', status);
-        }
-      });
+      .subscribe();
 
     return this.createUnsubscriber(organizationId);
   }
 
   private createUnsubscriber(organizationId: string): () => void {
     return () => {
-      const isDev = import.meta.env?.DEV;
-
       if (organizationId !== this.currentOrgId) {
         return;
       }
-
-      this.subscriberCount--;
-
-      if (isDev) {
-        console.log(`Global Individual Objectives: Subscriber left (${this.subscriberCount} remaining)`);
-      }
-
-      if (this.subscriberCount <= 0) {
-        if (isDev) {
-          console.log('Global Individual Objectives: No more subscribers, cleaning up subscription');
-        }
-        this.cleanup();
-      }
+      this.subscriberCount = Math.max(0, this.subscriberCount - 1);
+      // Jangan removeChannel saat 0 — komponen akan subscribe lagi segera; tutup hanya saat ganti org di atas.
     };
-  }
-
-  private cleanup(): void {
-    if (this.channel) {
-      supabase.removeChannel(this.channel);
-      this.channel = null;
-    }
-    this.currentOrgId = null;
-    this.subscriberCount = 0;
   }
 
   getStats() {
     return {
       subscriberCount: this.subscriberCount,
       currentOrgId: this.currentOrgId,
-      hasActiveChannel: !!this.channel
+      hasActiveChannel: !!this.channel,
     };
   }
 }

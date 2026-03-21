@@ -63,7 +63,7 @@ export function getContentPlansQueryOptions(organizationId: string | undefined) 
     staleTime: 30 * 1000, // 30s: revisits show cache immediately while refetch runs in background
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    refetchOnMount: false, // Selaras halaman tidak reload: tidak refetch massal saat remount/tab
     refetchInterval: false,
     retry: 1,
     retryDelay: (attemptIndex: number) => Math.min(500 * 2 ** attemptIndex, 5000),

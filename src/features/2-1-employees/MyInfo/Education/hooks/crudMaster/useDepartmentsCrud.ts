@@ -18,7 +18,7 @@ export function useDepartmentsCrud(
     queryFn: () => fetchDepartments(),
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 3,
     retryDelay: 1000
   });

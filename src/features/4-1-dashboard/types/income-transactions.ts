@@ -19,6 +19,8 @@ export interface IncomeTransaction {
   receipt_file_name?: string;
   receipt_file_size?: number;
   receipt_mime_type?: string;
+  /** External ref from receipt (share flow); unique per org when set. */
+  transaction_reference?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -38,6 +40,14 @@ export interface IncomeTransactionWithRelations extends IncomeTransaction {
   sub_services?: {
     name: string;
   };
+  /** Joined from `bank_accounts` via `bank_account_id` */
+  bank_accounts?: {
+    id: string;
+    name: string;
+    bank_name: string | null;
+    account_number: string | null;
+    account_holder: string | null;
+  } | null;
 }
 
 export interface CreateIncomeTransactionData {
@@ -55,4 +65,5 @@ export interface CreateIncomeTransactionData {
   description?: string;
   receipt_file?: File;
   receipt_url?: string;
+  transaction_reference?: string | null;
 }

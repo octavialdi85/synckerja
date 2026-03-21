@@ -32,24 +32,35 @@ export interface UpdateBankAccountData {
   is_active?: boolean;
 }
 
+export type UseBankAccountsOptions = {
+  /** When true, includes inactive accounts (e.g. label past transactions). Default: only active. */
+  includeInactive?: boolean;
+};
+
 // Hook: useBankAccounts
-export const useBankAccounts = () => {
+export const useBankAccounts = (options?: UseBankAccountsOptions) => {
+  const includeInactive = options?.includeInactive === true;
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Fetch bank accounts
   const { data: bankAccounts = [], isLoading: loading, refetch } = useQuery({
-    queryKey: ['bank-accounts', organizationId],
+    queryKey: ['bank-accounts', organizationId, includeInactive],
     queryFn: async () => {
       if (!organizationId) return [];
-      
-      const { data, error } = await supabase
+
+      let q = supabase
         .from('bank_accounts')
         .select('*')
         .eq('organization_id', organizationId)
-        .eq('is_active', true)
         .order('name');
+
+      if (!includeInactive) {
+        q = q.eq('is_active', true);
+      }
+
+      const { data, error } = await q;
 
       if (error) {
         console.error('Error fetching bank accounts:', error);

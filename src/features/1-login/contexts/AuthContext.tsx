@@ -33,7 +33,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+  /** Snapshot user id for onAuthStateChange (callback sees fresh value). */
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+
   // Debounce auth state changes to prevent excessive logging
   const lastAuthEventRef = useRef<string>('');
   const authDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,6 +98,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               const authUserId = session?.user?.id ?? 'no-user';
               console.log('AuthContext: Auth state change:', event, authUserId);
             }, 500);
+          }
+        }
+
+        // TOKEN_REFRESHED (sering saat kembali dari app lain): JWT baru sudah di client Supabase.
+        // Hanya sync `session` ke React agar Bearer dari context tetap valid; jangan setUser lagi
+        // jika id sama — menghindari re-render massal / efek samping yang terasa seperti refresh halaman.
+        if (event === 'TOKEN_REFRESHED' && session?.user) {
+          const prevId = userRef.current?.id;
+          if (prevId && prevId === session.user.id) {
+            setSession(session);
+            setError(null);
+            return;
           }
         }
 

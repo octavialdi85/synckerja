@@ -119,21 +119,6 @@ const Absensi = () => {
   const greeting = t(`home.greeting.${greetingKey}`);
   const displayName = profileLoading ? '...' : (profile?.full_name ?? t('mobileHome.user', 'User'));
 
-  // Force refresh data when component mounts or when organization might change
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Refetch data when user returns to tab (might have switched organization)
-        refetch();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [refetch]);
-
   useEffect(() => {
     pullDistanceRef.current = pullDistance;
   }, [pullDistance]);

@@ -2,6 +2,10 @@ import { useMemo } from 'react';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { usePermissionConfiguration } from './usePermissionConfiguration';
 import { logger } from '@/config/logger';
+import {
+  accessCache,
+  ACCESS_CACHE_TTL,
+} from './departmentPageAccessCache';
 
 // Fallback restricted pages for employee role (used when database config is not available)
 // Updated to allow all access for employees
@@ -40,54 +44,17 @@ const CROSS_DEPARTMENT_PAGES = [
   '/organization'
 ];
 
-// Optimized cache with intelligent clearing
-const accessCache = new Map<string, { result: boolean; timestamp: number; configHash: string }>();
-const ACCESS_CACHE_TTL = 30000; // 30 seconds - longer cache
-let lastClearTime = 0;
-const MIN_CLEAR_INTERVAL = 5000; // Minimum 5 seconds between clears
 const isDev = import.meta.env.DEV; // Define once at module level for performance
 
 // Track logged paths for CAN ACCESS PAGE OVERRIDE to avoid duplicate logs
 const loggedOverridePaths = new Set<string>();
 
-// Smart cache clearing - only when necessary
-export const clearAccessCache = () => {
-  const now = Date.now();
-  if (now - lastClearTime < MIN_CLEAR_INTERVAL) {
-    return;
-  }
-
-  accessCache.clear();
-  lastClearTime = now;
-};
-
-// Debug function to inspect cache
-export const debugAccessCache = () => {
-  logger.debug('🔍 Access Cache Debug:');
-  logger.debug('Cache size:', accessCache.size);
-  logger.debug('Cache entries:');
-  accessCache.forEach((value, key) => {
-    logger.debug(`  ${key}:`, value);
-  });
-};
-
-// Function to force clear cache and debug - for troubleshooting
-export const forceClearCache = () => {
-  logger.debug('🔥 FORCE CLEARING ALL CACHE');
-  logger.debug('Cache before clear:', accessCache.size, 'entries');
-  accessCache.forEach((value, key) => {
-    logger.debug(`  Removing: ${key} = ${value.result}`);
-  });
-  accessCache.clear();
-  logger.debug('✅ Force clear completed');
-};
-
-// Make functions available globally for debugging
-if (typeof window !== 'undefined') {
-  (window as any).debugAccessCache = debugAccessCache;
-  (window as any).forceClearCache = forceClearCache;
-  (window as any).clearAccessCache = clearAccessCache;
-}
+// Re-export for backward compatibility (other modules import from useDepartmentAccess)
+export {
+  clearAccessCache,
+  debugAccessCache,
+  forceClearCache,
+} from './departmentPageAccessCache';
 
 export const useDepartmentAccess = () => {
   const { userRole, employee, userData, isOwner, isAdmin, organization } = useCentralizedUserData();

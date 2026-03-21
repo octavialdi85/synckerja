@@ -13,8 +13,7 @@ import { formatToRupiah } from '@/utils/formatCurrency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { submitDebtPayment } from '@/features/4_2_debt/services/submitDebtPayment';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 
@@ -30,7 +29,6 @@ export const DebtPage = () => {
   const { debts, totalInterestYtd, isLoading, isCreating, isUpdating, createDebt, updateDebt, deleteDebt, refetch: refetchDebts } = useDebts();
   const { balances: bankAccountBalances, loading: balancesLoading, updateBalance } = useBankAccountBalances();
   const { bankAccounts } = useBankAccounts();
-  const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
 
@@ -69,73 +67,38 @@ export const DebtPage = () => {
     paymentDate: string;
     paymentMethod?: string;
     notes?: string;
+    transactionReference?: string;
+    receiptFile?: File;
   }): Promise<boolean> => {
-    const debt = debts.find(d => d.id === paymentData.debtId);
+    const debt = debts.find((d) => d.id === paymentData.debtId);
     if (!debt) return false;
-
     if (!organizationId || !user?.id) {
       console.error('Missing organizationId or user.id');
       return false;
     }
 
-    // Insert payment record into debt_payments table
-    // The trigger will automatically update paid_amount and available_limit in debts table
-    try {
-      const { error: paymentError } = await supabase
-        .from('debt_payments')
-        .insert({
-          organization_id: organizationId,
-          debt_id: paymentData.debtId,
-          created_by: user.id,
-          payment_amount: paymentData.paymentAmount,
-          payment_date: paymentData.paymentDate,
-          payment_method: paymentData.paymentMethod || null,
-          notes: paymentData.notes || null,
-        });
-
-      if (paymentError) {
-        console.error('Error inserting debt payment:', paymentError);
-        return false;
-      }
-
-      // Trigger will automatically update paid_amount and available_limit in debts table
-      // No need to manually update debt
-      const success = true;
-
-      // Refetch debts to ensure UI shows updated paid_amount
-      if (success) {
-        await refetchDebts();
-      }
-
-      // Update bank account balance if payment method is a bank account
-      if (success && paymentData.paymentMethod) {
-        try {
-        // Check if paymentMethod is a valid UUID (bank account ID)
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (uuidRegex.test(paymentData.paymentMethod)) {
-          // This is a bank account ID, reduce the balance
-          await updateBalance(
-            paymentData.paymentMethod,
-            -paymentData.paymentAmount, // Negative because we're paying from the account
-            'expense', // Debt payment is treated as an expense from the bank account
-            paymentData.debtId,
-            `Debt Payment: ${debt.debt_name}`
-          );
-          
-          // Invalidate bank account balances query to refresh the UI
-          queryClient.invalidateQueries({ queryKey: ['bank-account-balances'] });
-        }
-        } catch (balanceError) {
-          console.error('Error updating bank account balance:', balanceError);
-          // Don't fail the payment if balance update fails, but log the error
-        }
-      }
-
-      return success;
-    } catch (insertError) {
-      console.error('Error inserting debt payment:', insertError);
-      return false;
-    }
+    return submitDebtPayment({
+      organizationId,
+      userId: user.id,
+      debtId: paymentData.debtId,
+      paymentAmount: paymentData.paymentAmount,
+      paymentDate: paymentData.paymentDate,
+      paymentMethod: paymentData.paymentMethod,
+      notes: paymentData.notes ?? null,
+      transactionReference: paymentData.transactionReference ?? null,
+      receiptFile: paymentData.receiptFile ?? null,
+      debtDisplayName: debt.debt_name,
+      updateBalance,
+      onAfterSuccess: refetchDebts,
+      messages: {
+        duplicateTransactionRef: t(
+          'debt.payment.duplicateTransactionRef',
+          'This transaction ID is already recorded for this organization.'
+        ),
+        receiptUploadFailed: t('debt.payment.receiptUploadFailed', 'Failed to upload receipt.'),
+        paymentInsertFailed: t('debt.payment.insertFailed', 'Failed to record payment.'),
+      },
+    });
   };
 
   const handlePaymentClose = () => {

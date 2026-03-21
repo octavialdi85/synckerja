@@ -167,7 +167,7 @@ export function AddNewExpenseModal({
   onShareFlowSuccess,
   aiAutofillStatus = "idle",
   aiAutofillData,
-  aiAutofillRequestId,
+  aiAutofillRequestId = 0,
 }: AddNewExpenseModalProps) {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
@@ -196,6 +196,9 @@ export function AddNewExpenseModal({
   /** True saat overlay kamera receipt terbuka; cegah Radix menutup dialog (outside/focus) */
   const isReceiptInteractionRef = useRef(false);
   const receiptProtectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasOpenRef = useRef(false);
+  const lastAppliedAiRequestRef = useRef<number | null>(null);
+  const [transactionRefDisplay, setTransactionRefDisplay] = useState("");
 
   /** Delay setelah tutup kamera in-app sebelum ref proteksi di-clear */
   const RECEIPT_PROTECTION_DELAY_MS = 2000;
@@ -237,6 +240,28 @@ export function AddNewExpenseModal({
       setReceiptFiles([]);
     }
   }, [open, shareFlowLocked, initialReceiptFilesKey, initialReceiptFiles]);
+
+  useEffect(() => {
+    if (!open) {
+      wasOpenRef.current = false;
+      lastAppliedAiRequestRef.current = null;
+      return;
+    }
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (!justOpened) return;
+    setTransactionRefDisplay("");
+    lastAppliedAiRequestRef.current = null;
+  }, [open]);
+
+  useEffect(() => {
+    if (!shareFlowLocked || !open || aiAutofillStatus === "loading") return;
+    if (lastAppliedAiRequestRef.current === aiAutofillRequestId) return;
+    lastAppliedAiRequestRef.current = aiAutofillRequestId;
+    const d = aiAutofillData;
+    if (!d) return;
+    if (d.transactionId) setTransactionRefDisplay(d.transactionId.trim());
+  }, [shareFlowLocked, open, aiAutofillStatus, aiAutofillRequestId, aiAutofillData]);
 
   const receiptPreviewUrls = useMemo(
     () =>
@@ -363,6 +388,23 @@ export function AddNewExpenseModal({
   };
 
   const handleSubmit = async (data: AddExpenseFormData) => {
+    if (shareFlowLocked) {
+      if (aiAutofillStatus === "loading") return;
+      if (!transactionRefDisplay.trim()) {
+        toast.error(
+          t(
+            "expenses.shareTransactionIdRequired",
+            "Transaction ID was not detected on the receipt. Try again or choose another destination."
+          )
+        );
+        return;
+      }
+      if (receiptFiles.length === 0) {
+        toast.error(t("expenses.shareReceiptRequired", "Add at least one receipt file."));
+        return;
+      }
+    }
+
     if (data.withdrawal_from_balance && data.withdrawal_from_balance !== "none") {
       const selectedDebt = debtsForExpense.find((d) => d.id === data.withdrawal_from_balance);
       if (selectedDebt && (selectedDebt.available_limit ?? 0) < data.amount) {
@@ -416,6 +458,10 @@ export function AddNewExpenseModal({
       bank_account_id: data.bank_account_id ?? undefined,
       recurring_settlement_for_expense_id:
         data.is_recurring && linkedRecurringRaw ? linkedRecurringRaw : undefined,
+      transaction_reference:
+        shareFlowLocked && transactionRefDisplay.trim()
+          ? transactionRefDisplay.trim()
+          : undefined,
     };
 
     const createdExpense = await createExpense(expenseData);
@@ -454,6 +500,7 @@ export function AddNewExpenseModal({
       setSelectedDate(undefined);
       setFirstPaymentDate(undefined);
       setSelectedExpenseTypeId("");
+      setTransactionRefDisplay("");
       if (expenseData.withdrawal_from_balance) refetchDebts();
     }
   };
@@ -607,12 +654,19 @@ export function AddNewExpenseModal({
     setIsCreateDatePickerOpen(false);
     setIsFirstPaymentDatePickerOpen(false);
     setReceiptFiles([]);
+    setTransactionRefDisplay("");
     onOpenChange(false);
   };
 
   const hasWithdrawal =
     (form.watch("withdrawal_from_balance") && form.watch("withdrawal_from_balance") !== "none") ||
     !!form.watch("bank_account_id");
+
+  const shareSubmitBlocked =
+    shareFlowLocked &&
+    (aiAutofillStatus === "loading" ||
+      !transactionRefDisplay.trim() ||
+      receiptFiles.length === 0);
 
   return (
     <Fragment>
@@ -661,6 +715,29 @@ export function AddNewExpenseModal({
               <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 flex items-center gap-2">
                 <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 <span>{t("expenses.aiAnalyzingReceipt", "Menganalisis receipt dengan AI...")}</span>
+              </div>
+            ) : null}
+            {shareFlowLocked ? (
+              <div>
+                <label htmlFor="expense_transaction_ref_display" className="block text-sm font-medium mb-2">
+                  {t("expenses.transactionIdLabel", "Transaction ID")}
+                </label>
+                <Input
+                  id="expense_transaction_ref_display"
+                  value={transactionRefDisplay}
+                  readOnly
+                  disabled
+                  className="w-full text-sm bg-muted"
+                  placeholder={t("expenses.transactionIdPlaceholder", "Detected from receipt by AI")}
+                />
+                {!transactionRefDisplay.trim() && aiAutofillStatus !== "loading" ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                    {t(
+                      "expenses.transactionIdMissingHint",
+                      "No reference found yet. Wait for analysis to finish or choose another destination."
+                    )}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             <div>
@@ -1623,7 +1700,7 @@ export function AddNewExpenseModal({
               <Button
                 type="submit"
                 size="sm"
-                disabled={isCreating || !hasWithdrawal || aiAutofillStatus === "loading"}
+                disabled={isCreating || !hasWithdrawal || shareSubmitBlocked}
                 className="min-w-[120px] flex items-center justify-center gap-1.5"
               >
                 {isCreating ? (

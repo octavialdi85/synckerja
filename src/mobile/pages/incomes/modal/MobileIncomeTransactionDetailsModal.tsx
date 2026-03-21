@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/features/ui/dialog";
 import { Badge } from "@/features/ui/badge";
 import { Button } from "@/features/ui/button";
@@ -9,6 +9,7 @@ import { useIsMobile } from "@/mobile/hooks/use-mobile";
 import { formatToRupiah } from "@/utils/formatCurrency";
 import type { IncomeTransactionWithRelations } from "@/features/4-1-dashboard/types";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { useBankAccounts } from "@/hooks/organized/useBankAccounts";
 
 interface MobileIncomeTransactionDetailsModalProps {
   transaction: IncomeTransactionWithRelations | null;
@@ -25,6 +26,7 @@ export function MobileIncomeTransactionDetailsModal({
 }: MobileIncomeTransactionDetailsModalProps) {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
+  const { bankAccounts } = useBankAccounts({ includeInactive: true });
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const receiptPath = transaction?.receipt_file_path as string | null | undefined;
 
@@ -97,6 +99,30 @@ export function MobileIncomeTransactionDetailsModal({
     };
   }, [open, receiptPath]);
 
+  const bankDisplay = useMemo(() => {
+    if (!transaction) return null;
+    const joined = transaction.bank_accounts;
+    if (joined && typeof joined === "object" && !Array.isArray(joined) && joined.name) {
+      return {
+        primary: joined.name,
+        secondary: [joined.bank_name, joined.account_number].filter(Boolean).join(" · "),
+      };
+    }
+    const id = transaction.bank_account_id?.trim();
+    if (!id) return null;
+    const b = bankAccounts.find((x) => x.id === id);
+    if (b) {
+      return {
+        primary: b.name,
+        secondary: [b.bank_name, b.account_number].filter(Boolean).join(" · "),
+      };
+    }
+    return {
+      primary: t("incomes.previouslySelectedAccount", "Previously selected account"),
+      secondary: "",
+    };
+  }, [transaction, bankAccounts, t]);
+
   if (!transaction) return null;
 
   return (
@@ -121,9 +147,24 @@ export function MobileIncomeTransactionDetailsModal({
               <Detail label="Amount" value={formatToRupiah(transaction.amount)} valueClassName="font-semibold text-green-600" />
             </div>
 
+            <div>
+              <p className="text-sm font-medium text-gray-500">{t("incomes.tableTransactionId", "Transaction ID")}</p>
+              <p className="text-sm text-gray-900 mt-1 font-mono break-all">
+                {transaction.transaction_reference?.trim() || "—"}
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <Detail label="Customer Name" value={transaction.customer_name || "-"} />
               <Detail label="Payment Method" value={transaction.payment_method || "-"} />
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-500">{t("incomes.bankAccount", "Bank Account")}</p>
+              <p className="text-sm text-gray-900 mt-1">{bankDisplay?.primary ?? "-"}</p>
+              {bankDisplay?.secondary ? (
+                <p className="text-xs text-gray-500 mt-1">{bankDisplay.secondary}</p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

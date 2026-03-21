@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { IncomeTransactionWithRelations } from '@/features/4-1-dashboard/types';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/features/ui/button';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface IncomeTransactionViewDialogProps {
   transaction: IncomeTransactionWithRelations | null;
@@ -19,6 +20,7 @@ export const IncomeTransactionViewDialog = ({
   onOpenChange,
   onEdit
 }: IncomeTransactionViewDialogProps) => {
+  const { t } = useAppTranslation();
   if (!transaction) return null;
 
   const getStatusBadgeVariant = (status: string) => {
@@ -86,6 +88,15 @@ export const IncomeTransactionViewDialog = ({
             </div>
           </div>
 
+          <div>
+            <label className="text-sm font-medium text-gray-500">
+              {t('incomes.tableTransactionId', 'Transaction ID')}
+            </label>
+            <p className="text-sm text-gray-900 mt-1 font-mono break-all">
+              {transaction.transaction_reference?.trim() || '—'}
+            </p>
+          </div>
+
           {/* Customer & Payment */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -100,6 +111,19 @@ export const IncomeTransactionViewDialog = ({
                 {transaction.payment_method || '-'}
               </p>
             </div>
+          </div>
+
+          {/* Bank account (joined from bank_accounts) */}
+          <div>
+            <label className="text-sm font-medium text-gray-500">Bank Account</label>
+            <p className="text-sm text-gray-900 mt-1">
+              {transaction.bank_accounts?.name || '-'}
+            </p>
+            {(transaction.bank_accounts?.bank_name || transaction.bank_accounts?.account_number) && (
+              <p className="text-xs text-gray-500 mt-1">
+                {[transaction.bank_accounts.bank_name, transaction.bank_accounts.account_number].filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
 
           {/* Service Information */}

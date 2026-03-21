@@ -1,4 +1,4 @@
-import { memo, Suspense, useState, useCallback, useEffect } from 'react';
+import { memo, Suspense, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOptimizedPerformanceMonitor } from '@/features/10-management/hooks/useOptimizedPerformanceMonitor';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
@@ -20,7 +20,7 @@ import {
   OverviewSidebarFooter
 } from './section';
 
-const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoading, refreshSubscriptionStatus, nextBillingOverride, nextBillingLoading }: any) => {
+const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoading, refreshSubscriptionStatus, nextBillingOverride, nextBillingLoading, onFooterRefresh, isFooterRefreshing }: any) => {
   const [lastUpdated] = useState(new Date());
 
   return (
@@ -92,8 +92,8 @@ const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoadi
             <OverviewFooter 
               totalMetrics={4}
               lastUpdated={lastUpdated}
-              onRefresh={() => window.location.reload()}
-              isRefreshing={false}
+              onRefresh={onFooterRefresh}
+              isRefreshing={isFooterRefreshing}
             />
         </div>
       </div>
@@ -129,7 +129,7 @@ const OverviewTabPage = memo(() => {
   useOptimizedPerformanceMonitor('OverviewTabPage');
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [forceRefresh, setForceRefresh] = useState(0);
+  const [isFooterRefreshing, setIsFooterRefreshing] = useState(false);
 
   const { organizationId, loading: orgLoading } = useCurrentOrg();
   
@@ -147,26 +147,19 @@ const OverviewTabPage = memo(() => {
 
   const {
     analytics,
-    isLoading: analyticsLoading
+    isLoading: analyticsLoading,
+    refetch: refetchAnalytics,
   } = useSubscriptionAnalytics();
 
-  // EMERGENCY REFRESH MECHANISM - If data doesn't load within 10 seconds
-  useEffect(() => {
-    let emergencyTimer: NodeJS.Timeout;
-    
-    if (organizationId && isLoading && !subscriptionStatus && !statusError) {
-      emergencyTimer = setTimeout(() => {
-        refreshSubscriptionStatus();
-        setForceRefresh(prev => prev + 1);
-      }, 10000);
+  const handleOverviewFooterRefresh = useCallback(async () => {
+    setIsFooterRefreshing(true);
+    try {
+      refreshSubscriptionStatus();
+      await refetchAnalytics();
+    } finally {
+      setIsFooterRefreshing(false);
     }
-    
-    return () => {
-      if (emergencyTimer) {
-        clearTimeout(emergencyTimer);
-      }
-    };
-  }, [organizationId, isLoading, subscriptionStatus, statusError, refreshSubscriptionStatus]);
+  }, [refreshSubscriptionStatus, refetchAnalytics]);
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
@@ -225,6 +218,8 @@ const OverviewTabPage = memo(() => {
                       refreshSubscriptionStatus={refreshSubscriptionStatus}
                       nextBillingOverride={nextBillingOverride}
                       nextBillingLoading={paymentsLoading}
+                      onFooterRefresh={handleOverviewFooterRefresh}
+                      isFooterRefreshing={isFooterRefreshing}
                     />
                   </Suspense>
                 </div>

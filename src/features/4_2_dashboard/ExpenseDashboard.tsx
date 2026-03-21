@@ -809,11 +809,11 @@ export function ExpenseDashboard() {
     };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
-      <div className="flex flex-1 min-h-0">
-        {/* Main Content */}
+    <div className="flex-1 min-h-0 flex flex-col bg-gray-100 font-sans relative overflow-hidden w-full">
+      <div className="flex flex-1 min-h-0 min-w-0">
+        {/* Main Content — tinggi mengikuti StandardLayout (viewport − header/sidebar) */}
         <div className="flex-1 flex flex-col min-h-0 px-2 sm:px-4 pb-4 min-w-0">
-          <div className="h-full flex flex-col overflow-hidden min-w-0">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden min-w-0">
             {/* Header and Tabs */}
             <div className="flex-shrink-0 mb-1 min-w-0">
               <HeaderAndTab 
@@ -822,8 +822,8 @@ export function ExpenseDashboard() {
               />
             </div>
             
-            {/* Content Area - max-h + flex; table section scrolls internally */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] min-w-0">
+            {/* Kolom konten: kartu/chart shrink-0; tabel flex-1 + tinggi tetap relatif viewport + scroll dalam */}
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col min-w-0">
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-2 bg-gradient-to-br from-gray-50 to-white min-w-0">
               {/* Quick View Total Current Balance - not affected by table filters; updates instantly when expense uses bank balance */}
       <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
@@ -1048,7 +1048,7 @@ export function ExpenseDashboard() {
               <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
             </div>
 
-            <div className="flex-1 min-h-0 min-w-0">
+            <div className="h-52 w-full min-w-0 shrink-0">
               {monthlyData.length > 0 && monthlyData.some(d => d.amount > 0) ? (
                 <ResponsiveContainer width="100%" height="100%" className="min-w-0">
                   <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
@@ -1108,8 +1108,8 @@ export function ExpenseDashboard() {
 
       
 
-      {/* Table Section - scrolls internally via seamless-scroll */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1 min-h-0">
+      {/* Table Section — isi sisa tinggi layar; baris di-scroll di dalam (halaman tidak memanjang) */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1 min-h-0 mt-2">
         {/* Table Header with Search and Filters */}
         <div className="px-2 sm:px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
@@ -1307,12 +1307,15 @@ export function ExpenseDashboard() {
           </div>
         </div>
 
-        {/* Table - seamless vertical scroll when many rows */}
-        <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
+        {/* flex-1 isi sisa kartu; max-h ikut viewport agar tinggi proporsional & halaman tidak memanjang */}
+        <div className="flex-1 min-h-0 min-w-0 max-h-[min(42dvh,calc(100dvh-19rem))] overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
             <table className="w-full min-w-[1400px]">
               <thead className="bg-gray-50 border-b sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Expense</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tableTransactionId', 'Transaction ID')}
+                  </th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Payment Date</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Next Payment</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Type</th>
@@ -1343,10 +1346,14 @@ export function ExpenseDashboard() {
                   </tr>
                 ) : (
                   allExpenses
-                    .filter(expense => 
-                      expense.expense_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      expense.category.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
+                    .filter(expense => {
+                      const q = searchQuery.toLowerCase();
+                      return (
+                        expense.expense_name.toLowerCase().includes(q) ||
+                        expense.category.toLowerCase().includes(q) ||
+                        (expense.transaction_reference || '').toLowerCase().includes(q)
+                      );
+                    })
                     .map((expense) => {
                       // Check if this is a paid purchase request
                       const isPaidPurchaseRequest = paidPurchaseRequests.some(pr => pr.id === expense.id);
@@ -1365,6 +1372,14 @@ export function ExpenseDashboard() {
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
                           <div className="truncate text-xs sm:text-sm" title={requestTitle || expense.expense_name || '-'}>
                             {requestTitle || expense.expense_name || '-'}
+                          </div>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[140px] sm:max-w-[180px] min-w-0">
+                          <div
+                            className="truncate text-xs sm:text-sm"
+                            title={expense.transaction_reference?.trim() || undefined}
+                          >
+                            {expense.transaction_reference?.trim() || '—'}
                           </div>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
@@ -1979,6 +1994,14 @@ export function ExpenseDashboard() {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Amount</label>
                   <p className="text-sm font-semibold mt-1">{formatCurrency(selectedExpense.amount)}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-500">
+                    {t('expenses.tableTransactionId', 'Transaction ID')}
+                  </label>
+                  <p className="text-sm font-mono mt-1 break-all">
+                    {selectedExpense.transaction_reference?.trim() || '—'}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Type</label>

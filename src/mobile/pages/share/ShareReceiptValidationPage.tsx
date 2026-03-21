@@ -17,6 +17,16 @@ import {
   analyzeExpenseReceiptWithAI,
   type ExpenseReceiptAutofillData,
 } from "@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI";
+import { useDebts } from "@/features/4_2_debt/hooks";
+import { DebtPaymentModal } from "@/features/4_2_debt/components/DebtPaymentModal";
+import { getPayableDebts } from "@/features/4_2_debt/utils/payableDebts";
+import {
+  submitDebtPayment,
+  type DebtPaymentModalSubmitPayload,
+} from "@/features/4_2_debt/services/submitDebtPayment";
+import { useBankAccountBalances } from "@/hooks/organized/useBankAccountBalances";
+import { useCurrentOrg } from "@/features/share/hooks/useCurrentOrg";
+import { useCurrentUser } from "@/features/share/hooks/useCurrentUser";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -43,9 +53,12 @@ export default function ShareReceiptValidationPage() {
   useStatusBarStyle("light");
   const { t } = useAppTranslation();
   const navigate = useNavigate();
-  const { organizations, activeOrganizationId, activeOrganization, loading: orgLoading } =
-    useOrganizationList();
+  const { activeOrganization, loading: orgLoading } = useOrganizationList();
   const { updateRecurringBillAfterPayNow } = useExpenses();
+  const { debts, isLoading: debtsLoading, refetch: refetchDebts } = useDebts();
+  const { updateBalance } = useBankAccountBalances();
+  const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
 
   const [loading, setLoading] = useState(shareValidationCache.files === null);
   const [files, setFiles] = useState<File[]>(shareValidationCache.files ?? []);
@@ -53,12 +66,22 @@ export default function ShareReceiptValidationPage() {
   const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [incomeModalOpen, setIncomeModalOpen] = useState(false);
+  const [isAnalyzingIncomeReceipt, setIsAnalyzingIncomeReceipt] = useState(false);
+  const [incomeAutofillData, setIncomeAutofillData] = useState<ExpenseReceiptAutofillData | null>(null);
+  const [incomeAnalysisRequestId, setIncomeAnalysisRequestId] = useState(0);
   const [isAnalyzingReceipt, setIsAnalyzingReceipt] = useState(false);
   const [autofillData, setAutofillData] = useState<ExpenseReceiptAutofillData | null>(null);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [debtModalOpen, setDebtModalOpen] = useState(false);
+  const [isAnalyzingDebtReceipt, setIsAnalyzingDebtReceipt] = useState(false);
+  const [debtAutofillData, setDebtAutofillData] = useState<ExpenseReceiptAutofillData | null>(null);
+  const [debtAnalysisRequestId, setDebtAnalysisRequestId] = useState(0);
+  const [isDebtPaymentSubmitting, setIsDebtPaymentSubmitting] = useState(false);
 
   const activeOrgName = activeOrganization?.company_name ?? "—";
+  const payableDebts = useMemo(() => getPayableDebts(debts), [debts]);
+  const hasPayableDebts = payableDebts.length > 0;
 
   const didLoadRef = useRef(false);
 
@@ -131,7 +154,7 @@ export default function ShareReceiptValidationPage() {
   }, [imagePreviewUrls]);
 
   useEffect(() => {
-    if (expenseModalOpen || incomeModalOpen) {
+    if (expenseModalOpen || incomeModalOpen || debtModalOpen) {
       setShareBackGuard(null);
       return;
     }
@@ -140,10 +163,11 @@ export default function ShareReceiptValidationPage() {
       return true;
     });
     return () => setShareBackGuard(null);
-  }, [expenseModalOpen, incomeModalOpen]);
+  }, [expenseModalOpen, incomeModalOpen, debtModalOpen]);
 
   const handleLeaveConfirm = async () => {
     setLeaveConfirmOpen(false);
+    setDebtModalOpen(false);
     await ShareIntent.clearPending();
     shareValidationCache = { files: null, loadError: null };
     setShareBackGuard(null);
@@ -155,6 +179,7 @@ export default function ShareReceiptValidationPage() {
     shareValidationCache = { files: null, loadError: null };
     setExpenseModalOpen(false);
     setIncomeModalOpen(false);
+    setDebtModalOpen(false);
     navigate("/expenses/dashboard", { replace: true });
   };
 
@@ -162,7 +187,91 @@ export default function ShareReceiptValidationPage() {
     await ShareIntent.clearPending();
     shareValidationCache = { files: null, loadError: null };
     setIncomeModalOpen(false);
+    setDebtModalOpen(false);
     navigate("/incomes/transaction", { replace: true });
+  };
+
+  const handleDebtShareFlowSuccess = async () => {
+    await ShareIntent.clearPending();
+    shareValidationCache = { files: null, loadError: null };
+    setDebtModalOpen(false);
+    navigate("/expenses/debt", { replace: true });
+  };
+
+  const handleAnalyzeAndOpenDebtPayment = async () => {
+    setDebtModalOpen(true);
+    setDebtAutofillData(null);
+    setIsAnalyzingDebtReceipt(true);
+    setDebtAnalysisRequestId((prev) => prev + 1);
+
+    const result = await analyzeExpenseReceiptWithAI({
+      receiptFiles: files,
+    });
+
+    if (result.success && result.data) {
+      setDebtAutofillData(result.data);
+      toast.success(
+        t(
+          "shareReceipt.debtAiAutofillReady",
+          "Payment draft filled from receipt."
+        )
+      );
+    } else {
+      toast.error(
+        result.error ||
+          t(
+            "shareReceipt.debtAiAutofillFailed",
+            "AI analysis failed. Transaction ID may be missing."
+          )
+      );
+    }
+
+    setIsAnalyzingDebtReceipt(false);
+  };
+
+  const handleDebtPaymentSubmit = async (
+    paymentData: DebtPaymentModalSubmitPayload
+  ): Promise<boolean> => {
+    const debt = debts.find((d) => d.id === paymentData.debtId);
+    if (!debt || !organizationId || !user?.id) return false;
+
+    setIsDebtPaymentSubmitting(true);
+    try {
+      const ok = await submitDebtPayment({
+        organizationId,
+        userId: user.id,
+        debtId: paymentData.debtId,
+        paymentAmount: paymentData.paymentAmount,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        notes: paymentData.notes ?? null,
+        transactionReference: paymentData.transactionReference ?? null,
+        receiptFile: paymentData.receiptFile ?? null,
+        debtDisplayName: debt.debt_name,
+        updateBalance,
+        onAfterSuccess: refetchDebts,
+        messages: {
+          duplicateTransactionRef: t(
+            "debt.payment.duplicateTransactionRef",
+            "This transaction ID is already recorded for this organization."
+          ),
+          receiptUploadFailed: t(
+            "debt.payment.receiptUploadFailed",
+            "Failed to upload receipt."
+          ),
+          paymentInsertFailed: t(
+            "debt.payment.insertFailed",
+            "Failed to record payment."
+          ),
+        },
+      });
+      if (ok) {
+        await handleDebtShareFlowSuccess();
+      }
+      return ok;
+    } finally {
+      setIsDebtPaymentSubmitting(false);
+    }
   };
 
   const isImage = (f: File) => f.type.startsWith("image/");
@@ -193,6 +302,37 @@ export default function ShareReceiptValidationPage() {
     }
 
     setIsAnalyzingReceipt(false);
+  };
+
+  const handleAnalyzeAndOpenIncome = async () => {
+    setIncomeModalOpen(true);
+    setIncomeAutofillData(null);
+    setIsAnalyzingIncomeReceipt(true);
+    setIncomeAnalysisRequestId((prev) => prev + 1);
+
+    const result = await analyzeExpenseReceiptWithAI({
+      receiptFiles: files,
+    });
+
+    if (result.success && result.data) {
+      setIncomeAutofillData(result.data);
+      toast.success(
+        t(
+          "shareReceipt.aiAutofillReadyIncome",
+          "Draft pemasukan berhasil diisi otomatis dari receipt."
+        )
+      );
+    } else {
+      toast.error(
+        result.error ||
+          t(
+            "shareReceipt.aiAutofillFailed",
+            "Analisis AI gagal. Silakan isi form manual."
+          )
+      );
+    }
+
+    setIsAnalyzingIncomeReceipt(false);
   };
 
   return (
@@ -285,7 +425,7 @@ export default function ShareReceiptValidationPage() {
                   type="button"
                   className="w-full justify-center"
                   onClick={() => void handleAnalyzeAndOpenExpense()}
-                  disabled={isAnalyzingReceipt}
+                  disabled={isAnalyzingReceipt || isAnalyzingIncomeReceipt}
                 >
                   {isAnalyzingReceipt ? (
                     <>
@@ -300,10 +440,58 @@ export default function ShareReceiptValidationPage() {
                   type="button"
                   variant="secondary"
                   className="w-full"
-                  onClick={() => setIncomeModalOpen(true)}
+                  disabled={isAnalyzingIncomeReceipt || isAnalyzingReceipt}
+                  onClick={() => void handleAnalyzeAndOpenIncome()}
                 >
-                  {t("shareReceipt.toIncome", "Simpan sebagai pemasukan (Income)")}
+                  {isAnalyzingIncomeReceipt ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {t("shareReceipt.analyzingReceiptIncome", "Menganalisis receipt untuk pemasukan…")}
+                    </>
+                  ) : (
+                    t("shareReceipt.toIncome", "Simpan sebagai pemasukan (Income)")
+                  )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-violet-400/70 text-violet-900 dark:border-violet-600 dark:text-violet-100"
+                  disabled={
+                    debtsLoading ||
+                    !hasPayableDebts ||
+                    isAnalyzingDebtReceipt ||
+                    isAnalyzingReceipt ||
+                    isAnalyzingIncomeReceipt
+                  }
+                  onClick={() => void handleAnalyzeAndOpenDebtPayment()}
+                >
+                  {isAnalyzingDebtReceipt ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {t(
+                        "shareReceipt.analyzingReceiptDebt",
+                        "Analyzing receipt for debt…"
+                      )}
+                    </>
+                  ) : debtsLoading ? (
+                    t("shareReceipt.debtLoadingDebts", "Loading debts…")
+                  ) : !hasPayableDebts ? (
+                    t(
+                      "shareReceipt.debtNoPayable",
+                      "No active debt available to pay"
+                    )
+                  ) : (
+                    t("shareReceipt.toDebt", "Save as debt payment")
+                  )}
+                </Button>
+                {!debtsLoading && !hasPayableDebts ? (
+                  <p className="text-xs text-muted-foreground text-center px-1">
+                    {t(
+                      "shareReceipt.debtNoPayableHint",
+                      "Add or activate a debt in Expenses → Debt to use this option."
+                    )}
+                  </p>
+                ) : null}
               </div>
             </section>
           </>
@@ -332,8 +520,42 @@ export default function ShareReceiptValidationPage() {
         open={incomeModalOpen}
         onOpenChange={setIncomeModalOpen}
         initialReceiptFile={files[0] ?? null}
+        initialReceiptFilesKey={initialReceiptKey}
         shareFlowLocked
+        aiAutofillData={incomeAutofillData ?? undefined}
+        aiAutofillStatus={
+          isAnalyzingIncomeReceipt
+            ? "loading"
+            : incomeAutofillData
+              ? "success"
+              : incomeAnalysisRequestId > 0
+                ? "error"
+                : "idle"
+        }
+        aiAutofillRequestId={incomeAnalysisRequestId}
         onShareFlowSuccess={handleShareIncomeFlowSuccess}
+      />
+
+      <DebtPaymentModal
+        isOpen={debtModalOpen}
+        onClose={() => setDebtModalOpen(false)}
+        onSubmit={handleDebtPaymentSubmit}
+        debts={debts}
+        isLoading={isDebtPaymentSubmitting}
+        shareFlowLocked
+        initialReceiptFiles={files}
+        initialReceiptFilesKey={initialReceiptKey}
+        aiAutofillData={debtAutofillData ?? undefined}
+        aiAutofillStatus={
+          isAnalyzingDebtReceipt
+            ? "loading"
+            : debtAutofillData
+              ? "success"
+              : debtAnalysisRequestId > 0
+                ? "error"
+                : "idle"
+        }
+        aiAutofillRequestId={debtAnalysisRequestId}
       />
 
       <AlertDialog open={leaveConfirmOpen} onOpenChange={setLeaveConfirmOpen}>

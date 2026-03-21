@@ -8,14 +8,17 @@ import {
   DropdownMenuSeparator,
 } from "@/features/ui/dropdown-menu";
 import { ChevronDown, Building, Check, Plus, AlertCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMultiOrganization } from "@/features/1-login/hooks/useMultiOrganization";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import CreateOrganizationModal from "@/features/1-login/components/CreateOrganization/CreateOrganizationModal";
 
 const OrganizationSwitcher = () => {
   const { userOrganizations, activeOrganization, switchOrganization, loading, refetch } = useMultiOrganization();
-  const { hasOrganization } = useCentralizedUserData();
+  const { forceRefreshUserData } = useCentralizedUserData();
+  const queryClient = useQueryClient();
+  const location = useLocation();
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -33,9 +36,10 @@ const OrganizationSwitcher = () => {
       
       if (success) {
         console.log('✅ Organization switch successful');
-        // Force a page reload to ensure all components get the new organization context
-        // This is more reliable than trying to coordinate all hook refreshes
-        window.location.reload();
+        await refetch();
+        await forceRefreshUserData();
+        await queryClient.invalidateQueries();
+        navigate(`${location.pathname}${location.search}`, { replace: true });
       } else {
         setSwitchError('Gagal mengganti organisasi aktif');
         console.error('❌ Failed to switch organization');

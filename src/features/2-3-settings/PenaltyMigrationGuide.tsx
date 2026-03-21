@@ -4,9 +4,11 @@ import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Button } from '@/features/ui/button';
 import { AlertTriangle, Database, CheckCircle, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const PenaltyMigrationGuide = () => {
   const [copied, setCopied] = useState(false);
+  const queryClient = useQueryClient();
 
   const migrationSQL = `-- Create penalty_rules table for configurable penalty rules
 CREATE TABLE public.penalty_rules (
@@ -148,7 +150,7 @@ USING (organization_id IN (
               <li>2. Go to SQL Editor</li>
               <li>3. Paste the migration SQL above</li>
               <li>4. Click "Run" to execute the migration</li>
-              <li>5. Refresh this page to access penalty features</li>
+              <li>5. Muat ulang data aplikasi (tombol di bawah) untuk mengaktifkan fitur penalty</li>
             </ol>
           </div>
         </CardContent>
@@ -160,10 +162,10 @@ USING (organization_id IN (
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600 mb-4">
-            After running the migration, refresh this page to enable penalty features.
+            Setelah migrasi dijalankan, invalidasi cache query agar aplikasi mengambil skema terbaru tanpa reload halaman penuh.
           </p>
-          <Button onClick={() => window.location.reload()}>
-            Refresh Page
+          <Button type="button" onClick={() => void queryClient.invalidateQueries()}>
+            Muat ulang data
           </Button>
         </CardContent>
       </Card>

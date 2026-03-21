@@ -5,6 +5,8 @@ export interface ExpenseReceiptAutofillData {
   amount?: number;
   createDate?: string;
   description?: string;
+  /** Bank / invoice reference from receipt (debt payment dedupe). */
+  transactionId?: string;
 }
 
 export interface AnalyzeExpenseReceiptWithAIResult {
@@ -27,6 +29,8 @@ function normalizeAutofillData(input: unknown): ExpenseReceiptAutofillData | und
   const expenseName = typeof source.expenseName === "string" ? source.expenseName.trim() : "";
   const description = typeof source.description === "string" ? source.description.trim() : "";
   const createDate = typeof source.createDate === "string" ? source.createDate.trim() : "";
+  const transactionId =
+    typeof source.transactionId === "string" ? source.transactionId.trim() : "";
   const amount =
     typeof source.amount === "number"
       ? source.amount
@@ -38,6 +42,7 @@ function normalizeAutofillData(input: unknown): ExpenseReceiptAutofillData | und
   if (expenseName) normalized.expenseName = expenseName;
   if (description) normalized.description = description;
   if (createDate) normalized.createDate = createDate;
+  if (transactionId) normalized.transactionId = transactionId;
   if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
     normalized.amount = amount;
   }

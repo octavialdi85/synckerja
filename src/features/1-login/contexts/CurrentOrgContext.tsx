@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   clearCurrentOrgCacheForUser,
@@ -19,6 +19,11 @@ export function CurrentOrgProvider({ children }: { children: React.ReactNode }) 
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Snapshot for fetchFromProfile: jangan setLoading(true) saat refetch jika org sudah ada (tab resume / SIGNED_IN ulang) — semua halaman desktop+mobile ikut useCurrentOrg(). */
+  const organizationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    organizationIdRef.current = organizationId;
+  }, [organizationId]);
 
   const fetchFromProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -27,7 +32,10 @@ export function CurrentOrgProvider({ children }: { children: React.ReactNode }) 
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const hadOrgId = organizationIdRef.current != null && organizationIdRef.current !== '';
+    if (!hadOrgId) {
+      setLoading(true);
+    }
     setError(null);
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -67,6 +75,7 @@ export function CurrentOrgProvider({ children }: { children: React.ReactNode }) 
       if (event === 'SIGNED_OUT') {
         setOrganizationId(null);
         setError(null);
+        setLoading(false);
       }
       // After login, refetch profile so organizationId is set and SubscriptionExpiryGuard
       // can resolve (avoids loading forever when waitingForOrg never clears)

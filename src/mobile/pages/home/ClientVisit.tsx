@@ -146,20 +146,6 @@ export default function ClientVisit() {
     checkActiveVisit();
   }, [todayVisits]);
 
-  // Force refresh data when component mounts or when organization might change
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        refetch();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [refetch]);
-
   // Clear confetti timeout on unmount
   useEffect(() => {
     return () => {

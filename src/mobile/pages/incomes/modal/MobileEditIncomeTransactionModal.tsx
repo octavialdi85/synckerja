@@ -13,9 +13,11 @@ import { Checkbox } from "@/features/ui/checkbox";
 import { useIncomeTransactions } from "@/features/4-1-dashboard/hooks";
 import { useIncomeMasterData } from "@/features/4-1-dashboard/hooks";
 import type { IncomeTransactionWithRelations } from "@/features/4-1-dashboard/types";
+import { useBankAccounts } from "@/hooks/organized/useBankAccounts";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/mobile/components/ui/drawer";
 import { Camera, Check, ChevronDown, FileText, Upload, X } from "lucide-react";
 import { CameraModal } from "@/mobile/components/CameraModal";
+import { MobileIncomeTransactionDateField } from "../components/MobileIncomeTransactionDateField";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 const formSchema = z.object({
@@ -23,6 +25,7 @@ const formSchema = z.object({
   amount: z.number().min(0.01, "Amount must be greater than 0"),
   customer_name: z.string().optional(),
   payment_method: z.string().optional(),
+  bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
   service_id: z.string().optional(),
@@ -31,6 +34,17 @@ const formSchema = z.object({
   recurring_frequency: z.string().optional(),
   description: z.string().optional(),
   receipt_file: z.instanceof(File).optional(),
+}).superRefine((data, ctx) => {
+  if (data.payment_method === "bank_transfer") {
+    const id = data.bank_account_id?.trim();
+    if (!id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "bank_account_required",
+        path: ["bank_account_id"],
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -66,10 +80,12 @@ export function MobileEditIncomeTransactionModal({
   const isMobile = useIsMobile();
   const { updateIncomeTransaction, isUpdating } = useIncomeTransactions();
   const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
+  const { bankAccounts } = useBankAccounts({ includeInactive: true });
   const [receiptFile, setReceiptFile] = useState<File | undefined>(undefined);
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null);
   const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
   const [paymentMethodDrawerOpen, setPaymentMethodDrawerOpen] = useState(false);
+  const [bankAccountDrawerOpen, setBankAccountDrawerOpen] = useState(false);
   const [incomeTypeDrawerOpen, setIncomeTypeDrawerOpen] = useState(false);
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
   const [serviceDrawerOpen, setServiceDrawerOpen] = useState(false);
@@ -84,6 +100,7 @@ export function MobileEditIncomeTransactionModal({
       amount: 0,
       customer_name: "",
       payment_method: "",
+      bank_account_id: "",
       income_type_id: "",
       category_id: "",
       service_id: "",
@@ -107,15 +124,35 @@ export function MobileEditIncomeTransactionModal({
     [incomeCategories, watchedIncomeTypeId]
   );
 
-  const paymentMethods = [
-    { value: "cash", label: "Cash" },
-    { value: "bank_transfer", label: "Bank Transfer" },
-    { value: "credit_card", label: "Credit Card" },
-    { value: "debit_card", label: "Debit Card" },
-    { value: "check", label: "Check" },
-    { value: "digital_wallet", label: "Digital Wallet" },
-    { value: "other", label: "Other" },
-  ];
+  const paymentMethods = useMemo(
+    () => [
+      { value: "cash", label: t("incomes.paymentMethod.cash", "Cash") },
+      { value: "bank_transfer", label: t("incomes.paymentMethod.bankTransfer", "Bank Transfer") },
+      { value: "credit_card", label: t("incomes.paymentMethod.creditCard", "Credit Card") },
+      { value: "debit_card", label: t("incomes.paymentMethod.debitCard", "Debit Card") },
+      { value: "check", label: t("incomes.paymentMethod.check", "Check") },
+      { value: "digital_wallet", label: t("incomes.paymentMethod.digitalWallet", "Digital Wallet") },
+      { value: "other", label: t("incomes.paymentMethod.other", "Other") },
+    ],
+    [t]
+  );
+
+  const bankAccountSelectOptions = useMemo(() => {
+    const rows = bankAccounts.map((b) => ({
+      value: b.id,
+      label: `${b.name}${b.account_number ? ` (${b.account_number})` : ""}`,
+    }));
+    const linkedId = income?.bank_account_id?.trim();
+    if (!linkedId || rows.some((r) => r.value === linkedId)) {
+      return rows;
+    }
+    const rel = income?.bank_accounts;
+    const label =
+      rel?.name != null && String(rel.name).length > 0
+        ? `${rel.name}${rel.account_number ? ` (${rel.account_number})` : ""}`
+        : t("incomes.previouslySelectedAccount", "Previously selected account");
+    return [{ value: linkedId, label }, ...rows];
+  }, [bankAccounts, income, t]);
   const recurringFrequencies = [
     { value: "daily", label: "Daily" },
     { value: "weekly", label: "Weekly" },
@@ -136,23 +173,27 @@ export function MobileEditIncomeTransactionModal({
   }, [selectedReceiptPreviewUrl]);
 
   useEffect(() => {
-    if (income) {
-      form.reset({
-        transaction_date: income.transaction_date,
-        amount: income.amount,
-        customer_name: income.customer_name || "",
-        payment_method: income.payment_method || "",
-        income_type_id: income.income_type_id || "",
-        category_id: income.category_id || "",
-        service_id: income.service_id || "",
-        sub_service_id: income.sub_service_id || "",
-        is_recurring: income.is_recurring,
-        recurring_frequency: income.recurring_frequency || "",
-        description: income.description || "",
-      });
-      setReceiptFile(undefined);
-    }
-  }, [income, form]);
+    if (!open || !income) return;
+    const txDate =
+      typeof income.transaction_date === "string" && income.transaction_date.length >= 10
+        ? income.transaction_date.slice(0, 10)
+        : income.transaction_date;
+    form.reset({
+      transaction_date: txDate,
+      amount: income.amount,
+      customer_name: income.customer_name || "",
+      payment_method: income.payment_method || "",
+      bank_account_id: income.bank_account_id?.trim() || "",
+      income_type_id: income.income_type_id || "",
+      category_id: income.category_id || "",
+      service_id: income.service_id || "",
+      sub_service_id: income.sub_service_id || "",
+      is_recurring: income.is_recurring,
+      recurring_frequency: income.recurring_frequency || "",
+      description: income.description || "",
+    });
+    setReceiptFile(undefined);
+  }, [open, income, form]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,8 +260,9 @@ export function MobileEditIncomeTransactionModal({
 
   const onSubmit = (values: FormData) => {
     if (!income) return;
+    const bankId = values.bank_account_id?.trim() || null;
     updateIncomeTransaction(
-      { id: income.id, ...values },
+      { id: income.id, ...values, bank_account_id: bankId },
       {
         onSuccess: () => {
           onOpenChange(false);
@@ -247,10 +289,12 @@ export function MobileEditIncomeTransactionModal({
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 py-4">
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Transaction Date</Label>
-                <Input type="date" className="text-sm" {...form.register("transaction_date")} />
-              </div>
+              <MobileIncomeTransactionDateField
+                label={t("incomes.transactionDate", "Transaction Date")}
+                value={form.watch("transaction_date")}
+                onChange={(v) => form.setValue("transaction_date", v, { shouldValidate: true })}
+                errorMessage={form.formState.errors.transaction_date?.message}
+              />
               <div className="space-y-2">
                 <Label>Amount</Label>
                 <Input
@@ -274,13 +318,38 @@ export function MobileEditIncomeTransactionModal({
                 <DrawerSelectField
                   open={paymentMethodDrawerOpen}
                   onOpenChange={setPaymentMethodDrawerOpen}
-                  title="Payment Method"
+                  title={t("incomes.paymentMethod", "Payment Method")}
                   value={form.watch("payment_method") || ""}
-                  placeholder="Select payment method"
+                  placeholder={t("incomes.selectPaymentMethod", "Select payment method")}
                   options={paymentMethods}
-                  onSelect={(value) => form.setValue("payment_method", value)}
+                  onSelect={(value) => {
+                    form.setValue("payment_method", value, { shouldValidate: true });
+                    if (value !== "bank_transfer") {
+                      form.setValue("bank_account_id", "");
+                    }
+                  }}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("incomes.bankAccount", "Bank Account")}</Label>
+              <DrawerSelectField
+                open={bankAccountDrawerOpen}
+                onOpenChange={setBankAccountDrawerOpen}
+                title={t("incomes.bankAccount", "Bank Account")}
+                value={form.watch("bank_account_id") || ""}
+                placeholder={t("incomes.selectBankAccount", "Select bank account")}
+                options={bankAccountSelectOptions}
+                onSelect={(value) => form.setValue("bank_account_id", value, { shouldValidate: true })}
+              />
+              {form.formState.errors.bank_account_id ? (
+                <p className="text-xs text-red-600">
+                  {form.formState.errors.bank_account_id.message === "bank_account_required"
+                    ? t("incomes.bankAccountRequiredForTransfer", "Select a bank account for bank transfer")
+                    : form.formState.errors.bank_account_id.message}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

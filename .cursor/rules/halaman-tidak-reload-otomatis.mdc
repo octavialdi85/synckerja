@@ -1,64 +1,130 @@
 ---
-description: Halaman tidak reload otomatis saat pindah tab/window. Standar agar konten (hasil generate, draft, state) tidak hilang ketika user kembali ke tab. Berlaku untuk route protected, query TanStack, dan permission/config loading.
-alwaysApply: true
+description: Mencegah sensasi reload/unmount halaman saat user pindah tab atau window. Cakupan App shell (desktop + mobile), TanStack Query, permission config, subscription/org guard, dan realtime digital marketing. Pakai @rule ini saat mengubah routing, loading global, atau useQuery yang sensitif terhadap focus.
+alwaysApply: false
 ---
 
-# Halaman Tidak Reload Otomatis
+# Halaman tidak reload otomatis (tab / window)
 
-Rule ini memastikan **halaman tidak reload atau unmount otomatis** ketika user pindah ke tab/window lain lalu kembali. Tujuan: konten (hasil generate, draft, state) **tetap ada** setelah kembali ke tab — tanpa refetch massal atau tampilan loading yang unmount route.
+## Tujuan
 
-**Penyebab yang sudah diperbaiki:**
-1. **ProtectedRoute** menampilkan loading (dan unmount children) saat `configLoading`/`isLoading` jadi `true` — termasuk saat permission config **refetch** setelah tab visible.
-2. **TanStack Query** default `refetchOnWindowFocus: true` — saat tab focus kembali, query refetch dan bisa memicu re-render/reload feeling.
+Saat user **pindah tab atau jendela** lalu kembali, konten halaman (draft, state form, hasil generate, posisi scroll, modal) **tidak boleh hilang** karena:
 
----
+- seluruh pohon route **unmount**, atau
+- **refetch massal** yang mengganti data seolah halaman dimuat ulang, atau
+- loading global yang **mengganti** children route hanya karena refetch singkat.
 
-## 1. usePermissionConfiguration (global)
+Yang diizinkan: data **stale-while-revalidate** di latar belakang tanpa melepas route atau mereset UI yang sedang dipakai.
 
-**File:** `src/features/1-layouts/sidebar/usePermissionConfiguration.ts`
+## Ruang lingkup
 
-- **Hanya set loading pada load awal.** Saat **refetch** (mis. effect jalan lagi karena `user`/`organization` referensi berubah setelah tab visible), **jangan** panggil `setLoading(true)` agar ProtectedRoute tidak unmount route content.
-- Pola yang dipakai: `if (configurations.length === 0) { setLoading(true); }` sebelum fetch. Jadi refetch di background tanpa mengubah loading → tidak ada unmount SettingsPage/Dashboard/ScriptGenerator dll.
-
-Saat mengubah logic fetch permission config, **jangan** menghapus atau mengabaikan pengecekan ini.
-
----
-
-## 2. TanStack Query — refetchOnWindowFocus
-
-**Di seluruh project:** untuk query yang dipakai di halaman yang ingin bebas reload saat pindah tab, selalu set:
-
-```ts
-refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
-```
-
-- **App.tsx** sudah set `focusManager.setEventListener` no-op dan `QueryClient` default `refetchOnWindowFocus: false`. Query individual bisa **override** jadi `true` — hindari itu untuk halaman digital-marketing/settings/dashboard/script-generator dan halaman lain yang tidak ingin refetch on focus.
-- Saat **menambah useQuery baru** di fitur:
-  - `src/features/6-1-dashboard/**`
-  - `src/features/6-1-Settings/**`
-  - `src/features/6-1-ScriptGenerator/**`
-  - `src/features/6-1-ContentCalendar/**`
-  - `src/features/6-1-ProductKnowledge/**`
-  - dan halaman lain yang sama pola (protected route + konten yang tidak boleh hilang)
-
-  **wajib** menyertakan `refetchOnWindowFocus: false` di options query (kecuali ada kebutuhan eksplisit refetch on focus).
+- **Satu** `BrowserRouter` dan **satu** `SubscriptionExpiryGuard` membungkus `<Routes>` di `src/App.tsx` — **semua route** (layout desktop dan halaman mobile seperti absensi, tools, digital marketing) melewati guard yang sama.
+- Aturan Query (`refetchOnWindowFocus`, dll.) relevan untuk **fitur baru** dan hook yang dipakai di halaman panjang / editor / dashboard.
 
 ---
 
-## 3. Route & ProtectedRoute
+## 1. SubscriptionExpiryGuard — me-unmount seluruh `<Routes>`
 
-- Semua route digital-marketing (dashboard, content-calendar, product-knowledge, script-generator, settings) memakai `<ProtectedRoute>`. Perilaku "tidak reload" sudah didukung oleh:
-  - usePermissionConfiguration (tidak set loading saat refetch), dan
-  - query di masing-masing fitur dengan `refetchOnWindowFocus: false`.
-- Saat **menambah halaman baru** yang tidak boleh reload saat pindah tab: pastikan tidak ada loading state yang unmount children saat refetch (ikuti pola usePermissionConfiguration), dan semua useQuery di halaman itu pakai `refetchOnWindowFocus: false`.
+**File:** `src/components/SubscriptionExpiryGuard.tsx`
+
+Guard ini, saat `isAnyLoading` benar, **tidak me-render** `{children}` dan menggantinya dengan skeleton / splash. Akibatnya **seluruh** isi `<Routes>` **unmount** — ini penyebab paling berat untuk “reload” seluruh app.
+
+`isAnyLoading` memakai:
+
+- `authLoading` (`useAuth`)
+- `isLoading` dari **`useSubscriptionExpiry()`** (bukan gabungan sembarangan dengan `orgLoading`)
+- `isChecking` (state internal guard)
+- `waitingForOrg` = `user` ada, `organizationId === null`, dan `orgLoading` dari `useCurrentOrg()`
+
+### Yang harus dijaga
+
+1. **`src/hooks/useSubscriptionExpiry.ts`**  
+   - Jangan mengembalikan `isLoading: queryLoading || orgLoading` untuk keperluan guard.  
+   - `orgLoading` saat refetch profil (dengan `organizationId` yang masih terisi) **bukan** sinyal “app belum siap” — itu membuat guard mengganti seluruh route.  
+   - Kasus “org belum ter-resolve” sudah ditangani guard lewat **`waitingForOrg`**.
+
+2. **`src/features/1-login/contexts/CurrentOrgContext.tsx`**  
+   - `fetchFromProfile`: naikkan `loading` (`setLoading(true)`) **hanya** bila belum punya `organizationId` (load pertama). Jika org sudah dikenal, refetch profil berjalan **tanpa** flip `loading` — mengurangi kedip `orgLoading` di seluruh konsumen `useCurrentOrg()`.  
+   - `refetch()` eksplisit (mis. ganti org) tetap boleh memakai loading penuh sesuai implementasi saat ini.
+
+3. **`SIGNED_OUT`** di listener auth pada provider org: pastikan `loading` tidak tertinggal `true` setelah logout (sinkron dengan penghapusan `organizationId`).
 
 ---
 
-## 4. Ringkasan checklist (halaman baru / query baru)
+## 2. App.tsx — default TanStack Query & focus / online
 
-- [ ] Query baru di halaman protected: tambah `refetchOnWindowFocus: false`.
-- [ ] Logic loading (permission/config/org) yang bisa refetch: jangan set loading `true` saat refetch jika data sudah pernah load (stale-while-revalidate tanpa unmount).
-- [ ] Jangan pasang listener `visibilitychange` / `focus` yang memicu reload, full refetch, atau navigasi kecuali memang dibutuhkan (mis. notifikasi).
+**File:** `src/App.tsx`
 
-**File acuan:**  
-`src/features/1-layouts/sidebar/usePermissionConfiguration.ts`, `src/App.tsx` (focusManager + QueryClient), `src/features/6-1-dashboard/SocialMediaDashboardPage.tsx`, `src/features/6-1-Settings/SettingsPage.tsx`, `src/features/6-1-ScriptGenerator/ScriptGeneratorPage.tsx`.
+Sudah dikonfigurasi:
+
+- `focusManager.setEventListener` **no-op** + `focusManager.setFocused(true)` agar Query tidak mengandalkan `visibilitychange` bawaan untuk refocus massal.
+- `onlineManager.setEventListener` no-op agar transisi online tidak memicu pola refetch bawaan.
+- `QueryClient` default: `refetchOnWindowFocus: false`, `refetchOnReconnect: false`, `refetchOnMount: false`, plus `staleTime` / `gcTime` umum.
+
+**Query per-fitur** boleh override default; untuk halaman yang tidak boleh “reload” saat kembali ke tab, **jangan** mengaktifkan `refetchOnWindowFocus: true` atau `refetchOnReconnect: true` tanpa alasan produk.
+
+---
+
+## 3. Permission config & ProtectedRoute
+
+**File:** `src/features/1-layouts/sidebar/usePermissionConfiguration.tsx`
+
+- **`setLoading(true)`** untuk permission config **hanya** pada skenario setara **cold start** (belum ada data yang relevan untuk org), bukan pada setiap refetch karena referensi `user` / `organization` berubah setelah tab aktif lagi.  
+- Pola inti: jangan membuat `configLoading` bernilai true pada refetch jika konfigurasi untuk org tersebut **sudah pernah terisi** — agar `ProtectedRoute` tidak me-unmount children.
+
+**File:** `src/components/ProtectedRoute.tsx`
+
+- `isLoading` memasukkan `configLoading` dari `useDepartmentAccess` / permission provider.  
+- Ada **debounce ~250ms** untuk menampilkan UI loading dan untuk “Akses ditolak” agar tidak berkedip saat resolusi singkat.  
+- Saat mengubah logika loading di sini, pertahankan prinsip: **jangan** unmount children hanya karena refetch permission singkat.
+
+---
+
+## 4. UniversalProtectedRoute
+
+**File:** `src/components/UniversalProtectedRoute.tsx`
+
+- Ada optimasi **skip re-validasi** jika akses sudah granted dan path / user / hash config tidak berubah (`accessGrantedRef` + refs path/user/config).  
+- Saat `configLoading`, validasi bisa tertahan — pastikan perubahan di `usePermissionConfiguration` tidak membuat `configLoading` berkedip tidak perlu (lihat §3).
+
+---
+
+## 5. Realtime digital marketing — `social_media_plans`
+
+**File:** `src/features/6-1-dashboard/hook/useRealtimeSocialMedia.ts`, `briefModalOpenRef.ts`
+
+Perubahan realtime pada tabel `social_media_plans` dapat memicu **refetch** query rencana konten. Saat modal **Brief**, **Title**, atau **Preview (Google Drive)** terbuka, refetch penuh harus **ditunda** agar state modal tidak reset.
+
+- Daftarkan pembukaan modal yang relevan lewat setter di **`briefModalOpenRef.ts`** dan cek **`shouldDeferSocialMediaPlansRefetch()`** sebelum refetch (sudah terpasang di alur realtime).
+
+Ini **khusus** fitur digital marketing dashboard / konten terkait; tidak memaksa pola yang sama ke domain lain kecuali ada masalah serupa.
+
+---
+
+## Checklist (halaman atau `useQuery` baru)
+
+- [ ] Butuh bebas dari refetch saat fokus tab: set `refetchOnWindowFocus: false` (dan hindari `refetchOnReconnect: true` kecuali disengaja).
+- [ ] Loading permission / org / subscription: **stale-while-revalidate** — jangan naikkan flag yang **mengganti** seluruh route jika data sudah pernah valid untuk konteks saat ini.
+- [ ] Hindari listener `visibilitychange` / `focus` yang memicu navigasi, `window.location` reload, atau invalidate massal kecuali ada kebutuhan eksplisit (mis. notifikasi).
+- [ ] Modal baru yang mengunci satu baris `social_media_plans` saat realtime aktif: integrasikan dengan **`briefModalOpenRef.ts`** (lihat §5).
+
+---
+
+## File acuan (grouped)
+
+| Area | Path |
+|------|------|
+| App shell, Query default, guard luar | `src/App.tsx`, `src/components/SubscriptionExpiryGuard.tsx` |
+| Subscription / RPC status | `src/hooks/useSubscriptionExpiry.ts`, `src/hooks/useSubscriptionExpiryRealtime.ts` |
+| Org dari profil | `src/features/1-login/contexts/CurrentOrgContext.tsx` |
+| Permission global | `src/features/1-layouts/sidebar/usePermissionConfiguration.tsx`, `src/features/1-layouts/sidebar/useDepartmentAccess.ts` |
+| Route protected | `src/components/ProtectedRoute.tsx`, `src/components/UniversalProtectedRoute.tsx` |
+| Realtime DM + defer refetch | `src/features/6-1-dashboard/hook/useRealtimeSocialMedia.ts`, `src/features/6-1-dashboard/hook/briefModalOpenRef.ts` |
+| Contoh halaman DM | `src/features/6-1-dashboard/SocialMediaDashboardPage.tsx`, `src/features/6-1-Settings/SettingsPage.tsx`, `src/features/6-1-ScriptGenerator/ScriptGeneratorPage.tsx` |
+
+**Mobile:** `src/mobile/components/SubscriptionExpiryGuardMobile.tsx` meneruskan ke `SubscriptionExpiryGuard` yang sama — tidak ada aturan terpisah untuk unmount global.
+
+---
+
+## Opsional: `alwaysApply`
+
+Saat ini **`alwaysApply: false`** — rule ini dipakai dengan **@mention** file rule atau saat relevan. Untuk menegakkan di setiap chat, ubah ke `alwaysApply: true` di frontmatter.

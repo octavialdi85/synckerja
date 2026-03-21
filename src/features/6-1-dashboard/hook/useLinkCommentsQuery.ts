@@ -141,7 +141,7 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, _linkUrl?: strin
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
     refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (especially when copying links)
     refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces unnecessary requests)
-    refetchOnReconnect: true, // Enable refetch on reconnect
+    refetchOnReconnect: false, // Disabled: no auto refetch on reconnect (same as global app policy)
     retry: 1,
   });
 };

@@ -21,6 +21,7 @@ import { useCarouselImages, getCarouselImagePublicUrl, CAROUSEL_QUERY_KEY } from
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
 import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
+import { setGoogleDriveModalOpenPlanId } from '../hook/briefModalOpenRef';
 
 const getEmbedUrl = (url: string) => {
   const u = getEmbedUrlFromUtils(url);
@@ -220,6 +221,15 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     refetch: carouselRefetch,
     count: carouselCount,
   } = useCarouselImages(isCarouselMode ? socialMediaPlanId : undefined);
+
+  useEffect(() => {
+    if (isOpen && socialMediaPlanId) {
+      setGoogleDriveModalOpenPlanId(socialMediaPlanId);
+      return () => setGoogleDriveModalOpenPlanId(null);
+    }
+    setGoogleDriveModalOpenPlanId(null);
+    return undefined;
+  }, [isOpen, socialMediaPlanId]);
 
   useEffect(() => {
     if (isCarouselMode && carouselImages.length > 0) {

@@ -488,6 +488,9 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                     {t("expenses.tableExpense", "Expense")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
+                    {t("expenses.tableTransactionId", "Transaction ID")}
+                  </th>
+                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tablePaymentDate", "Payment Date")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
@@ -533,6 +536,7 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                   Array.from({ length: 6 }).map((_, rowIndex) => (
                     <tr key={rowIndex} className="border-b">
                       <td className="py-2 px-2"><Skeleton className="h-4 w-full max-w-[120px]" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-16" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
@@ -544,14 +548,13 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                       <td className="py-2 px-2"><Skeleton className="h-4 w-full max-w-[80px]" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-12" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-5 w-14 rounded-full" /></td>
                       <td className="py-2 px-2 text-center"><Skeleton className="h-5 w-5 rounded-full mx-auto" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-8 w-8 rounded" /></td>
                     </tr>
                   ))
                 ) : filteredBySearch.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="py-6 text-center text-muted-foreground text-sm">
+                    <td colSpan={15} className="py-6 text-center text-muted-foreground text-sm">
                       {t("expenses.noExpensesInTable", "No expenses found. Use filters or add an expense.")}
                     </td>
                   </tr>
@@ -580,6 +583,14 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                         <td className="py-2 px-2 max-w-[150px] sm:max-w-[200px] min-w-0">
                           <div className="truncate text-xs" title={requestTitle}>
                             {requestTitle}
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 max-w-[120px] sm:max-w-[160px] min-w-0">
+                          <div
+                            className="truncate text-xs font-mono"
+                            title={expense.transaction_reference?.trim() || undefined}
+                          >
+                            {expense.transaction_reference?.trim() || "—"}
                           </div>
                         </td>
                         <td className="py-2 px-2 whitespace-nowrap text-xs">
@@ -725,6 +736,14 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                         <label className="text-xs font-medium text-muted-foreground">{t("expenses.amount", "Amount")}</label>
                         <p className="text-sm font-semibold mt-1">{formatCurrency(selectedExpense.amount)}</p>
                       </div>
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {t("expenses.tableTransactionId", "Transaction ID")}
+                        </label>
+                        <p className="text-sm font-mono mt-1 break-all">
+                          {selectedExpense.transaction_reference?.trim() || "—"}
+                        </p>
+                      </div>
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">{t("expenses.type", "Type")}</label>
                         <p className="text-sm mt-1">{selectedExpense.expense_type}</p>
@@ -820,6 +839,14 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">{t("expenses.amount", "Amount")}</label>
                         <p className="text-sm font-semibold mt-1">{formatCurrency(selectedExpense.amount)}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {t("expenses.tableTransactionId", "Transaction ID")}
+                        </label>
+                        <p className="text-sm font-mono mt-1 break-all">
+                          {selectedExpense.transaction_reference?.trim() || "—"}
+                        </p>
                       </div>
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">{t("expenses.type", "Type")}</label>

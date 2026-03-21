@@ -756,10 +756,7 @@ export const CandidateReviewsTab = ({
           });
         }
 
-        // Reload page after short delay to show updated status
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        await Promise.all([loadReviews(), loadDocuments()]);
       } else {
         console.error('[FRONTEND] Migration failed:', data);
         throw new Error(data?.error || 'Migration failed for unknown reason');

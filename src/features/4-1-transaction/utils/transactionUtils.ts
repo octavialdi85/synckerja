@@ -16,6 +16,7 @@ export interface IncomeTransaction {
   receipt_file_name?: string | null;
   services?: { name: string } | null;
   sub_services?: { name: string } | null;
+  transaction_reference?: string | null;
 }
 
 /**
@@ -27,10 +28,13 @@ export const filterTransactions = (
 ): IncomeTransaction[] => {
   return transactions.filter((transaction) => {
     // Search filter
-    const matchesSearch = !filters.search || 
-      transaction.customer_name?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      transaction.id.toLowerCase().includes(filters.search.toLowerCase());
+    const q = filters.search.toLowerCase();
+    const matchesSearch =
+      !filters.search ||
+      transaction.customer_name?.toLowerCase().includes(q) ||
+      transaction.description?.toLowerCase().includes(q) ||
+      transaction.id.toLowerCase().includes(q) ||
+      (transaction.transaction_reference || "").toLowerCase().includes(q);
 
     // Status filter
     const matchesStatus = filters.status === 'all' || transaction.status === filters.status;

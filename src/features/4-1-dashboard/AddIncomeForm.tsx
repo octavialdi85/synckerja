@@ -48,6 +48,17 @@ const formSchema = z.object({
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
   description: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.payment_method === 'bank_transfer') {
+    const id = data.bank_account_id?.trim();
+    if (!id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a bank account for bank transfer',
+        path: ['bank_account_id'],
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -194,7 +205,15 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
 
         <div className="space-y-2">
           <Label htmlFor="payment_method">Payment Method</Label>
-          <Select onValueChange={(value) => form.setValue('payment_method', value)}>
+          <Select
+            onValueChange={(value) => {
+              form.setValue('payment_method', value, { shouldValidate: true });
+              if (value !== 'bank_transfer') {
+                form.setValue('bank_account_id', undefined);
+              }
+            }}
+            value={form.watch('payment_method') || undefined}
+          >
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select payment method" />
             </SelectTrigger>
@@ -213,7 +232,7 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
         <Label htmlFor="bank_account_id">Bank Account</Label>
         <div className="flex gap-2">
           <Select 
-            onValueChange={(value) => form.setValue('bank_account_id', value)}
+            onValueChange={(value) => form.setValue('bank_account_id', value, { shouldValidate: true })}
             value={form.watch('bank_account_id') || undefined}
           >
             <SelectTrigger className="text-sm flex-1">
@@ -228,6 +247,9 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
             </SelectContent>
           </Select>
         </div>
+        {form.formState.errors.bank_account_id && (
+          <p className="text-sm text-red-600">{form.formState.errors.bank_account_id.message}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

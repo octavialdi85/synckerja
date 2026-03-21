@@ -28,6 +28,8 @@ type ParsedResult = {
   amount?: number;
   createDate?: string;
   description?: string;
+  /** Bank transfer ref, invoice no., BI-FAST ref, etc. */
+  transactionId?: string;
 };
 
 async function callGeminiText(params: {
@@ -207,12 +209,13 @@ Deno.serve(async (req: Request) => {
       "You are extracting expense data from receipts.",
       "Use both receipt images/PDF and OCR text context when available.",
       "Return ONLY valid JSON with shape:",
-      '{"expenseName":"string","amount":12345,"createDate":"YYYY-MM-DD","description":"string"}',
+      '{"expenseName":"string","amount":12345,"createDate":"YYYY-MM-DD","description":"string","transactionId":"string"}',
       "Rules:",
       "- amount must be final transaction total amount (not subtotal/fee).",
       "- createDate must be transaction date. If unknown, return empty string.",
       "- expenseName should be merchant or best transaction title.",
       "- description should summarize transaction details briefly.",
+      "- transactionId: unique reference visible on the receipt (e.g. BI-FAST ref, transfer reference, invoice number, trace no.). If none, empty string.",
       "- If field not found, return empty string for text/date and 0 for amount.",
       combinedOcrText ? `OCR text:\n${combinedOcrText}` : "OCR text: (empty)",
     ].join("\n");
@@ -231,6 +234,7 @@ Deno.serve(async (req: Request) => {
       amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount) : undefined,
       createDate: safeTrim(parsed.createDate),
       description: safeTrim(parsed.description),
+      transactionId: safeTrim((parsed as ParsedResult).transactionId),
     };
 
     if (usageRow?.id) {

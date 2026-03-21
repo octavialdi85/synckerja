@@ -38,19 +38,9 @@ export const useInvalidateUserCache = () => {
   };
 
   const forceRefreshAllData = async () => {
-    console.log('🚀 Force refreshing all user data...');
-    
-    // Clear all React Query cache
+    console.log('🚀 Force clearing query cache (SPA refresh, no document reload)...');
     queryClient.clear();
-    
-    // Small delay to ensure cache is cleared
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Trigger a page reload as fallback
-    setTimeout(() => {
-      console.log('🔄 Triggering page reload for complete refresh...');
-      window.location.reload();
-    }, 1000);
+    await queryClient.refetchQueries({ type: 'active' });
   };
 
   const invalidateOwnershipData = async () => {

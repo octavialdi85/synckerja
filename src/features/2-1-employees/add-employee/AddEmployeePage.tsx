@@ -19,9 +19,13 @@ import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useOptimizedSubscription } from '@/features/10-management/hooks/useOptimizedSubscription';
 import { EmployeeLimitHardGuard } from './EmployeeLimitHardGuard';
 import { SubscriptionWarningBanner } from '@/features/share/banners/SubscriptionWarningBanner';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 const AddEmployee = () => {
   const navigate = useNavigate();
+  const { forceRefreshUserData } = useCentralizedUserData();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
   const { organizationId, loading: orgLoading } = useCurrentOrg();
@@ -224,10 +228,10 @@ const AddEmployee = () => {
       <CreateOrganizationModal 
         open={showCreateOrgModal}
         onOpenChange={setShowCreateOrgModal}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowCreateOrgModal(false);
-          // Refresh page to get new organization data
-          window.location.reload();
+          await forceRefreshUserData();
+          await queryClient.invalidateQueries();
         }}
       />
     </EmployeeLimitHardGuard>

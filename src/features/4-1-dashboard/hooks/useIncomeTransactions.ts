@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { IncomeTransactionWithRelations, CreateIncomeTransactionData } from '../types';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 
@@ -50,6 +51,7 @@ function normalizeReceiptMetadata(file: File): { extension: string; mimeType: st
 }
 
 export const useIncomeTransactions = () => {
+  const { t } = useAppTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
@@ -68,7 +70,14 @@ export const useIncomeTransactions = () => {
           income_types(name),
           income_categories(name),
           services(name),
-          sub_services(name)
+          sub_services(name),
+          bank_accounts (
+            id,
+            name,
+            bank_name,
+            account_number,
+            account_holder
+          )
         `)
         .eq('organization_id', organizationId)
         .order('transaction_date', { ascending: false });
@@ -77,6 +86,8 @@ export const useIncomeTransactions = () => {
       return data as IncomeTransactionWithRelations[];
     },
     enabled: !!organizationId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const createMutation = useMutation({
@@ -128,13 +139,23 @@ export const useIncomeTransactions = () => {
         }
       }
 
-      // Remove receipt_file and receipt_url from the data before inserting
-      const { receipt_file, receipt_url, ...transactionData } = newTransaction;
+      const {
+        receipt_file,
+        receipt_url,
+        transaction_reference: txRefInput,
+        ...transactionData
+      } = newTransaction;
+
+      const refTrimmed = txRefInput?.trim() ?? null;
+      const refForDb =
+        refTrimmed && refTrimmed.length > 0 ? refTrimmed : null;
 
       const { data, error } = await supabase
         .from('income_transactions')
         .insert({
           ...transactionData,
+          // Explicit null so PostgREST stores NULL; omitting undefined can skip the column depending on client shape
+          bank_account_id: transactionData.bank_account_id ?? null,
           organization_id: organizationId,
           user_id: user.id,
           created_by: user.id,
@@ -142,6 +163,7 @@ export const useIncomeTransactions = () => {
           receipt_file_name,
           receipt_file_size,
           receipt_mime_type,
+          transaction_reference: refForDb,
         })
         .select()
         .single();
@@ -177,10 +199,32 @@ export const useIncomeTransactions = () => {
       });
     },
     onError: (error) => {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code?: unknown }).code ?? '')
+          : '';
       const rawMessage =
         typeof error === 'object' && error !== null && 'message' in error
           ? String((error as { message?: unknown }).message ?? '')
           : '';
+      const msg = rawMessage;
+      if (
+        code === '23505' ||
+        /duplicate key/i.test(msg) ||
+        /unique constraint/i.test(msg) ||
+        /idx_income_transactions_org_transaction_ref/i.test(msg)
+      ) {
+        toast({
+          title: t('common.error', 'Error'),
+          description: t(
+            'incomes.duplicateTransactionReference',
+            'An income transaction with this Transaction ID already exists in your organization.'
+          ),
+          variant: 'destructive',
+        });
+        console.error('Error creating income transaction:', error);
+        return;
+      }
       const fallbackMessage = "Failed to create income transaction";
       const detailedMessage = rawMessage.trim() || fallbackMessage;
       toast({

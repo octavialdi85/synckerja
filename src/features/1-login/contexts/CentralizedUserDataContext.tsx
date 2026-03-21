@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
-import type { User } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 import { logger } from '@/config/logger';
 
 // Types - focus only on 5 core tables
@@ -32,6 +32,17 @@ interface Employee {
 }
 
 type UserRole = 'owner' | 'admin' | 'employee' | 'hr' | null;
+
+/** Jangan mengosongkan `organization` di state jika profil punya `active_organization_id` (hindari skeleton / flicker). */
+function mergeOrganizationState(
+  fetched: Organization | null | undefined,
+  activeOrganizationId: string | undefined,
+  previous: Organization | null
+): Organization | null {
+  if (fetched) return fetched;
+  if (activeOrganizationId) return previous;
+  return null;
+}
 
 interface CentralizedUserDataContextType {
   // Auth data - focus only on 5 core tables
@@ -89,6 +100,16 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  /** Snapshot org terakhir untuk callback async (timeout) — jangan setOrganization(null) saat refetch gagal. */
+  const organizationStateRef = useRef<Organization | null>(null);
+  organizationStateRef.current = organization;
+
+  // Refs: Supabase TOKEN_REFRESHED gives a new `session` object every time — jangan jadikan
+  // dependency useCallback/useEffect agar tidak re-run massal / setLoading saat pindah tab.
+  const userRef = useRef<User | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  userRef.current = user;
+  sessionRef.current = session;
 
   // Prevent multiple simultaneous fetches
   const fetchingRef = useRef(false);
@@ -106,8 +127,13 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
   // Fetch user data - focus only on 5 core tables
   const refreshUserData = useCallback(async () => {
+    const user = userRef.current;
+    const session = sessionRef.current;
+    // Hanya reset penuh saat benar-benar logout (!user). Session bisa null sebentar saat
+    // TOKEN_REFRESHED / resume WebView — jangan kosongkan org/userData (bukti log RESUME:
+    // orgIdPresent false + configRowCount 0 lalu setLoading permission).
     if (!user || !session || authLoading || fetchingRef.current) {
-      if (!user || !session) {
+      if (!user) {
         setUserData(null);
         setOrganization(null);
         setUserRole(null);
@@ -450,7 +476,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             }
             setEmployee(null);
             setUserRole(null);
-            setOrganization(null);
+            setOrganization((prev) =>
+              mergeOrganizationState(null, userData.active_organization_id, prev)
+            );
           } else {
             const enrichedEmployeeData = employeeData ? {
               ...employeeData,
@@ -459,14 +487,22 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
             setEmployee(enrichedEmployeeData);
             setUserRole(roleData?.role || null);
-            setOrganization(orgData);
+            setOrganization((prev) =>
+              mergeOrganizationState(orgData, userData.active_organization_id, prev)
+            );
+
+            const orgForCache = mergeOrganizationState(
+              orgData,
+              userData.active_organization_id,
+              organizationStateRef.current
+            );
 
             if (employeeData?.department_id) {
               const updatedUserData = { ...userData, department_id: employeeData.department_id };
               setUserData(updatedUserData);
               userDataCacheRef.current = {
                 data: updatedUserData,
-                organization: orgData,
+                organization: orgForCache,
                 userRole: roleData?.role || null,
                 employee: enrichedEmployeeData,
                 timestamp: Date.now()
@@ -474,7 +510,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             } else {
               userDataCacheRef.current = {
                 data: userData,
-                organization: orgData,
+                organization: orgForCache,
                 userRole: roleData?.role || null,
                 employee: enrichedEmployeeData,
                 timestamp: Date.now()
@@ -487,10 +523,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             if (import.meta.env.DEV) {
               logger.debug('CentralizedUserDataContext: Organization data timeout - using fallback data');
             }
-            // Set userData anyway but with fallback organization data
+            // Jangan setOrganization(null): profile masih punya active_organization_id → ProtectedRoute isLoadingOrgData + skeleton (debug D).
             setEmployee(null);
-            setOrganization(null);
-            
+
             // Set a default role based on email or user metadata
             if (user.email?.includes('owner') || user.email?.includes('admin')) {
               setUserRole('owner');
@@ -509,7 +544,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
               : (user.user_metadata?.role as UserRole || 'employee');
             userDataCacheRef.current = {
               data: userData,
-              organization: null,
+              organization: organizationStateRef.current,
               userRole: fallbackRole,
               employee: null,
               timestamp: Date.now()
@@ -519,15 +554,21 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           }
         }
       } else {
-        // No organization found
+        // No organization found (profile tanpa active_organization_id di cabang ini)
         setEmployee(null);
-        setOrganization(null);
+        setOrganization((prev) =>
+          mergeOrganizationState(null, userData.active_organization_id, prev)
+        );
         setUserRole(null);
-        
-        // Update cache with partial data (no organization)
+
+        const orgForCache = mergeOrganizationState(
+          null,
+          userData.active_organization_id,
+          organizationStateRef.current
+        );
         userDataCacheRef.current = {
           data: userData,
-          organization: null,
+          organization: orgForCache,
           userRole: null,
           employee: null,
           timestamp: Date.now()
@@ -586,12 +627,12 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user?.id, session, authLoading]);
+  }, [authLoading]);
 
   // Force refresh function that bypasses caching (e.g. after switch organization in drawer)
   const forceRefreshUserData = useCallback(async () => {
     logger.userData('CentralizedUserDataContext: Force refresh requested');
-    if (!user) {
+    if (!userRef.current) {
       logger.userData('CentralizedUserDataContext: No user for force refresh');
       return;
     }
@@ -603,7 +644,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     previousOrgIdRef.current = undefined; // Allow org-change effect to run if needed
     
     await refreshUserData();
-  }, [refreshUserData, user]);
+  }, [refreshUserData]);
 
   
   // Track previous organization ID to detect changes
@@ -638,10 +679,10 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
     // Only fetch data for authenticated users on protected pages
     // Don't reset lastUserIdRef here to allow caching to work
-    if (user && session && lastUserIdRef.current !== user.id) {
+    if (user && sessionRef.current && lastUserIdRef.current !== user.id) {
       refreshUserData();
     }
-  }, [user?.id, session]);
+  }, [user?.id, refreshUserData]);
 
   // Effect to refresh data when active organization changes
   useEffect(() => {
@@ -659,7 +700,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       // Just track the organization ID without triggering refresh
       previousOrgIdRef.current = userData.active_organization_id;
     }
-  }, [userData?.active_organization_id]);
+  }, [userData?.active_organization_id, refreshUserData]);
 
   // Sync sidebar and all pages when organization is switched from Profile or Sidebar drawer
   useEffect(() => {

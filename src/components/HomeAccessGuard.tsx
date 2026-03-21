@@ -106,7 +106,8 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     organization, 
     isEmailVerified,
     loading: userDataLoading,
-    error: userDataError
+    error: userDataError,
+    forceRefreshUserData,
   } = useCentralizedUserData();
   
   // ADDITIONAL LAYER: Check subscription expiry based on trial_end_date and subscription_end_date
@@ -249,10 +250,11 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
                 Terjadi kesalahan: {userDataError.message}
               </p>
               <button 
-                onClick={() => window.location.reload()} 
+                type="button"
+                onClick={() => void forceRefreshUserData()} 
                 className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
               >
-                Muat Ulang Halaman
+                Coba muat ulang data
               </button>
             </div>
           )}
@@ -279,10 +281,11 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
                 Terjadi kesalahan: {userDataError.message}
               </p>
               <button 
-                onClick={() => window.location.reload()} 
+                type="button"
+                onClick={() => void forceRefreshUserData()} 
                 className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
               >
-                Muat Ulang Halaman
+                Coba muat ulang data
               </button>
             </div>
           )}
@@ -309,10 +312,11 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
               Terjadi kesalahan: {userDataError.message}
             </p>
             <button 
-              onClick={() => window.location.reload()} 
+              type="button"
+              onClick={() => void forceRefreshUserData()} 
               className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
             >
-              Muat Ulang Halaman
+              Coba muat ulang data
             </button>
           </div>
         )}

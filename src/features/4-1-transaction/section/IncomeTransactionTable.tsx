@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, MoreHorizontal, Edit, Trash2, Eye, FileDown } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
@@ -13,6 +13,8 @@ import { formatToRupiah } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
 import { AddIncomeForm } from '@/features/4-1-dashboard/AddIncomeForm';
 import { IncomeTransactionWithRelations } from '@/features/4-1-dashboard/types';
+import { useBankAccounts, type BankAccount } from '@/hooks/organized/useBankAccounts';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface IncomeTransactionTableProps {
   transactions: any[];
@@ -25,12 +27,18 @@ export const IncomeTransactionTable = ({
   isLoading = false,
   onRefresh 
 }: IncomeTransactionTableProps) => {
+  const { t } = useAppTranslation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<IncomeTransactionWithRelations | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { deleteIncomeTransaction, isDeleting } = useIncomeTransactions();
+  const { bankAccounts } = useBankAccounts({ includeInactive: true });
+  const bankById = useMemo(
+    () => new Map<string, BankAccount>(bankAccounts.map((b) => [b.id, b])),
+    [bankAccounts]
+  );
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -125,9 +133,13 @@ export const IncomeTransactionTable = ({
               <TableHead className="h-8 px-3 text-xs font-medium">Type & Category</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Amount</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Payment Method</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Bank Account</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Recurring</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Receipt</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium max-w-[10rem]">
+                {t('incomes.tableTransactionId', 'Transaction ID')}
+              </TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
               <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
             </TableRow>
@@ -135,7 +147,7 @@ export const IncomeTransactionTable = ({
           <TableBody>
             {transactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-16 text-center text-xs text-gray-500">
+                <TableCell colSpan={13} className="h-16 text-center text-xs text-gray-500">
                   No transactions found
                 </TableCell>
               </TableRow>
@@ -177,6 +189,40 @@ export const IncomeTransactionTable = ({
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     {transaction.payment_method || '-'}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs max-w-[10rem]">
+                    {(() => {
+                      const joined = transaction.bank_accounts;
+                      const fromJoin =
+                        joined && typeof joined === 'object' && !Array.isArray(joined) && joined.name
+                          ? joined
+                          : null;
+                      const id = transaction.bank_account_id;
+                      const fromList =
+                        !fromJoin && id ? bankById.get(id) : undefined;
+                      const row = fromJoin
+                        ? fromJoin
+                        : fromList
+                          ? {
+                              name: fromList.name,
+                              bank_name: fromList.bank_name,
+                              account_number: fromList.account_number,
+                            }
+                          : null;
+                      if (!row?.name) {
+                        return <span className="text-gray-400">-</span>;
+                      }
+                      return (
+                        <div>
+                          <div className="font-medium text-wrap break-words">{row.name}</div>
+                          {(row.bank_name || row.account_number) && (
+                            <div className="text-gray-500 text-xs text-wrap break-words">
+                              {[row.bank_name, row.account_number].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <Badge
@@ -231,6 +277,14 @@ export const IncomeTransactionTable = ({
                     <Badge variant={getStatusBadgeVariant(transaction.status)} className="text-xs">
                       {transaction.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs max-w-[10rem] min-w-0">
+                    <div
+                      className="truncate font-mono text-xs"
+                      title={transaction.transaction_reference?.trim() || undefined}
+                    >
+                      {transaction.transaction_reference?.trim() || '—'}
+                    </div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}

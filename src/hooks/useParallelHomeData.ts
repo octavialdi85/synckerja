@@ -94,7 +94,7 @@ export const useParallelHomeData = () => {
         enabled: !!organizationId && !!user,
         staleTime: 2 * 60 * 1000, // 2 minutes
         gcTime: 5 * 60 * 1000,
-        refetchOnWindowFocus: true, // Refetch attendance on focus
+        refetchOnWindowFocus: false, // Selaraskan: tidak refetch saat pindah tab/window
       },
 
       // Query 3: Department Objectives (cached for 5 mins)

@@ -453,10 +453,7 @@ export const IntervieweeTab = () => {
           description: `${selectedCandidate.applicant_name} has been successfully converted to an employee.`
         });
 
-        // Reload page after short delay to show updated status
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        await fetchInterviewees();
       } else {
         console.error('[FRONTEND] Migration failed:', data);
         throw new Error(data?.error || 'Migration failed for unknown reason');

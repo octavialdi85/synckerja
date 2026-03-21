@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { FileDown } from "lucide-react";
 import { Badge } from "@/features/ui/badge";
@@ -10,6 +10,8 @@ import { useIncomeTransactions } from "@/features/4-1-dashboard/hooks";
 import type { IncomeTransactionWithRelations } from "@/features/4-1-dashboard/types";
 import { MobileEditIncomeTransactionModal } from "../modal/MobileEditIncomeTransactionModal";
 import { MobileIncomeTransactionDetailsModal } from "../modal/MobileIncomeTransactionDetailsModal";
+import { useBankAccounts, type BankAccount } from "@/hooks/organized/useBankAccounts";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface MobileIncomeTransactionTableProps {
   transactions: IncomeTransactionWithRelations[];
@@ -22,6 +24,12 @@ export function MobileIncomeTransactionTable({
   isLoading = false,
   onRefresh,
 }: MobileIncomeTransactionTableProps) {
+  const { t } = useAppTranslation();
+  const { bankAccounts } = useBankAccounts({ includeInactive: true });
+  const bankById = useMemo(
+    () => new Map<string, BankAccount>(bankAccounts.map((b) => [b.id, b])),
+    [bankAccounts]
+  );
   const [selectedTransaction, setSelectedTransaction] = useState<IncomeTransactionWithRelations | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -86,7 +94,7 @@ export function MobileIncomeTransactionTable({
   return (
     <div className="flex flex-col h-full min-w-0">
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain-xy touch-pan-x max-h-[52vh]">
-        <table className="w-full min-w-[1760px] select-none">
+        <table className="w-full min-w-[2000px] select-none">
           <thead className="border-b border-slate-400/50 sticky top-0 z-10 bg-slate-500">
             <tr>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Transaction</th>
@@ -95,9 +103,15 @@ export function MobileIncomeTransactionTable({
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Type & Category</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Amount</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Payment Method</th>
+              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500 max-w-[10rem]">
+                {t("incomes.bankAccount", "Bank Account")}
+              </th>
               <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Recurring</th>
               <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Receipt</th>
               <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Status</th>
+              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500 max-w-[10rem]">
+                {t("incomes.tableTransactionId", "Transaction ID")}
+              </th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Date</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Actions</th>
             </tr>
@@ -105,7 +119,7 @@ export function MobileIncomeTransactionTable({
           <tbody>
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={11} className="h-16 text-center text-xs text-gray-500">
+                <td colSpan={13} className="h-16 text-center text-xs text-gray-500">
                   No transactions found
                 </td>
               </tr>
@@ -128,6 +142,37 @@ export function MobileIncomeTransactionTable({
                     <div className="font-semibold text-green-600">{formatToRupiah(transaction.amount)}</div>
                   </td>
                   <td className="px-3 py-2 text-xs">{transaction.payment_method || "-"}</td>
+                  <td className="px-3 py-2 text-xs max-w-[10rem]">
+                    {(() => {
+                      const joined = transaction.bank_accounts;
+                      const fromJoin =
+                        joined && typeof joined === "object" && !Array.isArray(joined) && joined.name ? joined : null;
+                      const id = transaction.bank_account_id;
+                      const fromList = !fromJoin && id ? bankById.get(id) : undefined;
+                      const row = fromJoin
+                        ? fromJoin
+                        : fromList
+                          ? {
+                              name: fromList.name,
+                              bank_name: fromList.bank_name,
+                              account_number: fromList.account_number,
+                            }
+                          : null;
+                      if (!row?.name) {
+                        return <span className="text-gray-400">-</span>;
+                      }
+                      return (
+                        <div>
+                          <div className="font-medium text-wrap break-words">{row.name}</div>
+                          {(row.bank_name || row.account_number) && (
+                            <div className="text-gray-500 text-xs text-wrap break-words">
+                              {[row.bank_name, row.account_number].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap text-center">
                     <Badge
                       variant="outline"
@@ -179,6 +224,14 @@ export function MobileIncomeTransactionTable({
                     <Badge variant={getStatusBadgeVariant(transaction.status)} className="text-xs mx-auto">
                       {transaction.status}
                     </Badge>
+                  </td>
+                  <td className="px-3 py-2 text-xs max-w-[10rem] min-w-0 text-left">
+                    <div
+                      className="truncate font-mono text-xs"
+                      title={transaction.transaction_reference?.trim() || undefined}
+                    >
+                      {transaction.transaction_reference?.trim() || "—"}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-xs text-left">{format(new Date(transaction.transaction_date), "MMM dd, yyyy")}</td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap text-left">

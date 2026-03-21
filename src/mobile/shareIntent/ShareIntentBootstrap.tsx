@@ -12,14 +12,18 @@ export function ShareIntentBootstrap() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const pathRef = useRef(location.pathname);
+  pathRef.current = location.pathname;
+
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !user) return;
+    if (!Capacitor.isNativePlatform() || !user?.id) return;
 
     const goIfNeeded = async () => {
       try {
+        const path = pathRef.current;
         const { files } = await ShareIntent.getPendingPayload();
         if (files.length === 0) return;
-        if (location.pathname === "/share/receipt-validation") return;
+        if (path === "/share/receipt-validation") return;
         navigate("/share/receipt-validation", { replace: true });
       } catch {
         /* ignore */
@@ -38,7 +42,7 @@ export function ShareIntentBootstrap() {
     return () => {
       void removeListener?.();
     };
-  }, [user, navigate, location.pathname]);
+  }, [user?.id, navigate]);
 
   return null;
 }

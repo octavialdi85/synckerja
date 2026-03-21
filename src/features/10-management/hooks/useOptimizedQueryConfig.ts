@@ -14,7 +14,7 @@ export const createOptimizedQueryConfig = () => ({
       retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10000),
       refetchOnWindowFocus: false,
       refetchOnMount: true,
-      refetchOnReconnect: true,
+      refetchOnReconnect: false, // Selaraskan App.tsx: hindari refetch massal saat online lagi
       // Enhanced performance settings
       networkMode: 'online' as const,
     },
