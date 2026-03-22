@@ -328,17 +328,22 @@ export function DebtTableSection({
                           : 0;
                     } else {
                       displayLimitAmount = debt.limit_amount;
-                      const hasAvailableLimit = debt.available_limit != null && debt.available_limit > 0;
-                      displayAvailableLimit = hasAvailableLimit ? debt.available_limit : debt.limit_amount;
                       displayPaidAmount = debt.paid_amount ?? null;
+                      const lim = debt.limit_amount ?? 0;
+
                       if (debt.remaining_debt !== undefined && debt.remaining_debt !== null) {
-                        displayDebtAmount = debt.remaining_debt;
+                        const rem = Math.max(0, Number(debt.remaining_debt));
+                        displayDebtAmount = rem;
+                        displayAvailableLimit = Math.max(0, lim - rem);
                       } else {
+                        const hasAvailableLimit = debt.available_limit != null && debt.available_limit > 0;
+                        displayAvailableLimit = hasAvailableLimit ? debt.available_limit : debt.limit_amount;
                         const hasPayment = debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0;
                         displayDebtAmount = !hasPayment ? debt.debt_amount : Math.max(0, debt.debt_amount - (displayPaidAmount ?? 0));
                       }
+
                       displayInterest = null;
-                      const terpakai = debt.limit_amount - displayAvailableLimit;
+                      const terpakai = lim - displayAvailableLimit;
                       utilization = calculateUtilization(debt.limit_amount, terpakai);
                     }
 

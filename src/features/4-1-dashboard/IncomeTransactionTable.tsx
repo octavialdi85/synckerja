@@ -13,6 +13,7 @@ import { formatToRupiah } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
 import { AddIncomeForm } from './AddIncomeForm';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { getIncomeTransactionIdDisplay } from '@/features/4-1-dashboard/utils/incomeTransactionDisplayId';
 
 export function IncomeTransactionTable() {
   const { t } = useAppTranslation();
@@ -300,12 +301,14 @@ export function IncomeTransactionTable() {
                     </Badge>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs max-w-[10rem] min-w-0">
-                    <div
-                      className="truncate font-mono text-xs"
-                      title={transaction.transaction_reference?.trim() || undefined}
-                    >
-                      {transaction.transaction_reference?.trim() || '—'}
-                    </div>
+                    {(() => {
+                      const { display, title } = getIncomeTransactionIdDisplay(transaction);
+                      return (
+                        <div className="truncate font-mono text-xs" title={title}>
+                          {display}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { ChevronLeft, FileText, Loader2 } from "lucide-react";
@@ -59,6 +60,7 @@ export default function ShareReceiptValidationPage() {
   const { updateBalance } = useBankAccountBalances();
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(shareValidationCache.files === null);
   const [files, setFiles] = useState<File[]>(shareValidationCache.files ?? []);
@@ -247,9 +249,13 @@ export default function ShareReceiptValidationPage() {
         notes: paymentData.notes ?? null,
         transactionReference: paymentData.transactionReference ?? null,
         receiptFile: paymentData.receiptFile ?? null,
+        income_allocation: paymentData.incomeAllocation ?? null,
         debtDisplayName: debt.debt_name,
         updateBalance,
-        onAfterSuccess: refetchDebts,
+        onAfterSuccess: async () => {
+          await refetchDebts();
+          await queryClient.invalidateQueries({ queryKey: ["income-transactions", organizationId] });
+        },
         messages: {
           duplicateTransactionRef: t(
             "debt.payment.duplicateTransactionRef",
@@ -262,6 +268,18 @@ export default function ShareReceiptValidationPage() {
           paymentInsertFailed: t(
             "debt.payment.insertFailed",
             "Failed to record payment."
+          ),
+          bankAccountRequired: t(
+            "debt.payment.bankAccountRequired",
+            "Pilih rekening sumber dana untuk melanjutkan pembayaran."
+          ),
+          rollbackFailed: t(
+            "debt.payment.rollbackFailed",
+            "Pembayaran tidak selesai. Muat ulang halaman dan coba lagi."
+          ),
+          allocationLinkFailed: t(
+            "debt.payment.allocationLinkFailed",
+            "Could not link this payment to the selected income. The payment was not saved. Check amounts and account, then try again."
           ),
         },
       });

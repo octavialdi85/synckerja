@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/mobile/hooks/use-mobile";
+import { Alert, AlertDescription } from "@/features/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/features/ui/dialog";
 import { Button } from "@/features/ui/button";
 import { Input } from "@/features/ui/input";
@@ -12,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/features/ui/textarea";
 import { Checkbox } from "@/features/ui/checkbox";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/mobile/components/ui/drawer";
-import { Camera, Check, ChevronDown, FileText, Upload, X } from "lucide-react";
+import { AlertCircle, Camera, Check, ChevronDown, FileText, Upload, X } from "lucide-react";
 import { useIncomeTransactions } from "@/features/4-1-dashboard/hooks";
 import { useIncomeMasterData } from "@/features/4-1-dashboard/hooks";
 import { useBankAccounts } from "@/hooks/organized/useBankAccounts";
@@ -26,6 +27,7 @@ import { toast } from "sonner";
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { format } from "date-fns";
 import type { ExpenseReceiptAutofillData } from "@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI";
+import { isOtherIncomeType } from "@/features/4-1-dashboard/utils/incomeOtherType";
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, "Transaction date is required"),
@@ -47,6 +49,7 @@ const formSchema = z.object({
   bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
+  custom_category_name: z.string().optional(),
   service_id: z.string().optional(),
   sub_service_id: z.string().optional(),
   is_recurring: z.boolean().default(false),
@@ -172,11 +175,30 @@ export function MobileAddIncomeTransactionModal({
     [incomeCategories, watchedIncomeTypeId]
   );
 
+  const selectedIncomeType = useMemo(
+    () => incomeTypes.find((t) => t.id === watchedIncomeTypeId),
+    [incomeTypes, watchedIncomeTypeId]
+  );
+  const isOtherIncomeTypeSelected = isOtherIncomeType(selectedIncomeType?.name);
+
   const shareSubmitBlocked =
     shareFlowLocked &&
     (aiAutofillStatus === "loading" ||
       !transactionRefDisplay.trim() ||
       !receiptFile);
+
+  const showAiIdentifierReviewHint = useMemo(
+    () =>
+      Boolean(
+        shareFlowLocked &&
+          aiAutofillStatus === "success" &&
+          aiAutofillData &&
+          (aiAutofillData.transactionIdNeedsReview === true ||
+            aiAutofillData.referenceNumberNeedsReview === true ||
+            aiAutofillData.paymentCodeNeedsReview === true)
+      ),
+    [shareFlowLocked, aiAutofillStatus, aiAutofillData]
+  );
 
   const paymentMethodOptions = useMemo(
     () => [
@@ -231,7 +253,7 @@ export function MobileAddIncomeTransactionModal({
     lastAppliedAiRequestRef.current = aiAutofillRequestId;
     const d = aiAutofillData;
     if (!d) return;
-    if (d.transactionId) setTransactionRefDisplay(d.transactionId.trim());
+    if (d.transactionId) setTransactionRefDisplay(d.transactionId);
   }, [shareFlowLocked, open, aiAutofillStatus, aiAutofillRequestId, aiAutofillData]);
 
   useEffect(() => {
@@ -260,10 +282,29 @@ export function MobileAddIncomeTransactionModal({
       }
     }
 
-    if (!dirtyFields.description && !form.getValues("description")?.trim() && aiAutofillData.description) {
-      form.setValue("description", aiAutofillData.description, { shouldDirty: false });
+    const refLines: string[] = [];
+    if (aiAutofillData.referenceNumber) {
+      refLines.push(
+        `${t("shareReceipt.aiRefLinePrefix", "Ref")}: ${aiAutofillData.referenceNumber}`
+      );
     }
-  }, [open, aiAutofillData, aiAutofillStatus, aiAutofillRequestId, form]);
+    if (aiAutofillData.paymentCode) {
+      refLines.push(
+        `${t("shareReceipt.aiPaymentCodeLinePrefix", "Payment code")}: ${aiAutofillData.paymentCode}`
+      );
+    }
+    const extraDesc = refLines.join("\n");
+    const baseDesc = aiAutofillData.description?.trim() ?? "";
+    const mergedDesc = extraDesc
+      ? baseDesc
+        ? `${baseDesc}\n${extraDesc}`
+        : extraDesc
+      : baseDesc;
+
+    if (!dirtyFields.description && !form.getValues("description")?.trim() && mergedDesc) {
+      form.setValue("description", mergedDesc, { shouldDirty: false });
+    }
+  }, [open, aiAutofillData, aiAutofillStatus, aiAutofillRequestId, form, t]);
 
   const handleOpenChange = (next: boolean) => {
     if (!next && shareFlowLocked) {
@@ -374,6 +415,9 @@ export function MobileAddIncomeTransactionModal({
     const toUndefinedIfEmpty = (value: string | undefined | null): string | undefined =>
       value === "" || value === null ? undefined : value;
 
+    const submitIncomeType = incomeTypes.find((t) => t.id === data.income_type_id);
+    const otherTypeSelected = isOtherIncomeType(submitIncomeType?.name);
+
     const transactionData: CreateIncomeTransactionData = {
       transaction_date: data.transaction_date,
       amount: amountValue,
@@ -381,7 +425,11 @@ export function MobileAddIncomeTransactionModal({
       payment_method: data.payment_method || undefined,
       bank_account_id: toUndefinedIfEmpty(data.bank_account_id),
       income_type_id: toUndefinedIfEmpty(data.income_type_id),
-      category_id: toUndefinedIfEmpty(data.category_id),
+      category_id: otherTypeSelected ? undefined : toUndefinedIfEmpty(data.category_id),
+      custom_category_name:
+        otherTypeSelected && data.custom_category_name?.trim()
+          ? data.custom_category_name.trim()
+          : undefined,
       service_id: toUndefinedIfEmpty(data.service_id),
       sub_service_id: toUndefinedIfEmpty(data.sub_service_id),
       is_recurring: data.is_recurring,
@@ -389,9 +437,7 @@ export function MobileAddIncomeTransactionModal({
       description: data.description || undefined,
       receipt_file: receiptFile || undefined,
       transaction_reference:
-        shareFlowLocked && transactionRefDisplay.trim()
-          ? transactionRefDisplay.trim()
-          : undefined,
+        shareFlowLocked && transactionRefDisplay.trim() ? transactionRefDisplay : undefined,
     };
 
     createIncomeTransaction(transactionData, {
@@ -455,6 +501,17 @@ export function MobileAddIncomeTransactionModal({
                       "No reference found yet. Wait for analysis to finish or choose another destination."
                     )}
                   </p>
+                ) : null}
+                {showAiIdentifierReviewHint ? (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {t(
+                        "shareReceipt.aiIdentifierReviewHint",
+                        "AI flagged reference numbers or codes on the receipt for manual verification against the original image (e.g. truncated or uncertain ID)."
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 ) : null}
               </div>
             ) : null}
@@ -567,21 +624,40 @@ export function MobileAddIncomeTransactionModal({
                   onSelect={(value) => {
                     form.setValue("income_type_id", value);
                     form.setValue("category_id", undefined);
+                    const next = incomeTypes.find((t) => t.id === value);
+                    if (!isOtherIncomeType(next?.name)) {
+                      form.setValue("custom_category_name", "");
+                    }
                   }}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category_id">{t("common.category", "Category")}</Label>
-                <DrawerSelectField
-                  open={categoryDrawerOpen}
-                  onOpenChange={setCategoryDrawerOpen}
-                  title={t("common.category", "Category")}
-                  value={form.watch("category_id") || ""}
-                  placeholder={t("incomes.selectCategory", "Select category")}
-                  options={filteredIncomeCategories.map((category) => ({ value: category.id, label: category.name }))}
-                  onSelect={(value) => form.setValue("category_id", value)}
-                  disabled={!watchedIncomeTypeId}
-                />
+                <Label htmlFor={isOtherIncomeTypeSelected ? "custom_category_name" : "category_id"}>
+                  {t("common.category", "Category")}
+                </Label>
+                {isOtherIncomeTypeSelected ? (
+                  <Input
+                    id="custom_category_name"
+                    className="text-sm"
+                    placeholder={t("incomes.categoryCustomPlaceholder", "e.g. THR, bonus, gift")}
+                    disabled={!watchedIncomeTypeId}
+                    {...form.register("custom_category_name")}
+                  />
+                ) : (
+                  <DrawerSelectField
+                    open={categoryDrawerOpen}
+                    onOpenChange={setCategoryDrawerOpen}
+                    title={t("common.category", "Category")}
+                    value={form.watch("category_id") || ""}
+                    placeholder={t("incomes.selectCategory", "Select category")}
+                    options={filteredIncomeCategories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    }))}
+                    onSelect={(value) => form.setValue("category_id", value)}
+                    disabled={!watchedIncomeTypeId}
+                  />
+                )}
               </div>
             </div>
 

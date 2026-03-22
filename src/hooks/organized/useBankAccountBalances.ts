@@ -3,6 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 
+/** PostgREST default max rows per request; must page or ledger sums are wrong for large orgs. */
+const LEDGER_PAGE_SIZE = 1000;
+
 // Types
 export interface BankAccountBalance {
   id: string;
@@ -39,14 +42,15 @@ export const useBankAccountBalances = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch bank account balances with bank account info
-  // Also calculate real-time balance from transactions to ensure accuracy
+  // Fetch bank account balances with bank account info.
+  // `balance` shown in UI = ledger: income − expenses − debt_payments (from bank) + internal transfers,
+  // aligned with `bank_account_balances` updates from expense/debt flows.
+  // Row metadata (id, timestamps) still comes from `bank_account_balances` when present.
   const { data: balances = [], isLoading: loading, refetch } = useQuery({
     queryKey: ['bank-account-balances', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
-      
-      // First, get all bank accounts
+
       const { data: bankAccounts, error: bankAccountsError } = await supabase
         .from('bank_accounts')
         .select('id, name, account_number, bank_name')
@@ -58,7 +62,6 @@ export const useBankAccountBalances = () => {
         throw bankAccountsError;
       }
 
-      // Get stored balances
       const { data: storedBalances, error: balancesError } = await supabase
         .from('bank_account_balances')
         .select('*')
@@ -69,48 +72,161 @@ export const useBankAccountBalances = () => {
         throw balancesError;
       }
 
-      // Calculate real-time balance from transactions for each bank account
-      const balancesWithRealTime = await Promise.all(
-        (bankAccounts || []).map(async (bankAccount: any) => {
-          // Get stored balance
-          const storedBalance = storedBalances?.find(b => b.bank_account_id === bankAccount.id);
-          
-          // Calculate income total
-          const { data: incomeData } = await supabase
-            .from('income_transactions')
-            .select('amount')
-            .eq('bank_account_id', bankAccount.id)
-            .eq('organization_id', organizationId)
-            .in('status', ['completed', 'pending']);
+      const ids = (bankAccounts || []).map((a: { id: string }) => a.id);
+      if (ids.length === 0) return [];
 
-          // Calculate expense total
-          const { data: expenseData } = await supabase
-            .from('expenses')
-            .select('amount')
-            .eq('bank_account_id', bankAccount.id)
-            .eq('organization_id', organizationId)
-            .eq('status', 'active');
+      const ledgerByAccount: Record<string, number> = {};
+      for (const id of ids) ledgerByAccount[id] = 0;
 
-          const totalIncome = incomeData?.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0) || 0;
-          const totalExpense = expenseData?.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0) || 0;
-          const realTimeBalance = totalIncome - totalExpense;
+      const incomeRows: { bank_account_id: string | null; amount: unknown }[] = [];
+      let incomeFrom = 0;
+      for (;;) {
+        const { data: chunk, error: incomeErr } = await supabase
+          .from('income_transactions')
+          .select('bank_account_id, amount')
+          .eq('organization_id', organizationId)
+          .in('bank_account_id', ids)
+          .in('status', ['completed', 'pending'])
+          .range(incomeFrom, incomeFrom + LEDGER_PAGE_SIZE - 1);
 
-          // Use real-time balance if stored balance exists, otherwise use calculated balance
-          const balance = storedBalance ? parseFloat(storedBalance.balance.toString()) : realTimeBalance;
+        if (incomeErr) {
+          console.error('Error fetching income for ledger balance:', incomeErr);
+          throw incomeErr;
+        }
+        const rows = chunk ?? [];
+        incomeRows.push(...rows);
+        if (rows.length < LEDGER_PAGE_SIZE) break;
+        incomeFrom += LEDGER_PAGE_SIZE;
+      }
 
+      const expenseRows: { bank_account_id: string | null; amount: unknown }[] = [];
+      let expenseFrom = 0;
+      for (;;) {
+        const { data: chunk, error: expenseErr } = await supabase
+          .from('expenses')
+          .select('bank_account_id, amount')
+          .eq('organization_id', organizationId)
+          .in('bank_account_id', ids)
+          .eq('status', 'active')
+          .range(expenseFrom, expenseFrom + LEDGER_PAGE_SIZE - 1);
+
+        if (expenseErr) {
+          console.error('Error fetching expenses for ledger balance:', expenseErr);
+          throw expenseErr;
+        }
+        const rows = chunk ?? [];
+        expenseRows.push(...rows);
+        if (rows.length < LEDGER_PAGE_SIZE) break;
+        expenseFrom += LEDGER_PAGE_SIZE;
+      }
+
+      for (const row of incomeRows) {
+        const bid = row.bank_account_id as string | null;
+        if (bid && bid in ledgerByAccount) {
+          ledgerByAccount[bid] += parseFloat(String(row.amount));
+        }
+      }
+      for (const row of expenseRows) {
+        const bid = row.bank_account_id as string | null;
+        if (bid && bid in ledgerByAccount) {
+          ledgerByAccount[bid] -= parseFloat(String(row.amount));
+        }
+      }
+
+      // New-style internal transfers: principal via bank_transfer_journals (no income row).
+      const transferRows: {
+        from_bank_account_id: string;
+        to_bank_account_id: string;
+        amount: unknown;
+      }[] = [];
+      let transferFrom = 0;
+      const idList = ids.join(',');
+      const transferFilter = `from_bank_account_id.in.(${idList}),to_bank_account_id.in.(${idList})`;
+      for (;;) {
+        const { data: chunk, error: transferErr } = await supabase
+          .from('bank_transfer_journals')
+          .select('from_bank_account_id, to_bank_account_id, amount')
+          .eq('organization_id', organizationId)
+          .is('income_transaction_id', null)
+          .or(transferFilter)
+          .range(transferFrom, transferFrom + LEDGER_PAGE_SIZE - 1);
+
+        if (transferErr) {
+          console.error('Error fetching bank transfer journals for ledger balance:', transferErr);
+          throw transferErr;
+        }
+        const rows = chunk ?? [];
+        transferRows.push(...rows);
+        if (rows.length < LEDGER_PAGE_SIZE) break;
+        transferFrom += LEDGER_PAGE_SIZE;
+      }
+
+      for (const row of transferRows) {
+        const fromId = row.from_bank_account_id;
+        const toId = row.to_bank_account_id;
+        const amt = parseFloat(String(row.amount ?? 0));
+        if (!Number.isFinite(amt)) continue;
+        if (fromId && fromId in ledgerByAccount) {
+          ledgerByAccount[fromId] -= amt;
+        }
+        if (toId && toId in ledgerByAccount) {
+          ledgerByAccount[toId] += amt;
+        }
+      }
+
+      const debtPaymentRows: { payment_method: string | null; payment_amount: unknown }[] = [];
+      let debtFrom = 0;
+      for (;;) {
+        const { data: chunk, error: debtErr } = await supabase
+          .from('debt_payments')
+          .select('payment_method, payment_amount')
+          .eq('organization_id', organizationId)
+          .in('payment_method', ids)
+          .range(debtFrom, debtFrom + LEDGER_PAGE_SIZE - 1);
+
+        if (debtErr) {
+          console.error('Error fetching debt_payments for ledger balance:', debtErr);
+          throw debtErr;
+        }
+        const rows = chunk ?? [];
+        debtPaymentRows.push(...rows);
+        if (rows.length < LEDGER_PAGE_SIZE) break;
+        debtFrom += LEDGER_PAGE_SIZE;
+      }
+
+      for (const row of debtPaymentRows) {
+        const bid = row.payment_method as string | null;
+        if (bid && bid in ledgerByAccount) {
+          ledgerByAccount[bid] -= parseFloat(String(row.payment_amount ?? 0));
+        }
+      }
+
+      return (bankAccounts || []).map((bankAccount: any) => {
+        const storedBalance = storedBalances?.find((b) => b.bank_account_id === bankAccount.id);
+        const ledger = ledgerByAccount[bankAccount.id] ?? 0;
+
+        if (storedBalance) {
           return {
-            id: storedBalance?.id || `temp-${bankAccount.id}`,
+            id: storedBalance.id,
             bank_account_id: bankAccount.id,
             organization_id: organizationId,
-            balance: balance,
-            created_at: storedBalance?.created_at || new Date().toISOString(),
-            updated_at: storedBalance?.updated_at || new Date().toISOString(),
+            balance: ledger,
+            created_at: storedBalance.created_at,
+            updated_at: storedBalance.updated_at,
             bank_account: bankAccount,
           } as BankAccountBalance;
-        })
-      );
+        }
 
-      return balancesWithRealTime;
+        return {
+          id: `temp-${bankAccount.id}`,
+          bank_account_id: bankAccount.id,
+          organization_id: organizationId,
+          balance: ledger,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          bank_account: bankAccount,
+        } as BankAccountBalance;
+      });
     },
     enabled: !!organizationId,
   });

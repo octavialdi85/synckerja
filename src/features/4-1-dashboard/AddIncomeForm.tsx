@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,6 +15,8 @@ import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { BankAccountManagementDialog } from './components/BankAccountManagementDialog';
 import { formatInputNumber, parseInputNumber } from '@/features/8_2_pricing-tools/utils/pricingUtils';
+import { isOtherIncomeType } from '@/features/4-1-dashboard/utils/incomeOtherType';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, 'Transaction date is required'),
@@ -43,6 +45,7 @@ const formSchema = z.object({
   bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
+  custom_category_name: z.string().optional(),
   service_id: z.string().optional(),
   sub_service_id: z.string().optional(),
   is_recurring: z.boolean().default(false),
@@ -68,6 +71,7 @@ interface AddIncomeFormProps {
 }
 
 export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
+  const { t } = useAppTranslation();
   const { createIncomeTransaction, isCreating } = useIncomeTransactions();
   const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
   const { bankAccounts, refetch: refetchBankAccounts } = useBankAccounts();
@@ -96,6 +100,12 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
     category => category.income_types_id === watchedIncomeTypeId
   );
 
+  const selectedIncomeType = useMemo(
+    () => incomeTypes.find((t) => t.id === watchedIncomeTypeId),
+    [incomeTypes, watchedIncomeTypeId]
+  );
+  const isOtherIncomeTypeSelected = isOtherIncomeType(selectedIncomeType?.name);
+
   const onSubmit = (data: FormData) => {
     // Ensure transaction_date is always provided and properly typed
     // Convert amount to number if it's a string (should already be number from parseInputNumber)
@@ -107,7 +117,10 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
     const toUndefinedIfEmpty = (value: string | undefined | null): string | undefined => {
       return value === '' || value === null ? undefined : value;
     };
-    
+
+    const submitIncomeType = incomeTypes.find((t) => t.id === data.income_type_id);
+    const otherTypeSelected = isOtherIncomeType(submitIncomeType?.name);
+
     const transactionData: CreateIncomeTransactionData = {
       transaction_date: data.transaction_date, // This is guaranteed to be a string due to form validation
       amount: amountValue,
@@ -115,7 +128,11 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
       payment_method: data.payment_method || undefined,
       bank_account_id: toUndefinedIfEmpty(data.bank_account_id),
       income_type_id: toUndefinedIfEmpty(data.income_type_id),
-      category_id: toUndefinedIfEmpty(data.category_id),
+      category_id: otherTypeSelected ? undefined : toUndefinedIfEmpty(data.category_id),
+      custom_category_name:
+        otherTypeSelected && data.custom_category_name?.trim()
+          ? data.custom_category_name.trim()
+          : undefined,
       service_id: toUndefinedIfEmpty(data.service_id),
       sub_service_id: toUndefinedIfEmpty(data.sub_service_id),
       is_recurring: data.is_recurring,
@@ -255,10 +272,17 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="income_type_id">Income Type</Label>
-          <Select onValueChange={(value) => {
-            form.setValue('income_type_id', value);
-            form.setValue('category_id', undefined); // Reset category when income type changes
-          }}>
+          <Select
+            value={watchedIncomeTypeId || undefined}
+            onValueChange={(value) => {
+              form.setValue('income_type_id', value);
+              form.setValue('category_id', undefined); // Reset category when income type changes
+              const next = incomeTypes.find((typeRow) => typeRow.id === value);
+              if (!isOtherIncomeType(next?.name)) {
+                form.setValue('custom_category_name', '');
+              }
+            }}
+          >
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select income type" />
             </SelectTrigger>
@@ -273,32 +297,46 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="category_id">Category</Label>
-          <Select 
-            onValueChange={(value) => form.setValue('category_id', value)}
-            disabled={!watchedIncomeTypeId}
-          >
-            <SelectTrigger className="text-sm">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredIncomeCategories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label htmlFor={isOtherIncomeTypeSelected ? 'custom_category_name' : 'category_id'}>Category</Label>
+          {isOtherIncomeTypeSelected ? (
+            <Input
+              id="custom_category_name"
+              className="text-sm"
+              placeholder={t('incomes.categoryCustomPlaceholder', 'e.g. THR, bonus, gift')}
+              disabled={!watchedIncomeTypeId}
+              {...form.register('custom_category_name')}
+            />
+          ) : (
+            <Select
+              onValueChange={(value) => form.setValue('category_id', value)}
+              disabled={!watchedIncomeTypeId}
+              value={form.watch('category_id') || undefined}
+            >
+              <SelectTrigger className="text-sm">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredIncomeCategories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="service_id">Service</Label>
-          <Select onValueChange={(value) => {
-            form.setValue('service_id', value);
-            form.setValue('sub_service_id', undefined); // Reset sub-service when service changes
-          }}>
+          <Select
+            value={watchedServiceId || undefined}
+            onValueChange={(value) => {
+              form.setValue('service_id', value);
+              form.setValue('sub_service_id', undefined); // Reset sub-service when service changes
+            }}
+          >
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select service" />
             </SelectTrigger>
@@ -314,7 +352,8 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
 
         <div className="space-y-2">
           <Label htmlFor="sub_service_id">Sub Service</Label>
-          <Select 
+          <Select
+            value={form.watch('sub_service_id') || undefined}
             onValueChange={(value) => form.setValue('sub_service_id', value)}
             disabled={!watchedServiceId}
           >
@@ -346,7 +385,10 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
       {watchedIsRecurring && (
         <div className="space-y-2">
           <Label htmlFor="recurring_frequency">Recurring Frequency</Label>
-          <Select onValueChange={(value) => form.setValue('recurring_frequency', value)}>
+          <Select
+            value={form.watch('recurring_frequency') || undefined}
+            onValueChange={(value) => form.setValue('recurring_frequency', value)}
+          >
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select frequency" />
             </SelectTrigger>

@@ -4,6 +4,8 @@ import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { Debt, CreateDebtData, UpdateDebtData } from '../types';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+import { deleteDebtWithPaymentRefunds } from '../services/deleteDebtWithPaymentRefunds';
 
 export const useDebts = () => {
   const { t } = useAppTranslation();
@@ -13,6 +15,7 @@ export const useDebts = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const { organizationId } = useCurrentOrg();
+  const { updateBalance } = useBankAccountBalances();
 
   const fetchDebts = async () => {
     if (!organizationId) return;
@@ -221,20 +224,27 @@ export const useDebts = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('debts')
-        .delete()
-        .eq('id', debtId)
-        .eq('organization_id', organizationId);
+      const debt = debts.find((d) => d.id === debtId);
+      const result = await deleteDebtWithPaymentRefunds({
+        organizationId,
+        debtId,
+        debtDisplayName: debt?.debt_name ?? 'Debt',
+        updateBalance,
+      });
 
-      if (error) throw error;
+      if (!result.ok) {
+        toast.error(result.message || t('debt.error.deleteFailed', 'Failed to delete debt'));
+        return false;
+      }
 
-      setDebts(prev => prev.filter(d => d.id !== debtId));
+      setDebts((prev) => prev.filter((d) => d.id !== debtId));
       toast.success(t('debt.success.deleted', 'Debt deleted successfully'));
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting debt:', error);
-      toast.error(error.message || t('debt.error.deleteFailed', 'Failed to delete debt'));
+      toast.error(
+        error instanceof Error ? error.message : t('debt.error.deleteFailed', 'Failed to delete debt')
+      );
       return false;
     }
   };

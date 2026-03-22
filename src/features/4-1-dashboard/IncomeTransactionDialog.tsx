@@ -20,6 +20,9 @@ import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { cn } from '@/lib/utils';
 import { useEffect, useMemo } from 'react';
+import { Alert, AlertDescription } from '@/features/ui/alert';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { isOtherIncomeType } from '@/features/4-1-dashboard/utils/incomeOtherType';
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, 'Transaction date is required'),
@@ -29,6 +32,7 @@ const formSchema = z.object({
   bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
+  custom_category_name: z.string().optional(),
   service_id: z.string().optional(),
   sub_service_id: z.string().optional(),
   is_recurring: z.boolean().default(false),
@@ -59,7 +63,13 @@ export const IncomeTransactionDialog = ({
   open, 
   onOpenChange 
 }: IncomeTransactionDialogProps) => {
-  const { createIncomeTransaction, updateIncomeTransaction, isCreating, isUpdating } = useIncomeTransactions();
+  const { t } = useAppTranslation();
+  const {
+    createIncomeTransactionAsync,
+    updateIncomeTransactionAsync,
+    isCreating,
+    isUpdating,
+  } = useIncomeTransactions();
   const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
   const { bankAccounts } = useBankAccounts({ includeInactive: true });
 
@@ -81,6 +91,8 @@ export const IncomeTransactionDialog = ({
     return [{ id: linkedId, label }, ...rows];
   }, [bankAccounts, income]);
 
+  const lockFinancial = !!(income?.has_income_allocations);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -91,6 +103,7 @@ export const IncomeTransactionDialog = ({
       bank_account_id: '',
       income_type_id: '',
       category_id: '',
+      custom_category_name: '',
       service_id: '',
       sub_service_id: '',
       is_recurring: false,
@@ -107,6 +120,8 @@ export const IncomeTransactionDialog = ({
         typeof income.transaction_date === 'string' && income.transaction_date.length >= 10
           ? income.transaction_date.slice(0, 10)
           : income.transaction_date;
+      const typeName = income.income_types?.name;
+      const otherSaved = isOtherIncomeType(typeName);
       form.reset({
         transaction_date: txDate,
         amount: income.amount,
@@ -115,6 +130,7 @@ export const IncomeTransactionDialog = ({
         bank_account_id: income.bank_account_id?.trim() || '',
         income_type_id: income.income_type_id || '',
         category_id: income.category_id || '',
+        custom_category_name: otherSaved ? (income.income_categories?.name ?? '') : '',
         service_id: income.service_id || '',
         sub_service_id: income.sub_service_id || '',
         is_recurring: income.is_recurring,
@@ -130,6 +146,7 @@ export const IncomeTransactionDialog = ({
         bank_account_id: '',
         income_type_id: '',
         category_id: '',
+        custom_category_name: '',
         service_id: '',
         sub_service_id: '',
         is_recurring: false,
@@ -139,24 +156,57 @@ export const IncomeTransactionDialog = ({
     }
   }, [income, open, form]);
 
+  const watchedIncomeTypeId = form.watch('income_type_id');
+  const watchedServiceId = form.watch('service_id');
+
+  const filteredIncomeCategories = useMemo(
+    () => incomeCategories.filter((c) => c.income_types_id === watchedIncomeTypeId),
+    [incomeCategories, watchedIncomeTypeId]
+  );
+
+  const filteredSubServices = useMemo(
+    () => subServices.filter((s) => s.service_id === watchedServiceId),
+    [subServices, watchedServiceId]
+  );
+
+  const selectedIncomeType = useMemo(
+    () => incomeTypes.find((row) => row.id === watchedIncomeTypeId),
+    [incomeTypes, watchedIncomeTypeId]
+  );
+  const isOtherIncomeTypeSelected = isOtherIncomeType(selectedIncomeType?.name);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    const { receipt_file, category_id, custom_category_name, ...rest } = values;
+    const bankId = rest.bank_account_id?.trim() || null;
+    const submitType = incomeTypes.find((row) => row.id === rest.income_type_id);
+    const otherSelected = isOtherIncomeType(submitType?.name);
     try {
-      const bankId = values.bank_account_id?.trim() || null;
       if (income) {
-        updateIncomeTransaction({
+        await updateIncomeTransactionAsync({
           id: income.id,
-          ...values,
+          ...rest,
           bank_account_id: bankId,
+          ...(otherSelected
+            ? { custom_category_name: custom_category_name ?? '' }
+            : { category_id }),
         });
       } else {
-        createIncomeTransaction({
-          ...(values as CreateIncomeTransactionData),
+        await createIncomeTransactionAsync({
+          ...(rest as CreateIncomeTransactionData),
           bank_account_id: bankId ?? undefined,
+          ...(otherSelected
+            ? {
+                custom_category_name: custom_category_name?.trim()
+                  ? custom_category_name.trim()
+                  : undefined,
+              }
+            : { category_id }),
+          ...(receipt_file ? { receipt_file } : {}),
         });
       }
       onOpenChange(false);
-    } catch (error) {
-      console.error('Error saving income transaction:', error);
+    } catch {
+      // Toast + logging handled in useIncomeTransactions mutation onError
     }
   };
 
@@ -189,6 +239,16 @@ export const IncomeTransactionDialog = ({
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {lockFinancial ? (
+              <Alert>
+                <AlertDescription className="text-sm">
+                  {t(
+                    'incomes.edit.lockedFinancialHint',
+                    'This income is linked to an expense or debt payment. Amount, account, and classification fields are locked until that payment is removed or changed.'
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {/* Basic Information */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -201,6 +261,7 @@ export const IncomeTransactionDialog = ({
                       <Input
                         type="date"
                         {...field}
+                        disabled={lockFinancial}
                       />
                     </FormControl>
                     <FormMessage />
@@ -220,6 +281,7 @@ export const IncomeTransactionDialog = ({
                         step="0.01"
                         placeholder="0.00"
                         {...field}
+                        disabled={lockFinancial}
                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       />
                     </FormControl>
@@ -258,9 +320,10 @@ export const IncomeTransactionDialog = ({
                         }
                       }}
                       value={field.value || undefined}
+                      disabled={lockFinancial}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger disabled={lockFinancial}>
                           <SelectValue placeholder="Select payment method" />
                         </SelectTrigger>
                       </FormControl>
@@ -287,9 +350,10 @@ export const IncomeTransactionDialog = ({
                   <Select
                     onValueChange={(v) => field.onChange(v)}
                     value={field.value || undefined}
+                    disabled={lockFinancial}
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger disabled={lockFinancial}>
                         <SelectValue placeholder="Select bank account" />
                       </SelectTrigger>
                     </FormControl>
@@ -314,9 +378,20 @@ export const IncomeTransactionDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Income Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue('category_id', '');
+                        const next = incomeTypes.find((row) => row.id === value);
+                        if (!isOtherIncomeType(next?.name)) {
+                          form.setValue('custom_category_name', '');
+                        }
+                      }}
+                      value={field.value || undefined}
+                      disabled={lockFinancial}
+                    >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger disabled={lockFinancial}>
                           <SelectValue placeholder="Select income type" />
                         </SelectTrigger>
                       </FormControl>
@@ -333,30 +408,54 @@ export const IncomeTransactionDialog = ({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="category_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+              {isOtherIncomeTypeSelected ? (
+                <FormField
+                  control={form.control}
+                  name="custom_category_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('common.category', 'Category')}</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
+                        <Input
+                          placeholder={t('incomes.categoryCustomPlaceholder', 'e.g. THR, bonus, gift')}
+                          disabled={lockFinancial || !watchedIncomeTypeId}
+                          {...field}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {incomeCategories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="category_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('common.category', 'Category')}</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || undefined}
+                        disabled={lockFinancial || !watchedIncomeTypeId}
+                      >
+                        <FormControl>
+                          <SelectTrigger disabled={lockFinancial || !watchedIncomeTypeId}>
+                            <SelectValue placeholder={t('incomes.selectCategory', 'Select category')} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {filteredIncomeCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -366,9 +465,16 @@ export const IncomeTransactionDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Service</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue('sub_service_id', '');
+                      }}
+                      value={field.value || undefined}
+                      disabled={lockFinancial}
+                    >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger disabled={lockFinancial}>
                           <SelectValue placeholder="Select service" />
                         </SelectTrigger>
                       </FormControl>
@@ -391,14 +497,18 @@ export const IncomeTransactionDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sub Service</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                      disabled={lockFinancial || !watchedServiceId}
+                    >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger disabled={lockFinancial || !watchedServiceId}>
                           <SelectValue placeholder="Select sub service" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {subServices.map((subService) => (
+                        {filteredSubServices.map((subService) => (
                           <SelectItem key={subService.id} value={subService.id}>
                             {subService.name}
                           </SelectItem>
@@ -422,6 +532,7 @@ export const IncomeTransactionDialog = ({
                       <Checkbox
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        disabled={lockFinancial}
                       />
                     </FormControl>
                     <div className="space-y-1 leading-none">
@@ -438,9 +549,9 @@ export const IncomeTransactionDialog = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Recurring Frequency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value || undefined} disabled={lockFinancial}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger disabled={lockFinancial}>
                             <SelectValue placeholder="Select frequency" />
                           </SelectTrigger>
                         </FormControl>

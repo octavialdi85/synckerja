@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -13,12 +13,15 @@ import { IncomeVsExpensesChart } from './IncomeVsExpensesChart';
 import { HeaderAndTab } from './HeaderAndTab';
 import { RecentIncomeOverview } from './RecentIncomeOverview';
 import { IncomeTransactionWithRelations } from './types';
-import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
+import { useBankAccounts, type BankAccount } from '@/hooks/organized/useBankAccounts';
+import { NetBankAccountSwipeRow } from './components/NetBankAccountSwipeRow';
+import { BankTransferDialog } from './components/BankTransferDialog';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { useExpenses } from '@/features/4_2_dashboard/hooks/useExpenses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { format } from 'date-fns';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 // Helper function to calculate date range based on selected period
 const getDateRangeForPeriod = (period: string): { startDate: Date; endDate: Date } => {
@@ -69,6 +72,7 @@ const formatDateToString = (date: Date): string => {
 };
 
 export function IncomeDashboard() {
+  const { t } = useAppTranslation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
   const [selectedType, setSelectedType] = useState('All Types');
@@ -79,6 +83,9 @@ export function IncomeDashboard() {
   const [selectedBankAccountForHistory, setSelectedBankAccountForHistory] = useState<string | null>(null);
   const [balanceHistory, setBalanceHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [netBankOpenSwipeId, setNetBankOpenSwipeId] = useState<string | null>(null);
+  const [bankTransferDialogOpen, setBankTransferDialogOpen] = useState(false);
+  const [bankTransferSource, setBankTransferSource] = useState<BankAccount | null>(null);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -748,6 +755,12 @@ export function IncomeDashboard() {
                   <Card className="flex flex-col min-w-0 h-full">
                     <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
                       <CardTitle className="text-base sm:text-lg font-semibold">Net Income per Bank Account</CardTitle>
+                      <CardDescription className="text-xs text-muted-foreground mt-1 leading-snug">
+                        {t(
+                          'incomes.netPerBankCardHint',
+                          'Balance = all-time net from Income and Expense rows for this account (same as transfer logic). Net = income − expense for the filtered period only.'
+                        )}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="px-3 pt-0 pb-2 flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden">
                       {selectedBankAccount === 'all' && bankAccounts.length > 0 ? (
@@ -762,31 +775,57 @@ export function IncomeDashboard() {
                             const expense = netData?.expense || 0;
                             const net = income - expense;
                             const currentBalance = balance?.balance || 0;
-                            const totalWithBalance = income + currentBalance;
-                            
+                            const estimatedPeriodOpening = currentBalance - net;
+                            const otherAccounts = bankAccounts.filter((a) => a.id !== bankAccount.id);
+                            const canTransfer = otherAccounts.length > 0 && currentBalance > 0;
+
                             return (
-                              <div key={bankAccount.id} className="flex items-center justify-between p-2 bg-gray-200 rounded-lg">
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm text-gray-900 truncate">{bankAccount.name}</div>
-                                  {bankAccount.account_number ? (
-                                    <div className="text-xs text-gray-700 truncate">No. Rek: {bankAccount.account_number}</div>
-                                  ) : null}
-                                  <div className="text-xs text-gray-700">
-                                    Income: {formatToRupiah(income)} | Expense: {formatToRupiah(expense)}
+                              <NetBankAccountSwipeRow
+                                key={bankAccount.id}
+                                rowId={bankAccount.id}
+                                isOpen={netBankOpenSwipeId === bankAccount.id}
+                                onOpenChange={(open) => {
+                                  if (open) setNetBankOpenSwipeId(bankAccount.id);
+                                  else setNetBankOpenSwipeId((cur) => (cur === bankAccount.id ? null : cur));
+                                }}
+                                onTransfer={() => {
+                                  setBankTransferSource(bankAccount);
+                                  setBankTransferDialogOpen(true);
+                                  setNetBankOpenSwipeId(null);
+                                }}
+                                transferLabel={t('incomes.bankTransfer.button', 'Transfer')}
+                                disabled={!canTransfer}
+                              >
+                                <div className="flex items-center justify-between p-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm text-gray-900 truncate">{bankAccount.name}</div>
+                                    {bankAccount.account_number ? (
+                                      <div className="text-xs text-gray-700 truncate">No. Rek: {bankAccount.account_number}</div>
+                                    ) : null}
+                                    <div className="text-xs text-gray-700">
+                                      Income: {formatToRupiah(income)} | Expense: {formatToRupiah(expense)}
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0 ml-2">
+                                    <div className={`text-sm font-semibold ${net >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                                      Net: {formatToRupiah(net)}
+                                    </div>
+                                    <div className="text-xs text-gray-800 font-medium">
+                                      Balance: {formatToRupiah(currentBalance)}
+                                    </div>
+                                    <div
+                                      className="text-xs text-gray-600 mt-0.5 max-w-[12rem] ml-auto cursor-help"
+                                      title={t(
+                                        'incomes.netPerBankEstimatedOpeningHint',
+                                        'Approx. balance at the start of the filtered period: current Balance minus Net.'
+                                      )}
+                                    >
+                                      {t('incomes.netPerBankEstimatedOpening', 'Est. opening balance (period)')}:{' '}
+                                      {formatToRupiah(estimatedPeriodOpening)}
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="text-right flex-shrink-0 ml-2">
-                                  <div className={`text-sm font-semibold ${net >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-                                    Net: {formatToRupiah(net)}
-                                  </div>
-                                  <div className="text-xs text-gray-800 font-medium">
-                                    Balance: {formatToRupiah(currentBalance)}
-                                  </div>
-                                  <div className="text-xs font-semibold text-blue-800">
-                                    Total: {formatToRupiah(totalWithBalance)}
-                                  </div>
-                                </div>
-                              </div>
+                              </NetBankAccountSwipeRow>
                             );
                           })}
                         </div>
@@ -946,6 +985,20 @@ export function IncomeDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <BankTransferDialog
+        open={bankTransferDialogOpen}
+        onOpenChange={setBankTransferDialogOpen}
+        sourceAccount={bankTransferSource}
+        destinationAccounts={
+          bankTransferSource ? bankAccounts.filter((a) => a.id !== bankTransferSource.id) : []
+        }
+        sourceBalance={
+          bankTransferSource
+            ? bankAccountBalances.find((b) => b.bank_account_id === bankTransferSource.id)?.balance ?? 0
+            : 0
+        }
+      />
     </div>
   );
 }

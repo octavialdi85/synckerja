@@ -21,6 +21,7 @@ type MobileIncomeTransactionDateFieldProps = {
   onChange: (yyyyMmDd: string) => void;
   errorMessage?: string;
   labelId?: string;
+  disabled?: boolean;
 };
 
 /**
@@ -33,6 +34,7 @@ export function MobileIncomeTransactionDateField({
   onChange,
   errorMessage,
   labelId = "transaction_date",
+  disabled = false,
 }: MobileIncomeTransactionDateFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseYyyyMmDd(value), [value]);
@@ -48,14 +50,22 @@ export function MobileIncomeTransactionDateField({
           "w-full h-10 justify-start text-left font-normal text-sm",
           !value && "text-muted-foreground"
         )}
-        onClick={() => setOpen(true)}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) setOpen(true);
+        }}
       >
         <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
         <span className="truncate">{format(selected, "MMM d, yyyy")}</span>
       </Button>
       {errorMessage ? <p className="text-xs text-red-600">{errorMessage}</p> : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          if (!disabled) setOpen(o);
+        }}
+      >
         <DialogContent
           overlayClassName="z-[100]"
           className="z-[100] w-auto max-w-[min(92vw,380px)] p-0 gap-0 overflow-hidden border rounded-lg shadow-lg bg-background"

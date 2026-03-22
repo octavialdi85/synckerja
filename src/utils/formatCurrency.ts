@@ -12,10 +12,10 @@ export const formatToRupiah = (amount: string | number | null | undefined): stri
     numericAmount = amount;
   }
   
-  if (isNaN(numericAmount) || numericAmount < 0) {
+  if (!Number.isFinite(numericAmount)) {
     return 'Not specified';
   }
-  // Allow 0 to display as Rp 0 (valid for "belum ada pemakaian" = full limit)
+  // Allow 0 and negatives (book / net balance can be below zero across accounts)
 
   try {
     return new Intl.NumberFormat('id-ID', {

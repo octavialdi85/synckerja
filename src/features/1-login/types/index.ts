@@ -791,6 +791,21 @@ export interface Database {
           has_more?: boolean
         }>
       }
+      create_bank_transfer: {
+        Args: {
+          p_from_bank_account_id: string
+          p_to_bank_account_id: string
+          p_amount: number
+          p_fee?: number | null
+          p_note?: string | null
+          p_transaction_date?: string | null
+        }
+        Returns: Json
+      }
+      delete_bank_transfer_by_journal_id: {
+        Args: { p_journal_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

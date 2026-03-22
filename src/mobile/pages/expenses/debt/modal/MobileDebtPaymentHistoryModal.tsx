@@ -4,22 +4,23 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/features/ui/button";
 import { Debt } from "@/features/4_2_debt/types";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
-import { formatToRupiah } from "@/utils/formatCurrency";
-import { format } from "date-fns";
-import { useDebtPayments, DebtPaymentRecord } from "@/features/4_2_debt/hooks/useDebtPayments";
-import { Calendar, CreditCard, Hash, Loader2, Receipt, RefreshCw } from "lucide-react";
+import { useDebtPayments } from "@/features/4_2_debt/hooks/useDebtPayments";
+import { Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SwipeableDebtPaymentRow } from "@/features/4_2_debt/components/SwipeableDebtPaymentRow";
 
 interface MobileDebtPaymentHistoryModalProps {
   debt: Debt | null;
   isOpen: boolean;
   onClose: () => void;
+  onPaymentDeleted?: () => void;
 }
 
 export function MobileDebtPaymentHistoryModal({
   debt,
   isOpen,
   onClose,
+  onPaymentDeleted,
 }: MobileDebtPaymentHistoryModalProps) {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
@@ -58,25 +59,28 @@ export function MobileDebtPaymentHistoryModal({
     if (el?.scrollTop <= 2) setIsPulling(true);
   }, []);
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    const el = listScrollRef.current;
-    if (!el || isRefreshing) return;
-    if (el.scrollTop > 2) {
-      setIsPulling(false);
-      setPullDistance(0);
-      pullDistanceRef.current = 0;
-      return;
-    }
-    const delta = e.touches[0].clientY - touchStartY.current;
-    if (delta > 0) {
-      const d = Math.min(delta * PULL_RESISTANCE, MAX_PULL);
-      setPullDistance(d);
-      pullDistanceRef.current = d;
-    } else {
-      setPullDistance(0);
-      pullDistanceRef.current = 0;
-    }
-  }, [isRefreshing]);
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const el = listScrollRef.current;
+      if (!el || isRefreshing) return;
+      if (el.scrollTop > 2) {
+        setIsPulling(false);
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+        return;
+      }
+      const delta = e.touches[0].clientY - touchStartY.current;
+      if (delta > 0) {
+        const d = Math.min(delta * PULL_RESISTANCE, MAX_PULL);
+        setPullDistance(d);
+        pullDistanceRef.current = d;
+      } else {
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+      }
+    },
+    [isRefreshing]
+  );
 
   const onTouchEnd = useCallback(() => {
     setIsPulling(false);
@@ -128,7 +132,7 @@ export function MobileDebtPaymentHistoryModal({
               minHeight: 0,
               transition: isPulling
                 ? "none"
-                : "height 0.35s ease-in-out, min-height 0.35s ease-in-out",
+                : "height 0.35s cubic-bezier(0.42, 0, 0.58, 1), min-height 0.35s cubic-bezier(0.42, 0, 0.58, 1)",
             }}
           >
             {isRefreshing ? (
@@ -160,9 +164,19 @@ export function MobileDebtPaymentHistoryModal({
               {t("debt.paymentHistory.noPayments", "No payment history yet.")}
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {payments.map((payment) => (
-                <PaymentHistoryItem key={payment.id} payment={payment} t={t} />
+                <SwipeableDebtPaymentRow
+                  key={payment.id}
+                  payment={payment}
+                  debtDisplayName={debt.debt_name}
+                  variant="mobile"
+                  t={t}
+                  refetchPayments={async () => {
+                    await refetch();
+                  }}
+                  onPaymentDeleted={onPaymentDeleted}
+                />
               ))}
             </div>
           )}
@@ -177,69 +191,5 @@ export function MobileDebtPaymentHistoryModal({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function PaymentHistoryItem({
-  payment,
-  t,
-}: {
-  payment: DebtPaymentRecord;
-  t: (key: string, fallback?: string) => string;
-}) {
-  const hasPrincipal = payment.principal_amount != null && payment.principal_amount > 0;
-  const hasInterest = payment.interest_amount != null && payment.interest_amount > 0;
-
-  return (
-    <div className="border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 hover:bg-gray-50">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-sm">
-          <Calendar className="h-4 w-4 text-gray-500 flex-shrink-0" />
-          <span className="font-medium text-gray-900">
-            {format(new Date(payment.payment_date), "dd MMM yyyy")}
-          </span>
-        </div>
-        <span className="font-semibold text-blue-600">
-          {formatToRupiah(payment.payment_amount)}
-        </span>
-      </div>
-
-      {(hasPrincipal || hasInterest) && (
-        <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-gray-600">
-          {hasPrincipal ? (
-            <span>
-              {t("debt.paymentHistory.principal", "Principal")}: {formatToRupiah(payment.principal_amount!)}
-            </span>
-          ) : null}
-          {hasInterest ? (
-            <span>
-              {t("debt.paymentHistory.interest", "Interest")}: {formatToRupiah(payment.interest_amount!)}
-            </span>
-          ) : null}
-        </div>
-      )}
-
-      <div className="mt-1.5 flex gap-2 text-xs text-gray-600">
-        <CreditCard className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-        <span>
-          {t("debt.payment.method", "Payment Method")}: {payment.bank_account_name ?? t("debt.paymentHistory.notSelected", "-")}
-        </span>
-      </div>
-
-      <div className="mt-1.5 flex gap-2 text-xs text-gray-600">
-        <Hash className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-        <span className="min-w-0 break-all font-mono">
-          {t("debt.paymentHistory.transactionId", "Transaction ID")}:{" "}
-          {payment.transaction_reference?.trim() || "—"}
-        </span>
-      </div>
-
-      <div className="mt-1.5 flex gap-2 text-xs text-gray-500">
-        <Receipt className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-        <span className="break-words">
-          {t("debt.payment.notes", "Notes")}: {payment.notes?.trim() ? payment.notes : t("debt.paymentHistory.notSelected", "-")}
-        </span>
-      </div>
-    </div>
   );
 }

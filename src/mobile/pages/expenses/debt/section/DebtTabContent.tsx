@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { useDebts } from "@/features/4_2_debt/hooks";
 import { DebtForm, DebtPaymentModal } from "@/features/4_2_debt/components";
@@ -7,7 +8,10 @@ import { DebtDashboardCarousel } from "@/mobile/pages/expenses/debt/section/Debt
 import { DebtTableSection } from "@/mobile/pages/expenses/debt/section/DebtTableSection";
 import { MobileDebtPaymentHistoryModal } from "@/mobile/pages/expenses/debt/modal/MobileDebtPaymentHistoryModal";
 import { useBankAccountBalances } from "@/hooks/organized/useBankAccountBalances";
-import { submitDebtPayment } from "@/features/4_2_debt/services/submitDebtPayment";
+import {
+  submitDebtPayment,
+  type DebtPaymentModalSubmitPayload,
+} from "@/features/4_2_debt/services/submitDebtPayment";
 import { useCurrentOrg } from "@/features/share/hooks/useCurrentOrg";
 import { useCurrentUser } from "@/features/share/hooks/useCurrentUser";
 import { ExpenseDashboardRefreshContext } from "@/mobile/pages/expenses/ExpenseDashboardRefreshContext";
@@ -25,6 +29,7 @@ export function DebtTabContent() {
   const { updateBalance } = useBankAccountBalances();
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const totalDebt = useMemo(() => {
     return debts.reduce((sum, debt) => {
@@ -59,7 +64,14 @@ export function DebtTabContent() {
   };
 
   const handleDeleteClick = async (debtId: string) => {
-    if (confirm(t("debt.deleteConfirm", "Are you sure you want to delete this debt?"))) {
+    if (
+      confirm(
+        t(
+          "debt.deleteConfirm",
+          "Delete this debt? Amounts paid from bank accounts will be refunded to those account balances."
+        )
+      )
+    ) {
       await deleteDebt(debtId);
     }
   };
@@ -72,15 +84,7 @@ export function DebtTabContent() {
     setIsPaymentModalOpen(false);
   };
 
-  const handlePaymentSubmit = async (paymentData: {
-    debtId: string;
-    paymentAmount: number;
-    paymentDate: string;
-    paymentMethod?: string;
-    notes?: string;
-    transactionReference?: string;
-    receiptFile?: File;
-  }): Promise<boolean> => {
+  const handlePaymentSubmit = async (paymentData: DebtPaymentModalSubmitPayload): Promise<boolean> => {
     const debt = debts.find((d) => d.id === paymentData.debtId);
     if (!debt) return false;
     if (!organizationId || !user?.id) return false;
@@ -95,9 +99,13 @@ export function DebtTabContent() {
       notes: paymentData.notes ?? null,
       transactionReference: paymentData.transactionReference ?? null,
       receiptFile: paymentData.receiptFile ?? null,
+      income_allocation: paymentData.incomeAllocation ?? null,
       debtDisplayName: debt.debt_name,
       updateBalance,
-      onAfterSuccess: refetchDebts,
+      onAfterSuccess: async () => {
+        await refetchDebts();
+        await queryClient.invalidateQueries({ queryKey: ["income-transactions", organizationId] });
+      },
       messages: {
         duplicateTransactionRef: t(
           "debt.payment.duplicateTransactionRef",
@@ -105,6 +113,18 @@ export function DebtTabContent() {
         ),
         receiptUploadFailed: t("debt.payment.receiptUploadFailed", "Failed to upload receipt."),
         paymentInsertFailed: t("debt.payment.insertFailed", "Failed to record payment."),
+        bankAccountRequired: t(
+          "debt.payment.bankAccountRequired",
+          "Pilih rekening sumber dana untuk melanjutkan pembayaran."
+        ),
+        rollbackFailed: t(
+          "debt.payment.rollbackFailed",
+          "Pembayaran tidak selesai. Muat ulang halaman dan coba lagi."
+        ),
+        allocationLinkFailed: t(
+          "debt.payment.allocationLinkFailed",
+          "Could not link this payment to the selected income. The payment was not saved. Check amounts and account, then try again."
+        ),
       },
     });
   };
@@ -166,6 +186,7 @@ export function DebtTabContent() {
         debt={paymentHistoryDebt}
         isOpen={!!paymentHistoryDebt}
         onClose={() => setPaymentHistoryDebt(null)}
+        onPaymentDeleted={() => void refetchDebts()}
       />
       <DebtPaymentModal
         isOpen={isPaymentModalOpen}

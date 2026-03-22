@@ -62,6 +62,8 @@ export interface CreateExpenseData {
   /** When set, inserts a recurring settlement payment (no own next_payment_date schedule). */
   recurring_settlement_for_expense_id?: string | null;
   transaction_reference?: string | null;
+  /** Optional link to an income row on the same bank account (`income_allocations`). */
+  income_allocation?: { income_transaction_id: string; amount: number } | null;
 }
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -400,13 +402,15 @@ export const useExpenses = () => {
 
       if (error) throw error;
 
-      if (expenseData.bank_account_id && data?.id) {
+      const newExpenseId = data?.id as string | undefined;
+
+      if (expenseData.bank_account_id && newExpenseId) {
         try {
           await updateBalance(
             expenseData.bank_account_id,
             -expenseData.amount,
             'expense',
-            data.id,
+            newExpenseId,
             `Expense: ${expenseData.expense_name}`
           );
         } catch (balanceError) {
@@ -414,9 +418,40 @@ export const useExpenses = () => {
         }
       }
 
+      const alloc = expenseData.income_allocation;
+      if (alloc?.income_transaction_id && alloc.amount > 0 && newExpenseId) {
+        const { error: allocError } = await supabase.from('income_allocations').insert({
+          organization_id: organizationId,
+          income_transaction_id: alloc.income_transaction_id,
+          amount: alloc.amount,
+          expense_id: newExpenseId,
+          created_by: userData.user.id,
+        });
+        if (allocError) {
+          if (expenseData.bank_account_id) {
+            try {
+              await updateBalance(
+                expenseData.bank_account_id,
+                expenseData.amount,
+                'manual_adjustment',
+                newExpenseId,
+                `Rollback: ${expenseData.expense_name}`
+              );
+            } catch (revertBalErr) {
+              console.error('Rollback balance after allocation failure:', revertBalErr);
+            }
+          }
+          const { error: delErr } = await supabase.from('expenses').delete().eq('id', newExpenseId);
+          if (delErr) console.error('Rollback expense delete after allocation failure:', delErr);
+          throw allocError;
+        }
+      }
+
       toast.success('Expense created successfully!');
 
       queryClient.invalidateQueries({ queryKey: ['bank-account-balances', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['income-transactions', organizationId] });
       queryClient.invalidateQueries({ queryKey });
       return data;
     } catch (error: any) {
@@ -424,6 +459,22 @@ export const useExpenses = () => {
 
       const code = error?.code as string | undefined;
       const msg = String(error?.message ?? '');
+      const msgU = msg.toUpperCase();
+      if (
+        msgU.includes('INCOME_ALLOCATION_EXCEEDS_INCOME') ||
+        msgU.includes('INCOME_ALLOCATION_EXCEEDS_EXPENSE') ||
+        msgU.includes('INCOME_ALLOCATION_BANK_MISMATCH') ||
+        msgU.includes('INCOME_ALLOCATION_ORG_MISMATCH') ||
+        msgU.includes('INCOME_ALLOCATION_INVALID')
+      ) {
+        toast.error(
+          t(
+            'incomes.allocation.error.linkFailed',
+            'Could not link this expense to the selected income. Check amounts, account, and remaining income balance, then try again.'
+          )
+        );
+        return false;
+      }
       if (
         code === '23505' ||
         /duplicate key/i.test(msg) ||
@@ -475,6 +526,7 @@ export const useExpenses = () => {
       if (error) throw error;
 
       toast.success('Expense deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
       queryClient.invalidateQueries({ queryKey });
       return true;
     } catch (error: any) {
@@ -521,6 +573,7 @@ export const useExpenses = () => {
 
       if (updateError) throw updateError;
 
+      queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
       queryClient.invalidateQueries({ queryKey });
       return true;
     } catch (error: any) {

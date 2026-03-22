@@ -15,6 +15,7 @@ import { AddIncomeForm } from '@/features/4-1-dashboard/AddIncomeForm';
 import { IncomeTransactionWithRelations } from '@/features/4-1-dashboard/types';
 import { useBankAccounts, type BankAccount } from '@/hooks/organized/useBankAccounts';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { getIncomeTransactionIdDisplay } from '@/features/4-1-dashboard/utils/incomeTransactionDisplayId';
 
 interface IncomeTransactionTableProps {
   transactions: any[];
@@ -279,12 +280,14 @@ export const IncomeTransactionTable = ({
                     </Badge>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs max-w-[10rem] min-w-0">
-                    <div
-                      className="truncate font-mono text-xs"
-                      title={transaction.transaction_reference?.trim() || undefined}
-                    >
-                      {transaction.transaction_reference?.trim() || '—'}
-                    </div>
+                    {(() => {
+                      const { display, title } = getIncomeTransactionIdDisplay(transaction);
+                      return (
+                        <div className="truncate font-mono text-xs" title={title}>
+                          {display}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}
@@ -311,12 +314,16 @@ export const IncomeTransactionTable = ({
                           <Edit className="mr-2 h-3 w-3" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="text-xs text-red-600 cursor-pointer"
-                          onClick={() => handleDelete(transaction)}
+                          disabled={!!transaction.has_income_allocations}
+                          onClick={() => {
+                            if (transaction.has_income_allocations) return;
+                            handleDelete(transaction);
+                          }}
                         >
                           <Trash2 className="mr-2 h-3 w-3" />
-                          Delete
+                          {t('common.delete', 'Delete')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -365,8 +372,19 @@ export const IncomeTransactionTable = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Income Transaction</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this income transaction? 
-              {selectedTransaction && (
+              {selectedTransaction?.has_income_allocations ? (
+                <span className="text-foreground">
+                  {t(
+                    'incomes.delete.error.lockedByAllocation',
+                    'This income is allocated to an expense or debt payment. Delete or change that payment first, then try again.'
+                  )}
+                </span>
+              ) : (
+                <>
+                  Are you sure you want to delete this income transaction?
+                </>
+              )}
+              {selectedTransaction && !selectedTransaction.has_income_allocations && (
                 <>
                   <br />
                   <span className="font-semibold">
@@ -374,10 +392,10 @@ export const IncomeTransactionTable = ({
                   </span>
                   <br />
                   Amount: {formatToRupiah(selectedTransaction.amount)}
+                  <br />
+                  This action cannot be undone.
                 </>
               )}
-              <br />
-              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -389,7 +407,7 @@ export const IncomeTransactionTable = ({
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              disabled={isDeleting}
+              disabled={isDeleting || !!selectedTransaction?.has_income_allocations}
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? 'Deleting...' : 'Delete'}

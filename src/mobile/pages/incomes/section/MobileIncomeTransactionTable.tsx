@@ -12,6 +12,7 @@ import { MobileEditIncomeTransactionModal } from "../modal/MobileEditIncomeTrans
 import { MobileIncomeTransactionDetailsModal } from "../modal/MobileIncomeTransactionDetailsModal";
 import { useBankAccounts, type BankAccount } from "@/hooks/organized/useBankAccounts";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { getIncomeTransactionIdDisplay } from "@/features/4-1-dashboard/utils/incomeTransactionDisplayId";
 
 interface MobileIncomeTransactionTableProps {
   transactions: IncomeTransactionWithRelations[];
@@ -226,12 +227,14 @@ export function MobileIncomeTransactionTable({
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-xs max-w-[10rem] min-w-0 text-left">
-                    <div
-                      className="truncate font-mono text-xs"
-                      title={transaction.transaction_reference?.trim() || undefined}
-                    >
-                      {transaction.transaction_reference?.trim() || "—"}
-                    </div>
+                    {(() => {
+                      const { display, title } = getIncomeTransactionIdDisplay(transaction);
+                      return (
+                        <div className="truncate font-mono text-xs" title={title}>
+                          {display}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-xs text-left">{format(new Date(transaction.transaction_date), "MMM dd, yyyy")}</td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap text-left">
@@ -252,10 +255,22 @@ export function MobileIncomeTransactionTable({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(transaction)}
-                        className="text-red-600 hover:text-red-800 text-xs font-medium h-8 px-1 rounded-sm touch-manipulation"
+                        disabled={!!transaction.has_income_allocations}
+                        title={
+                          transaction.has_income_allocations
+                            ? t(
+                                "incomes.delete.error.lockedByAllocation",
+                                "This income is allocated to an expense or debt payment. Delete or change that payment first, then try again."
+                              )
+                            : undefined
+                        }
+                        onClick={() => {
+                          if (transaction.has_income_allocations) return;
+                          handleDelete(transaction);
+                        }}
+                        className="text-red-600 hover:text-red-800 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium h-8 px-1 rounded-sm touch-manipulation"
                       >
-                        Delete
+                        {t("common.delete", "Delete")}
                       </button>
                     </div>
                   </td>
@@ -296,15 +311,28 @@ export function MobileIncomeTransactionTable({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Income Transaction</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this income transaction?
-              {selectedTransaction ? (
+              {selectedTransaction?.has_income_allocations ? (
+                <span className="text-foreground">
+                  {t(
+                    "incomes.delete.error.lockedByAllocation",
+                    "This income is allocated to an expense or debt payment. Delete or change that payment first, then try again."
+                  )}
+                </span>
+              ) : (
                 <>
-                  <br />
-                  <span className="font-semibold">{selectedTransaction.description || selectedTransaction.customer_name || "Transaction"}</span>
-                  <br />
-                  Amount: {formatToRupiah(selectedTransaction.amount)}
+                  Are you sure you want to delete this income transaction?
+                  {selectedTransaction ? (
+                    <>
+                      <br />
+                      <span className="font-semibold">
+                        {selectedTransaction.description || selectedTransaction.customer_name || "Transaction"}
+                      </span>
+                      <br />
+                      Amount: {formatToRupiah(selectedTransaction.amount)}
+                    </>
+                  ) : null}
                 </>
-              ) : null}
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -316,7 +344,11 @@ export function MobileIncomeTransactionTable({
             >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting || !!selectedTransaction?.has_income_allocations}
+              className="bg-red-600 hover:bg-red-700"
+            >
               {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

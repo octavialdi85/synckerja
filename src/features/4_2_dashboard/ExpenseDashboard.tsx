@@ -35,6 +35,7 @@ import { ExpenseTableFooter } from './ExpenseTableFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { Link } from 'react-router-dom';
+import { IncomeAllocationOptionalSection } from '@/features/4-1-dashboard/components/IncomeAllocationOptionalSection';
 
 // Helper function to handle invoice file viewing (same as payment-process page)
 // Uses createSignedUrl instead of getPublicUrl because the bucket may not be public
@@ -318,6 +319,8 @@ export function ExpenseDashboard() {
   const [amountDisplay, setAmountDisplay] = useState<string>('');
   const [isCreateDatePickerOpen, setIsCreateDatePickerOpen] = useState(false);
   const [isFirstPaymentDatePickerOpen, setIsFirstPaymentDatePickerOpen] = useState(false);
+  const [incomeAllocIncomeId, setIncomeAllocIncomeId] = useState('');
+  const [incomeAllocAmountStr, setIncomeAllocAmountStr] = useState('');
   const { expenseCategories, refetch: refetchExpenseCategories } = useExpenseCategories(selectedExpenseTypeId);
 
   const form = useForm<AddExpenseFormData>({
@@ -376,6 +379,15 @@ export function ExpenseDashboard() {
 
     const selectedExpenseType = expenseTypes.find(type => type.name === data.expense_type);
     
+    let income_allocation: CreateExpenseData['income_allocation'];
+    if (data.bank_account_id && incomeAllocIncomeId.trim()) {
+      const raw = incomeAllocAmountStr.trim().replace(/\s/g, '').replace(/,/g, '.');
+      const amt = parseFloat(raw);
+      if (Number.isFinite(amt) && amt > 0) {
+        income_allocation = { income_transaction_id: incomeAllocIncomeId.trim(), amount: amt };
+      }
+    }
+
     const expenseData: CreateExpenseData = {
       expense_name: data.expense_name || '',
       amount: data.amount || 0,
@@ -394,6 +406,7 @@ export function ExpenseDashboard() {
       bank_account_id: data.bank_account_id || undefined,
       recurring_settlement_for_expense_id:
         data.is_recurring && linkedRecurringRaw ? linkedRecurringRaw : undefined,
+      income_allocation,
     };
 
     const success = await createExpense(expenseData);
@@ -423,6 +436,8 @@ export function ExpenseDashboard() {
       setIsCreateDatePickerOpen(false);
       setIsFirstPaymentDatePickerOpen(false);
       form.setValue('withdrawal_from_balance', undefined);
+      setIncomeAllocIncomeId('');
+      setIncomeAllocAmountStr('');
       // Refresh debts to update available_limit
       if (expenseData.withdrawal_from_balance) {
         refetchDebts();
@@ -1496,6 +1511,8 @@ export function ExpenseDashboard() {
           setAmountDisplay('');
           setIsCreateDatePickerOpen(false);
           setIsFirstPaymentDatePickerOpen(false);
+          setIncomeAllocIncomeId('');
+          setIncomeAllocAmountStr('');
         }
       }}>
         <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
@@ -1699,6 +1716,8 @@ export function ExpenseDashboard() {
                 </label>
                 <Select 
                   onValueChange={(value) => {
+                    setIncomeAllocIncomeId('');
+                    setIncomeAllocAmountStr('');
                     if (value === 'none') {
                       form.setValue('withdrawal_from_balance', undefined);
                       form.setValue('bank_account_id', undefined);
@@ -1835,6 +1854,16 @@ export function ExpenseDashboard() {
                   })()
                 )}
               </div>
+
+              <IncomeAllocationOptionalSection
+                bankAccountId={form.watch('bank_account_id')}
+                referenceAmount={form.watch('amount') || 0}
+                referenceDate={form.watch('create_date')}
+                selectedIncomeId={incomeAllocIncomeId}
+                onSelectedIncomeId={setIncomeAllocIncomeId}
+                allocationAmountStr={incomeAllocAmountStr}
+                onAllocationAmountStrChange={setIncomeAllocAmountStr}
+              />
 
               <div className="flex items-center space-x-2">
                 <Checkbox 

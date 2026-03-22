@@ -5,8 +5,13 @@ export interface ExpenseReceiptAutofillData {
   amount?: number;
   createDate?: string;
   description?: string;
-  /** Bank / invoice reference from receipt (debt payment dedupe). */
+  /** Bank / invoice reference from receipt (debt payment dedupe). Verbatim from AI; do not trim. */
   transactionId?: string;
+  transactionIdNeedsReview?: boolean;
+  referenceNumber?: string;
+  referenceNumberNeedsReview?: boolean;
+  paymentCode?: string;
+  paymentCodeNeedsReview?: boolean;
 }
 
 export interface AnalyzeExpenseReceiptWithAIResult {
@@ -23,14 +28,26 @@ interface ReceiptFilePayload {
 
 const MAX_FILES = 3;
 
+function autofillDataHasUsefulContent(data: ExpenseReceiptAutofillData): boolean {
+  if (typeof data.amount === "number" && data.amount > 0) return true;
+  if (data.expenseName && data.expenseName.length > 0) return true;
+  if (data.description && data.description.length > 0) return true;
+  if (data.createDate && data.createDate.length > 0) return true;
+  if (data.transactionId != null && data.transactionId.length > 0) return true;
+  if (data.referenceNumber != null && data.referenceNumber.length > 0) return true;
+  if (data.paymentCode != null && data.paymentCode.length > 0) return true;
+  if (data.transactionIdNeedsReview || data.referenceNumberNeedsReview || data.paymentCodeNeedsReview) {
+    return true;
+  }
+  return false;
+}
+
 function normalizeAutofillData(input: unknown): ExpenseReceiptAutofillData | undefined {
   if (!input || typeof input !== "object") return undefined;
   const source = input as Record<string, unknown>;
   const expenseName = typeof source.expenseName === "string" ? source.expenseName.trim() : "";
   const description = typeof source.description === "string" ? source.description.trim() : "";
   const createDate = typeof source.createDate === "string" ? source.createDate.trim() : "";
-  const transactionId =
-    typeof source.transactionId === "string" ? source.transactionId.trim() : "";
   const amount =
     typeof source.amount === "number"
       ? source.amount
@@ -42,12 +59,23 @@ function normalizeAutofillData(input: unknown): ExpenseReceiptAutofillData | und
   if (expenseName) normalized.expenseName = expenseName;
   if (description) normalized.description = description;
   if (createDate) normalized.createDate = createDate;
-  if (transactionId) normalized.transactionId = transactionId;
+  if (typeof source.transactionId === "string" && source.transactionId.length > 0) {
+    normalized.transactionId = source.transactionId;
+  }
+  if (typeof source.referenceNumber === "string" && source.referenceNumber.length > 0) {
+    normalized.referenceNumber = source.referenceNumber;
+  }
+  if (typeof source.paymentCode === "string" && source.paymentCode.length > 0) {
+    normalized.paymentCode = source.paymentCode;
+  }
+  if (source.transactionIdNeedsReview === true) normalized.transactionIdNeedsReview = true;
+  if (source.referenceNumberNeedsReview === true) normalized.referenceNumberNeedsReview = true;
+  if (source.paymentCodeNeedsReview === true) normalized.paymentCodeNeedsReview = true;
   if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
     normalized.amount = amount;
   }
 
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
+  return autofillDataHasUsefulContent(normalized) ? normalized : undefined;
 }
 
 function fileToBase64(file: File): Promise<string> {

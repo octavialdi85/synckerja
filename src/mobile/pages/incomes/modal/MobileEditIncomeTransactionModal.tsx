@@ -19,6 +19,8 @@ import { Camera, Check, ChevronDown, FileText, Upload, X } from "lucide-react";
 import { CameraModal } from "@/mobile/components/CameraModal";
 import { MobileIncomeTransactionDateField } from "../components/MobileIncomeTransactionDateField";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { Alert, AlertDescription } from "@/features/ui/alert";
+import { isOtherIncomeType } from "@/features/4-1-dashboard/utils/incomeOtherType";
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, "Transaction date is required"),
@@ -28,6 +30,7 @@ const formSchema = z.object({
   bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
+  custom_category_name: z.string().optional(),
   service_id: z.string().optional(),
   sub_service_id: z.string().optional(),
   is_recurring: z.boolean().default(false),
@@ -103,6 +106,7 @@ export function MobileEditIncomeTransactionModal({
       bank_account_id: "",
       income_type_id: "",
       category_id: "",
+      custom_category_name: "",
       service_id: "",
       sub_service_id: "",
       is_recurring: false,
@@ -123,6 +127,12 @@ export function MobileEditIncomeTransactionModal({
     () => incomeCategories.filter((category) => category.income_types_id === watchedIncomeTypeId),
     [incomeCategories, watchedIncomeTypeId]
   );
+
+  const selectedIncomeType = useMemo(
+    () => incomeTypes.find((row) => row.id === watchedIncomeTypeId),
+    [incomeTypes, watchedIncomeTypeId]
+  );
+  const isOtherIncomeTypeSelected = isOtherIncomeType(selectedIncomeType?.name);
 
   const paymentMethods = useMemo(
     () => [
@@ -153,6 +163,9 @@ export function MobileEditIncomeTransactionModal({
         : t("incomes.previouslySelectedAccount", "Previously selected account");
     return [{ value: linkedId, label }, ...rows];
   }, [bankAccounts, income, t]);
+
+  const lockFinancial = !!(income?.has_income_allocations);
+
   const recurringFrequencies = [
     { value: "daily", label: "Daily" },
     { value: "weekly", label: "Weekly" },
@@ -178,6 +191,8 @@ export function MobileEditIncomeTransactionModal({
       typeof income.transaction_date === "string" && income.transaction_date.length >= 10
         ? income.transaction_date.slice(0, 10)
         : income.transaction_date;
+    const typeName = income.income_types?.name;
+    const otherSaved = isOtherIncomeType(typeName);
     form.reset({
       transaction_date: txDate,
       amount: income.amount,
@@ -186,6 +201,7 @@ export function MobileEditIncomeTransactionModal({
       bank_account_id: income.bank_account_id?.trim() || "",
       income_type_id: income.income_type_id || "",
       category_id: income.category_id || "",
+      custom_category_name: otherSaved ? (income.income_categories?.name ?? "") : "",
       service_id: income.service_id || "",
       sub_service_id: income.sub_service_id || "",
       is_recurring: income.is_recurring,
@@ -261,8 +277,18 @@ export function MobileEditIncomeTransactionModal({
   const onSubmit = (values: FormData) => {
     if (!income) return;
     const bankId = values.bank_account_id?.trim() || null;
+    const { category_id, custom_category_name, ...rest } = values;
+    const submitType = incomeTypes.find((row) => row.id === rest.income_type_id);
+    const otherSelected = isOtherIncomeType(submitType?.name);
     updateIncomeTransaction(
-      { id: income.id, ...values, bank_account_id: bankId },
+      {
+        id: income.id,
+        ...rest,
+        bank_account_id: bankId,
+        ...(otherSelected
+          ? { custom_category_name: custom_category_name ?? "" }
+          : { category_id }),
+      },
       {
         onSuccess: () => {
           onOpenChange(false);
@@ -288,12 +314,23 @@ export function MobileEditIncomeTransactionModal({
 
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 py-4">
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {lockFinancial ? (
+              <Alert>
+                <AlertDescription className="text-sm">
+                  {t(
+                    "incomes.edit.lockedFinancialHint",
+                    "This income is linked to an expense or debt payment. Amount, account, and classification fields are locked until that payment is removed or changed."
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <MobileIncomeTransactionDateField
                 label={t("incomes.transactionDate", "Transaction Date")}
                 value={form.watch("transaction_date")}
                 onChange={(v) => form.setValue("transaction_date", v, { shouldValidate: true })}
                 errorMessage={form.formState.errors.transaction_date?.message}
+                disabled={lockFinancial}
               />
               <div className="space-y-2">
                 <Label>Amount</Label>
@@ -303,6 +340,7 @@ export function MobileEditIncomeTransactionModal({
                   placeholder="0.00"
                   className="text-sm"
                   value={form.watch("amount") ?? 0}
+                  disabled={lockFinancial}
                   onChange={(e) => form.setValue("amount", parseFloat(e.target.value) || 0)}
                 />
               </div>
@@ -322,6 +360,7 @@ export function MobileEditIncomeTransactionModal({
                   value={form.watch("payment_method") || ""}
                   placeholder={t("incomes.selectPaymentMethod", "Select payment method")}
                   options={paymentMethods}
+                  disabled={lockFinancial}
                   onSelect={(value) => {
                     form.setValue("payment_method", value, { shouldValidate: true });
                     if (value !== "bank_transfer") {
@@ -341,6 +380,7 @@ export function MobileEditIncomeTransactionModal({
                 value={form.watch("bank_account_id") || ""}
                 placeholder={t("incomes.selectBankAccount", "Select bank account")}
                 options={bankAccountSelectOptions}
+                disabled={lockFinancial}
                 onSelect={(value) => form.setValue("bank_account_id", value, { shouldValidate: true })}
               />
               {form.formState.errors.bank_account_id ? (
@@ -358,28 +398,48 @@ export function MobileEditIncomeTransactionModal({
                 <DrawerSelectField
                   open={incomeTypeDrawerOpen}
                   onOpenChange={setIncomeTypeDrawerOpen}
-                  title="Income Type"
+                  title={t("incomes.incomeType", "Income Type")}
                   value={form.watch("income_type_id") || ""}
-                  placeholder="Select income type"
+                  placeholder={t("incomes.selectIncomeType", "Select income type")}
                   options={incomeTypes.map((type) => ({ value: type.id, label: type.name }))}
+                  disabled={lockFinancial}
                   onSelect={(value) => {
                     form.setValue("income_type_id", value);
                     form.setValue("category_id", "");
+                    const next = incomeTypes.find((row) => row.id === value);
+                    if (!isOtherIncomeType(next?.name)) {
+                      form.setValue("custom_category_name", "");
+                    }
                   }}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Category</Label>
-                <DrawerSelectField
-                  open={categoryDrawerOpen}
-                  onOpenChange={setCategoryDrawerOpen}
-                  title="Category"
-                  value={form.watch("category_id") || ""}
-                  placeholder="Select category"
-                  options={filteredIncomeCategories.map((category) => ({ value: category.id, label: category.name }))}
-                  onSelect={(value) => form.setValue("category_id", value)}
-                  disabled={!watchedIncomeTypeId}
-                />
+                <Label htmlFor={isOtherIncomeTypeSelected ? "custom_category_name" : "category_id"}>
+                  {t("common.category", "Category")}
+                </Label>
+                {isOtherIncomeTypeSelected ? (
+                  <Input
+                    id="custom_category_name"
+                    className="text-sm"
+                    placeholder={t("incomes.categoryCustomPlaceholder", "e.g. THR, bonus, gift")}
+                    disabled={lockFinancial || !watchedIncomeTypeId}
+                    {...form.register("custom_category_name")}
+                  />
+                ) : (
+                  <DrawerSelectField
+                    open={categoryDrawerOpen}
+                    onOpenChange={setCategoryDrawerOpen}
+                    title={t("common.category", "Category")}
+                    value={form.watch("category_id") || ""}
+                    placeholder={t("incomes.selectCategory", "Select category")}
+                    options={filteredIncomeCategories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    }))}
+                    onSelect={(value) => form.setValue("category_id", value)}
+                    disabled={lockFinancial || !watchedIncomeTypeId}
+                  />
+                )}
               </div>
             </div>
 
@@ -393,6 +453,7 @@ export function MobileEditIncomeTransactionModal({
                   value={form.watch("service_id") || ""}
                   placeholder="Select service"
                   options={services.map((service) => ({ value: service.id, label: service.name }))}
+                  disabled={lockFinancial}
                   onSelect={(value) => {
                     form.setValue("service_id", value);
                     form.setValue("sub_service_id", "");
@@ -409,7 +470,7 @@ export function MobileEditIncomeTransactionModal({
                   placeholder="Select sub service"
                   options={filteredSubServices.map((subService) => ({ value: subService.id, label: subService.name }))}
                   onSelect={(value) => form.setValue("sub_service_id", value)}
-                  disabled={!watchedServiceId}
+                  disabled={lockFinancial || !watchedServiceId}
                 />
               </div>
             </div>
@@ -419,6 +480,7 @@ export function MobileEditIncomeTransactionModal({
                 <Checkbox
                   checked={watchedIsRecurring}
                   onCheckedChange={(checked) => form.setValue("is_recurring", checked as boolean)}
+                  disabled={lockFinancial}
                 />
                 <Label className="text-sm">Recurring Transaction</Label>
               </div>
@@ -434,6 +496,7 @@ export function MobileEditIncomeTransactionModal({
                   value={form.watch("recurring_frequency") || ""}
                   placeholder="Select frequency"
                   options={recurringFrequencies}
+                  disabled={lockFinancial}
                   onSelect={(value) => form.setValue("recurring_frequency", value)}
                 />
               </div>

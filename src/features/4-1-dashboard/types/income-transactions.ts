@@ -28,6 +28,12 @@ export interface IncomeTransaction {
 }
 
 export interface IncomeTransactionWithRelations extends IncomeTransaction {
+  /** Sum of `income_allocations.amount` for this row (server-enriched in hook). */
+  allocated_amount?: number;
+  /** True when allocated_amount > 0. */
+  has_income_allocations?: boolean;
+  /** Legacy inter-bank transfer: linked from `bank_transfer_journals.income_transaction_id`. */
+  is_legacy_bank_transfer_income?: boolean;
   income_types?: {
     name: string;
   };
@@ -58,6 +64,8 @@ export interface CreateIncomeTransactionData {
   bank_account_id?: string;
   income_type_id?: string;
   category_id?: string;
+  /** For income type "Other": user-entered label; stored as income_categories row on create. */
+  custom_category_name?: string;
   service_id?: string;
   sub_service_id?: string;
   is_recurring?: boolean;

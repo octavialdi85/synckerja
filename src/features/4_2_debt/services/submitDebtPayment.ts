@@ -1,15 +1,23 @@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+const BANK_ACCOUNT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidDebtPaymentBankAccountId(value: string | undefined | null): boolean {
+  return typeof value === 'string' && BANK_ACCOUNT_UUID_RE.test(value.trim());
+}
+
 /** Payload from DebtPaymentModal → submitDebtPayment / parent handlers. */
 export type DebtPaymentModalSubmitPayload = {
   debtId: string;
   paymentAmount: number;
   paymentDate: string;
-  paymentMethod?: string;
+  paymentMethod: string;
   notes?: string;
   transactionReference?: string;
   receiptFile?: File;
+  /** Optional link to income on the same bank account (`payment_method`). */
+  incomeAllocation?: { income_transaction_id: string; amount: number };
 };
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -80,7 +88,7 @@ export interface SubmitDebtPaymentParams {
   debtId: string;
   paymentAmount: number;
   paymentDate: string;
-  paymentMethod?: string;
+  paymentMethod: string;
   notes?: string | null;
   transactionReference?: string | null;
   receiptFile?: File | null;
@@ -94,15 +102,20 @@ export interface SubmitDebtPaymentParams {
   ) => Promise<void>;
   /** e.g. refetchDebts */
   onAfterSuccess?: () => Promise<void>;
+  income_allocation?: { income_transaction_id: string; amount: number } | null;
   messages: {
     duplicateTransactionRef: string;
     receiptUploadFailed: string;
     paymentInsertFailed: string;
+    bankAccountRequired: string;
+    rollbackFailed: string;
+    allocationLinkFailed: string;
   };
 }
 
 /**
- * Insert debt_payments row, optional receipt upload, optional bank balance update.
+ * Insert debt_payments row, optional receipt upload, bank balance update.
+ * Requires a valid bank account UUID; rolls back the payment row if balance update fails.
  */
 export async function submitDebtPayment(params: SubmitDebtPaymentParams): Promise<boolean> {
   const {
@@ -118,8 +131,16 @@ export async function submitDebtPayment(params: SubmitDebtPaymentParams): Promis
     debtDisplayName,
     updateBalance,
     onAfterSuccess,
+    income_allocation,
     messages,
   } = params;
+
+  if (!isValidDebtPaymentBankAccountId(paymentMethod)) {
+    toast.error(messages.bankAccountRequired);
+    return false;
+  }
+
+  const bankAccountId = paymentMethod.trim();
 
   let receipt_file_path: string | null = null;
   let receipt_file_name: string | null = null;
@@ -141,24 +162,28 @@ export async function submitDebtPayment(params: SubmitDebtPaymentParams): Promis
   const refTrimmed = transactionReference?.trim() ?? null;
   const refForDb = refTrimmed && refTrimmed.length > 0 ? refTrimmed : null;
 
-  const { error: paymentError } = await supabase.from('debt_payments').insert({
-    organization_id: organizationId,
-    debt_id: debtId,
-    created_by: userId,
-    payment_amount: paymentAmount,
-    payment_date: paymentDate,
-    payment_method: paymentMethod || null,
-    notes: notes?.trim() ? notes.trim() : null,
-    transaction_reference: refForDb,
-    receipt_file_path,
-    receipt_file_name,
-    receipt_file_size,
-    receipt_mime_type,
-  });
+  const { data: inserted, error: paymentError } = await supabase
+    .from('debt_payments')
+    .insert({
+      organization_id: organizationId,
+      debt_id: debtId,
+      created_by: userId,
+      payment_amount: paymentAmount,
+      payment_date: paymentDate,
+      payment_method: bankAccountId,
+      notes: notes?.trim() ? notes.trim() : null,
+      transaction_reference: refForDb,
+      receipt_file_path,
+      receipt_file_name,
+      receipt_file_size,
+      receipt_mime_type,
+    })
+    .select('id')
+    .single();
 
-  if (paymentError) {
-    const code = (paymentError as { code?: string }).code;
-    const msg = String((paymentError as { message?: string }).message ?? '');
+  if (paymentError || !inserted?.id) {
+    const code = (paymentError as { code?: string } | undefined)?.code;
+    const msg = String((paymentError as { message?: string } | undefined)?.message ?? '');
     if (
       code === '23505' ||
       /duplicate key/i.test(msg) ||
@@ -173,26 +198,62 @@ export async function submitDebtPayment(params: SubmitDebtPaymentParams): Promis
     return false;
   }
 
-  if (paymentMethod) {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(paymentMethod)) {
+  const paymentRowId = inserted.id as string;
+
+  try {
+    await updateBalance(
+      bankAccountId,
+      -paymentAmount,
+      'expense',
+      debtId,
+      `Debt Payment: ${debtDisplayName}`
+    );
+  } catch (e) {
+    console.error('updateBalance after debt payment:', e);
+    const { error: deleteError } = await supabase.from('debt_payments').delete().eq('id', paymentRowId);
+    if (deleteError) {
+      console.error('debt_payments rollback after failed balance:', deleteError);
+      toast.error(messages.rollbackFailed);
+      return false;
+    }
+    toast.error(
+      typeof e === 'object' && e !== null && 'message' in e ? String((e as Error).message) : messages.paymentInsertFailed
+    );
+    return false;
+  }
+
+  const alloc = income_allocation;
+  if (alloc?.income_transaction_id && alloc.amount > 0) {
+    const { error: allocError } = await supabase.from('income_allocations').insert({
+      organization_id: organizationId,
+      income_transaction_id: alloc.income_transaction_id,
+      amount: alloc.amount,
+      debt_payment_id: paymentRowId,
+      created_by: userId,
+    });
+    if (allocError) {
+      console.error('income_allocations insert after debt payment:', allocError);
       try {
         await updateBalance(
-          paymentMethod,
-          -paymentAmount,
-          'expense',
+          bankAccountId,
+          paymentAmount,
+          'manual_adjustment',
           debtId,
-          `Debt Payment: ${debtDisplayName}`
+          `Rollback debt payment: ${debtDisplayName}`
         );
-      } catch (e) {
-        console.error('updateBalance after debt payment:', e);
-        toast.error(
-          typeof e === 'object' && e !== null && 'message' in e
-            ? String((e as Error).message)
-            : messages.paymentInsertFailed
-        );
+      } catch (revErr) {
+        console.error('rollback balance after allocation failure:', revErr);
+        toast.error(messages.rollbackFailed);
         return false;
       }
+      const { error: delPayErr } = await supabase.from('debt_payments').delete().eq('id', paymentRowId);
+      if (delPayErr) {
+        console.error('debt_payments rollback after allocation failure:', delPayErr);
+        toast.error(messages.rollbackFailed);
+        return false;
+      }
+      toast.error(messages.allocationLinkFailed);
+      return false;
     }
   }
 

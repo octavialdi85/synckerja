@@ -23,7 +23,8 @@ import { useIsMobile } from "@/mobile/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { toast } from "sonner";
-import { Camera, FileText, Upload, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/features/ui/alert";
+import { AlertCircle, Camera, FileText, Upload, X } from "lucide-react";
 import { CameraModal } from "@/mobile/components/CameraModal";
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import {
@@ -65,6 +66,7 @@ import {
 } from "@/mobile/components/ui/alert-dialog";
 import { setShareBackGuard } from "@/mobile/shareIntent/shareBackGuard";
 import type { ExpenseReceiptAutofillData } from "@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI";
+import { IncomeAllocationOptionalSection } from "@/features/4-1-dashboard/components/IncomeAllocationOptionalSection";
 
 export interface AddNewExpenseModalProps {
   open: boolean;
@@ -199,6 +201,8 @@ export function AddNewExpenseModal({
   const wasOpenRef = useRef(false);
   const lastAppliedAiRequestRef = useRef<number | null>(null);
   const [transactionRefDisplay, setTransactionRefDisplay] = useState("");
+  const [incomeAllocIncomeId, setIncomeAllocIncomeId] = useState("");
+  const [incomeAllocAmountStr, setIncomeAllocAmountStr] = useState("");
 
   /** Delay setelah tutup kamera in-app sebelum ref proteksi di-clear */
   const RECEIPT_PROTECTION_DELAY_MS = 2000;
@@ -260,7 +264,7 @@ export function AddNewExpenseModal({
     lastAppliedAiRequestRef.current = aiAutofillRequestId;
     const d = aiAutofillData;
     if (!d) return;
-    if (d.transactionId) setTransactionRefDisplay(d.transactionId.trim());
+    if (d.transactionId) setTransactionRefDisplay(d.transactionId);
   }, [shareFlowLocked, open, aiAutofillStatus, aiAutofillRequestId, aiAutofillData]);
 
   const receiptPreviewUrls = useMemo(
@@ -370,16 +374,29 @@ export function AddNewExpenseModal({
       }
     }
 
-    if (!dirtyFields.description && !form.getValues("description") && aiAutofillData.description) {
-      form.setValue("description", aiAutofillData.description, { shouldDirty: false });
+    const refLines: string[] = [];
+    if (aiAutofillData.referenceNumber) {
+      refLines.push(
+        `${t("shareReceipt.aiRefLinePrefix", "Ref")}: ${aiAutofillData.referenceNumber}`
+      );
     }
-  }, [
-    open,
-    aiAutofillData,
-    aiAutofillStatus,
-    aiAutofillRequestId,
-    form,
-  ]);
+    if (aiAutofillData.paymentCode) {
+      refLines.push(
+        `${t("shareReceipt.aiPaymentCodeLinePrefix", "Payment code")}: ${aiAutofillData.paymentCode}`
+      );
+    }
+    const extraDesc = refLines.join("\n");
+    const baseDesc = aiAutofillData.description?.trim() ?? "";
+    const mergedDesc = extraDesc
+      ? baseDesc
+        ? `${baseDesc}\n${extraDesc}`
+        : extraDesc
+      : baseDesc;
+
+    if (!dirtyFields.description && !form.getValues("description")?.trim() && mergedDesc) {
+      form.setValue("description", mergedDesc, { shouldDirty: false });
+    }
+  }, [open, aiAutofillData, aiAutofillStatus, aiAutofillRequestId, form, t]);
 
   const handleExpenseTypeChange = (value: string) => {
     form.setValue("expense_type", value);
@@ -439,6 +456,16 @@ export function AddNewExpenseModal({
     }
 
     const selectedExpenseType = expenseTypes.find((type) => type.name === data.expense_type);
+
+    let income_allocation: CreateExpenseData["income_allocation"];
+    if (data.bank_account_id && incomeAllocIncomeId.trim()) {
+      const raw = incomeAllocAmountStr.trim().replace(/\s/g, "").replace(/,/g, ".");
+      const amt = parseFloat(raw);
+      if (Number.isFinite(amt) && amt > 0) {
+        income_allocation = { income_transaction_id: incomeAllocIncomeId.trim(), amount: amt };
+      }
+    }
+
     const expenseData: CreateExpenseData = {
       expense_name: data.expense_name ?? "",
       amount: data.amount ?? 0,
@@ -459,9 +486,8 @@ export function AddNewExpenseModal({
       recurring_settlement_for_expense_id:
         data.is_recurring && linkedRecurringRaw ? linkedRecurringRaw : undefined,
       transaction_reference:
-        shareFlowLocked && transactionRefDisplay.trim()
-          ? transactionRefDisplay.trim()
-          : undefined,
+        shareFlowLocked && transactionRefDisplay.trim() ? transactionRefDisplay : undefined,
+      income_allocation,
     };
 
     const createdExpense = await createExpense(expenseData);
@@ -501,6 +527,8 @@ export function AddNewExpenseModal({
       setFirstPaymentDate(undefined);
       setSelectedExpenseTypeId("");
       setTransactionRefDisplay("");
+      setIncomeAllocIncomeId("");
+      setIncomeAllocAmountStr("");
       if (expenseData.withdrawal_from_balance) refetchDebts();
     }
   };
@@ -639,6 +667,8 @@ export function AddNewExpenseModal({
       setAmountDisplay("");
       setIsCreateDatePickerOpen(false);
       setIsFirstPaymentDatePickerOpen(false);
+      setIncomeAllocIncomeId("");
+      setIncomeAllocAmountStr("");
     }
     onOpenChange(next);
   };
@@ -655,6 +685,8 @@ export function AddNewExpenseModal({
     setIsFirstPaymentDatePickerOpen(false);
     setReceiptFiles([]);
     setTransactionRefDisplay("");
+    setIncomeAllocIncomeId("");
+    setIncomeAllocAmountStr("");
     onOpenChange(false);
   };
 
@@ -667,6 +699,19 @@ export function AddNewExpenseModal({
     (aiAutofillStatus === "loading" ||
       !transactionRefDisplay.trim() ||
       receiptFiles.length === 0);
+
+  const showAiIdentifierReviewHint = useMemo(
+    () =>
+      Boolean(
+        shareFlowLocked &&
+          aiAutofillStatus === "success" &&
+          aiAutofillData &&
+          (aiAutofillData.transactionIdNeedsReview === true ||
+            aiAutofillData.referenceNumberNeedsReview === true ||
+            aiAutofillData.paymentCodeNeedsReview === true)
+      ),
+    [shareFlowLocked, aiAutofillStatus, aiAutofillData]
+  );
 
   return (
     <Fragment>
@@ -737,6 +782,17 @@ export function AddNewExpenseModal({
                       "No reference found yet. Wait for analysis to finish or choose another destination."
                     )}
                   </p>
+                ) : null}
+                {showAiIdentifierReviewHint ? (
+                  <Alert className="mt-2 border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {t(
+                        "shareReceipt.aiIdentifierReviewHint",
+                        "AI flagged reference numbers or codes on the receipt for manual verification against the original image (e.g. truncated or uncertain ID)."
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 ) : null}
               </div>
             ) : null}
@@ -1215,6 +1271,8 @@ export function AddNewExpenseModal({
                           <button
                             type="button"
                             onClick={() => {
+                              setIncomeAllocIncomeId("");
+                              setIncomeAllocAmountStr("");
                               form.setValue("withdrawal_from_balance", undefined);
                               form.setValue("bank_account_id", undefined);
                               setWithdrawalDrawerOpen(false);
@@ -1254,6 +1312,8 @@ export function AddNewExpenseModal({
                                     key={`bank_${b.id}`}
                                     type="button"
                                     onClick={() => {
+                                      setIncomeAllocIncomeId("");
+                                      setIncomeAllocAmountStr("");
                                       form.setValue("bank_account_id", b.id);
                                       form.setValue("withdrawal_from_balance", undefined);
                                       setWithdrawalDrawerOpen(false);
@@ -1287,6 +1347,8 @@ export function AddNewExpenseModal({
                                     key={`debt_${d.id}`}
                                     type="button"
                                     onClick={() => {
+                                      setIncomeAllocIncomeId("");
+                                      setIncomeAllocAmountStr("");
                                       form.setValue("withdrawal_from_balance", d.id);
                                       form.setValue("bank_account_id", undefined);
                                       setWithdrawalDrawerOpen(false);
@@ -1315,6 +1377,8 @@ export function AddNewExpenseModal({
               ) : (
                 <Select
                   onValueChange={(value) => {
+                    setIncomeAllocIncomeId("");
+                    setIncomeAllocAmountStr("");
                     if (value === "none") {
                       form.setValue("withdrawal_from_balance", undefined);
                       form.setValue("bank_account_id", undefined);
@@ -1404,6 +1468,16 @@ export function AddNewExpenseModal({
                 </p>
               )}
             </div>
+
+            <IncomeAllocationOptionalSection
+              bankAccountId={form.watch("bank_account_id")}
+              referenceAmount={form.watch("amount") ?? 0}
+              referenceDate={form.watch("create_date")}
+              selectedIncomeId={incomeAllocIncomeId}
+              onSelectedIncomeId={setIncomeAllocIncomeId}
+              allocationAmountStr={incomeAllocAmountStr}
+              onAllocationAmountStrChange={setIncomeAllocAmountStr}
+            />
 
             <div className="flex items-center space-x-2">
               <Checkbox

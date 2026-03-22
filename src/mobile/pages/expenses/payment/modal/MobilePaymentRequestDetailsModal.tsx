@@ -36,6 +36,7 @@ import { useBankAccountBalances } from "@/hooks/organized/useBankAccountBalances
 import { useUpdatePurchaseRequestStatus, type PurchaseRequest } from "@/features/9_request-form/hooks/usePurchaseRequests";
 import { useIsMobile } from "@/mobile/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { IncomeAllocationOptionalSection } from "@/features/4-1-dashboard/components/IncomeAllocationOptionalSection";
 
 interface MobilePaymentRequestDetailsModalProps {
   request: PurchaseRequest | null;
@@ -50,6 +51,8 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
   const [isUploadingInvoice, setIsUploadingInvoice] = useState(false);
   const [processWithdrawalFromBalance, setProcessWithdrawalFromBalance] = useState<string | undefined>(request?.withdrawal_from_balance);
   const [processBankAccountId, setProcessBankAccountId] = useState<string | undefined>(request?.bank_account_id);
+  const [incomeAllocIncomeId, setIncomeAllocIncomeId] = useState("");
+  const [incomeAllocAmountStr, setIncomeAllocAmountStr] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
@@ -66,6 +69,8 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
     setProcessWithdrawalFromBalance(request.withdrawal_from_balance);
     setProcessBankAccountId(request.bank_account_id);
     setInvoiceFile(null);
+    setIncomeAllocIncomeId("");
+    setIncomeAllocAmountStr("");
   }, [request?.id, request?.withdrawal_from_balance, request?.bank_account_id]);
 
   if (!request) return null;
@@ -153,6 +158,14 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
 
       const { data: existingExpense } = await supabase.from("expenses").select("id").eq("purchase_request_id", request.id).maybeSingle();
       if (!existingExpense) {
+        let income_allocation: { income_transaction_id: string; amount: number } | undefined;
+        if (processBankAccountId && incomeAllocIncomeId.trim()) {
+          const raw = incomeAllocAmountStr.trim().replace(/\s/g, "").replace(/,/g, ".");
+          const amt = parseFloat(raw);
+          if (Number.isFinite(amt) && amt > 0) {
+            income_allocation = { income_transaction_id: incomeAllocIncomeId.trim(), amount: amt };
+          }
+        }
         const created = await createExpense({
           expense_name: request.request_title,
           amount: request.amount_idr,
@@ -165,6 +178,7 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
           withdrawal_from_balance: processWithdrawalFromBalance,
           bank_account_id: processBankAccountId,
           purchase_request_id: request.id,
+          income_allocation,
         });
         if (!created) {
           toast({ title: "Expense creation failed", description: "Invoice saved, retry processing.", variant: "destructive" });
@@ -180,6 +194,8 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
       setInvoiceFile(null);
       setProcessWithdrawalFromBalance(undefined);
       setProcessBankAccountId(undefined);
+      setIncomeAllocIncomeId("");
+      setIncomeAllocAmountStr("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       onClose();
       onRefresh?.();
@@ -279,6 +295,8 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
                   <Select
                     value={processWithdrawalFromBalance ? `debt_${processWithdrawalFromBalance}` : processBankAccountId ? `bank_${processBankAccountId}` : "none"}
                     onValueChange={(value) => {
+                      setIncomeAllocIncomeId("");
+                      setIncomeAllocAmountStr("");
                       if (value === "none") {
                         setProcessWithdrawalFromBalance(undefined);
                         setProcessBankAccountId(undefined);
@@ -321,6 +339,16 @@ export function MobilePaymentRequestDetailsModal({ request, isOpen, onClose, onR
                   </Select>
                 </CardContent>
               </Card>
+
+              <IncomeAllocationOptionalSection
+                bankAccountId={processBankAccountId}
+                referenceAmount={request.amount_idr}
+                referenceDate={format(new Date(), "yyyy-MM-dd")}
+                selectedIncomeId={incomeAllocIncomeId}
+                onSelectedIncomeId={setIncomeAllocIncomeId}
+                allocationAmountStr={incomeAllocAmountStr}
+                onAllocationAmountStrChange={setIncomeAllocAmountStr}
+              />
 
               <Card className="border-slate-200">
                 <CardHeader className="px-4 py-3 pb-2"><CardTitle className="text-[13px] font-semibold">Upload Invoice</CardTitle></CardHeader>

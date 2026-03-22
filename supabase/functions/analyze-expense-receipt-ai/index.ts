@@ -28,8 +28,13 @@ type ParsedResult = {
   amount?: number;
   createDate?: string;
   description?: string;
-  /** Bank transfer ref, invoice no., BI-FAST ref, etc. */
+  /** Bank transfer ref, invoice no., BI-FAST ref, etc. — verbatim from model, no trim. */
   transactionId?: string;
+  transactionIdNeedsReview?: boolean;
+  referenceNumber?: string;
+  referenceNumberNeedsReview?: boolean;
+  paymentCode?: string;
+  paymentCodeNeedsReview?: boolean;
 };
 
 async function callGeminiText(params: {
@@ -81,6 +86,15 @@ const jsonResponse = (body: object, status = 200) =>
 
 function safeTrim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Identifier / machine codes: preserve exactly as returned in JSON (no trim). */
+function passThroughIdentifier(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function parseBoolFlag(value: unknown): boolean {
+  return value === true || value === "true";
 }
 
 function extractJsonObject(text: string): ParsedResult | null {
@@ -199,6 +213,7 @@ Deno.serve(async (req: Request) => {
       "Extract all readable text from this receipt image/PDF.",
       "Return plain text only.",
       "Keep line breaks for readability.",
+      "Important: when a long transaction ID, payment code, or reference number wraps across lines, that line break is layout only—the next line often continues the same token with no space in the real value.",
       "Do not add extra explanation.",
     ].join("\n");
     const ocrResult = await callGeminiText({ apiKey, model, prompt: ocrPrompt, inlineParts });
@@ -208,14 +223,22 @@ Deno.serve(async (req: Request) => {
     const extractionPrompt = [
       "You are extracting expense data from receipts.",
       "Use both receipt images/PDF and OCR text context when available.",
-      "Return ONLY valid JSON with shape:",
-      '{"expenseName":"string","amount":12345,"createDate":"YYYY-MM-DD","description":"string","transactionId":"string"}',
+      "Return ONLY valid JSON with this exact shape (all keys present; use empty string \"\" or false as needed):",
+      '{"expenseName":"string","amount":12345,"createDate":"YYYY-MM-DD","description":"string","transactionId":"string","transactionIdNeedsReview":false,"referenceNumber":"string","referenceNumberNeedsReview":false,"paymentCode":"string","paymentCodeNeedsReview":false}',
       "Rules:",
       "- amount must be final transaction total amount (not subtotal/fee).",
       "- createDate must be transaction date. If unknown, return empty string.",
       "- expenseName should be merchant or best transaction title.",
-      "- description should summarize transaction details briefly.",
-      "- transactionId: unique reference visible on the receipt (e.g. BI-FAST ref, transfer reference, invoice number, trace no.). If none, empty string.",
+      "- description should summarize transaction details briefly (human-readable prose).",
+      "- transactionId: primary transaction / payment reference (e.g. ID transaksi, BI-FAST ref, trace no.). If none, \"\".",
+      "- referenceNumber: other long reference numbers on the receipt (e.g. nomor referensi) if distinct from transactionId; else \"\".",
+      "- paymentCode: payment / VA / billing codes if shown separately; else \"\".",
+      "- CRITICAL for transactionId, referenceNumber, paymentCode:",
+      "  * Prefer the receipt IMAGE to see whether a space truly exists between characters that appear on separate lines.",
+      "  * Do NOT insert spaces or line breaks only because OCR text or layout wrapped mid-string; merge continuation lines into one single-line string with no fake spaces.",
+      "  * Do NOT remove spaces that are clearly visible in the receipt between characters.",
+      "  * Each of these three fields must be a single line inside JSON (no newline characters inside the string).",
+      "- transactionIdNeedsReview, referenceNumberNeedsReview, paymentCodeNeedsReview: set true if that value is truncated, unreadable, ambiguous, or you are unsure; else false.",
       "- If field not found, return empty string for text/date and 0 for amount.",
       combinedOcrText ? `OCR text:\n${combinedOcrText}` : "OCR text: (empty)",
     ].join("\n");
@@ -229,12 +252,18 @@ Deno.serve(async (req: Request) => {
     const amount = typeof parsed.amount === "number"
       ? parsed.amount
       : Number(safeTrim(parsed.amount));
+    const p = parsed as ParsedResult;
     const normalized: ParsedResult = {
       expenseName: safeTrim(parsed.expenseName),
       amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount) : undefined,
       createDate: safeTrim(parsed.createDate),
       description: safeTrim(parsed.description),
-      transactionId: safeTrim((parsed as ParsedResult).transactionId),
+      transactionId: passThroughIdentifier(p.transactionId),
+      transactionIdNeedsReview: parseBoolFlag(p.transactionIdNeedsReview),
+      referenceNumber: passThroughIdentifier(p.referenceNumber),
+      referenceNumberNeedsReview: parseBoolFlag(p.referenceNumberNeedsReview),
+      paymentCode: passThroughIdentifier(p.paymentCode),
+      paymentCodeNeedsReview: parseBoolFlag(p.paymentCodeNeedsReview),
     };
 
     if (usageRow?.id) {

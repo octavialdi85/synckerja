@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react';
+import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -7,7 +8,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
-import { CalendarIcon, Check, ChevronDown, Camera, FileText, Images } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Check, ChevronDown, Camera, FileText, Images } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
@@ -33,7 +34,8 @@ import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances
 import { toast } from 'sonner';
 import { getPayableDebts } from '../utils/payableDebts';
 import type { ExpenseReceiptAutofillData } from '@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI';
-import type { DebtPaymentModalSubmitPayload } from '../services/submitDebtPayment';
+import { isValidDebtPaymentBankAccountId, type DebtPaymentModalSubmitPayload } from '../services/submitDebtPayment';
+import { IncomeAllocationOptionalSection } from '@/features/4-1-dashboard/components/IncomeAllocationOptionalSection';
 
 const RECEIPT_ALLOWED = [
   'image/jpeg',
@@ -98,7 +100,7 @@ export const DebtPaymentModal = ({
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
   const { bankAccounts, isLoading: bankAccountsLoading } = useBankAccounts();
-  const { balances } = useBankAccountBalances();
+  const { balances, refetch: refetchBalances } = useBankAccountBalances();
   const [selectedDebtId, setSelectedDebtId] = useState<string>('');
   const [paymentAmountDisplay, setPaymentAmountDisplay] = useState('');
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(new Date());
@@ -110,6 +112,8 @@ export const DebtPaymentModal = ({
   const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
   const [shareCancelConfirmOpen, setShareCancelConfirmOpen] = useState(false);
   const [transactionRefDisplay, setTransactionRefDisplay] = useState('');
+  const [incomeAllocIncomeId, setIncomeAllocIncomeId] = useState('');
+  const [incomeAllocAmountStr, setIncomeAllocAmountStr] = useState('');
   const receiptSectionRef = useRef<HTMLDivElement>(null);
   const isReceiptInteractionRef = useRef(false);
   const receiptProtectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,6 +175,8 @@ export const DebtPaymentModal = ({
     wasOpenRef.current = true;
     if (!justOpened) return;
 
+    void refetchBalances();
+
     const first = payableDebts[0];
     setSelectedDebtId(first?.id ?? '');
     setPaymentAmountDisplay('');
@@ -178,18 +184,24 @@ export const DebtPaymentModal = ({
     setPaymentMethod('');
     setNotes('');
     setTransactionRefDisplay('');
+    setIncomeAllocIncomeId('');
+    setIncomeAllocAmountStr('');
     if (shareFlowLocked && initialReceiptFiles?.length) {
       setReceiptFiles(initialReceiptFiles.filter((file) => getReceiptValidationError(file) === null));
     } else if (!shareFlowLocked) {
       setReceiptFiles([]);
     }
-  }, [isOpen, shareFlowLocked, initialReceiptFilesKey, initialReceiptFiles, payableDebts]);
+  }, [isOpen, shareFlowLocked, initialReceiptFilesKey, initialReceiptFiles, payableDebts, refetchBalances]);
 
   useEffect(() => {
     if (!isOpen || payableDebts.length === 0) return;
     if (selectedDebtId && payableDebts.some((d) => d.id === selectedDebtId)) return;
     setSelectedDebtId(payableDebts[0].id);
   }, [isOpen, payableDebts, selectedDebtId]);
+
+  // Do not clear income allocation on every paymentMethod change: that races with
+  // IncomeAllocationOptionalSection's auto-pick (parent useEffect runs after child and wiped selection).
+  // Clearing on modal open (above) and invalid income for the new bank are handled inside the section.
 
   useEffect(() => {
     if (!shareFlowLocked || !isOpen || aiAutofillStatus === 'loading') return;
@@ -205,9 +217,19 @@ export const DebtPaymentModal = ({
       const parsed = new Date(d.createDate);
       if (!Number.isNaN(parsed.getTime())) setPaymentDate(parsed);
     }
-    if (d.description) setNotes(d.description);
-    if (d.transactionId) setTransactionRefDisplay(d.transactionId.trim());
-  }, [shareFlowLocked, isOpen, aiAutofillStatus, aiAutofillRequestId, aiAutofillData]);
+    const refLines: string[] = [];
+    if (d.referenceNumber) {
+      refLines.push(`${t('shareReceipt.aiRefLinePrefix', 'Ref')}: ${d.referenceNumber}`);
+    }
+    if (d.paymentCode) {
+      refLines.push(`${t('shareReceipt.aiPaymentCodeLinePrefix', 'Payment code')}: ${d.paymentCode}`);
+    }
+    const extra = refLines.join('\n');
+    const baseNote = d.description?.trim() ?? '';
+    const mergedNotes = extra ? (baseNote ? `${baseNote}\n${extra}` : extra) : baseNote;
+    if (mergedNotes) setNotes(mergedNotes);
+    if (d.transactionId) setTransactionRefDisplay(d.transactionId);
+  }, [shareFlowLocked, isOpen, aiAutofillStatus, aiAutofillRequestId, aiAutofillData, t]);
 
   const receiptPreviewUrls = useMemo(
     () => receiptFiles.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : null)),
@@ -353,10 +375,13 @@ export const DebtPaymentModal = ({
       }
     }
 
+    if (!isValidDebtPaymentBankAccountId(paymentMethod)) {
+      toast.error(t('debt.payment.bankAccountRequired', 'Pilih rekening sumber dana untuk melanjutkan pembayaran.'));
+      return;
+    }
+
     if (insufficientBalance) {
-      toast.error(
-        t('debt.payment.insufficientBalance', 'Saldo metode pembayaran tidak mencukupi untuk jumlah pembayaran.')
-      );
+      toast.error(t('debt.payment.insufficientBalance', 'Saldo rekening tidak mencukupi untuk pembayaran ini.'));
       return;
     }
 
@@ -371,14 +396,24 @@ export const DebtPaymentModal = ({
       if (!confirmed) return;
     }
 
+    let incomeAllocation: DebtPaymentModalSubmitPayload['incomeAllocation'];
+    if (incomeAllocIncomeId.trim()) {
+      const raw = incomeAllocAmountStr.trim().replace(/\s/g, '').replace(/,/g, '.');
+      const amt = parseFloat(raw);
+      if (Number.isFinite(amt) && amt > 0) {
+        incomeAllocation = { income_transaction_id: incomeAllocIncomeId.trim(), amount: amt };
+      }
+    }
+
     const paymentData: DebtPaymentModalSubmitPayload = {
       debtId: selectedDebt.id,
       paymentAmount: paymentAmountNum,
       paymentDate: paymentDate ? format(paymentDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-      paymentMethod: paymentMethod || undefined,
+      paymentMethod: paymentMethod.trim(),
       notes: notes || undefined,
-      transactionReference: shareFlowLocked ? transactionRefDisplay.trim() : undefined,
+      transactionReference: shareFlowLocked && transactionRefDisplay.trim() ? transactionRefDisplay : undefined,
       receiptFile: shareFlowLocked ? receiptFiles[0] : undefined,
+      incomeAllocation,
     };
 
     const success = await onSubmit(paymentData);
@@ -403,11 +438,25 @@ export const DebtPaymentModal = ({
       !transactionRefDisplay.trim() ||
       receiptFiles.length === 0);
 
+  const showAiIdentifierReviewHint = useMemo(
+    () =>
+      Boolean(
+        shareFlowLocked &&
+          aiAutofillStatus === 'success' &&
+          aiAutofillData &&
+          (aiAutofillData.transactionIdNeedsReview === true ||
+            aiAutofillData.referenceNumberNeedsReview === true ||
+            aiAutofillData.paymentCodeNeedsReview === true),
+      ),
+    [shareFlowLocked, aiAutofillStatus, aiAutofillData],
+  );
+
   const submitDisabled =
     isLoading ||
     !selectedDebt ||
     !paymentAmountNum ||
     paymentAmountNum <= 0 ||
+    !isValidDebtPaymentBankAccountId(paymentMethod) ||
     insufficientBalance ||
     shareSubmitBlocked;
 
@@ -635,6 +684,17 @@ export const DebtPaymentModal = ({
                     )}
                   </p>
                 ) : null}
+                {showAiIdentifierReviewHint ? (
+                  <Alert className="mt-2 border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {t(
+                        'shareReceipt.aiIdentifierReviewHint',
+                        'AI flagged reference numbers or codes on the receipt for manual verification against the original image (e.g. truncated or uncertain ID).',
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
               </div>
             ) : null}
 
@@ -686,9 +746,17 @@ export const DebtPaymentModal = ({
             </div>
 
             <div>
-              <Label htmlFor="payment_method">{t('debt.payment.method', 'Payment Method')}</Label>
+              <Label htmlFor="payment_method">
+                {t('debt.payment.method', 'Payment Method')} <span className="text-red-500">*</span>
+              </Label>
               {isMobile ? (
-                <Drawer open={paymentMethodDrawerOpen} onOpenChange={setPaymentMethodDrawerOpen}>
+                <Drawer
+                  open={paymentMethodDrawerOpen}
+                  onOpenChange={(open) => {
+                    setPaymentMethodDrawerOpen(open);
+                    if (open) void refetchBalances();
+                  }}
+                >
                   <DrawerTrigger asChild>
                     <Button
                       type="button"
@@ -755,7 +823,13 @@ export const DebtPaymentModal = ({
                   </DrawerContent>
                 </Drawer>
               ) : (
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={setPaymentMethod}
+                  onOpenChange={(open) => {
+                    if (open) void refetchBalances();
+                  }}
+                >
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder={t('debt.payment.selectMethod', 'Select payment method')}>
                       {paymentMethod && bankAccounts.length > 0
@@ -787,14 +861,21 @@ export const DebtPaymentModal = ({
               )}
               {insufficientBalance && (
                 <p className="text-xs text-red-600 mt-1">
-                  {t(
-                    'debt.payment.insufficientBalance',
-                    'Saldo metode pembayaran tidak mencukupi untuk jumlah pembayaran.'
-                  )}{' '}
+                  {t('debt.payment.insufficientBalance', 'Saldo rekening tidak mencukupi untuk pembayaran ini.')}{' '}
                   ({t('debt.payment.balance', 'Balance')}: {formatToRupiah(selectedAccountBalance ?? 0)})
                 </p>
               )}
             </div>
+
+            <IncomeAllocationOptionalSection
+              bankAccountId={isValidDebtPaymentBankAccountId(paymentMethod) ? paymentMethod.trim() : undefined}
+              referenceAmount={paymentAmountNum}
+              referenceDate={paymentDate ? format(paymentDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
+              selectedIncomeId={incomeAllocIncomeId}
+              onSelectedIncomeId={setIncomeAllocIncomeId}
+              allocationAmountStr={incomeAllocAmountStr}
+              onAllocationAmountStrChange={setIncomeAllocAmountStr}
+            />
 
             <div>
               <Label htmlFor="notes">{t('debt.payment.notes', 'Notes')}</Label>
