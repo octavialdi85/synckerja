@@ -975,6 +975,20 @@ const SocialMediaContent = () => {
             production_status: null
           });
         }
+      } else if (field === 'approved' && value === true) {
+        // Toggle / flow approved tanpa modal (mis. shouldShowModal false karena post_date, atau status bukan Need Review):
+        // jangan simpan hanya approved=true — selaraskan status + completion_date agar kolom Status tidak tertinggal "Need Review".
+        const plan = contentPlans.find((p) => p.id === id);
+        if (plan) {
+          const completionDateToUse = plan.completion_date || new Date().toISOString();
+          updateContentPlan(id, {
+            approved: true,
+            status: 'Approved',
+            completion_date: completionDateToUse,
+          });
+        } else {
+          updateContentPlan(id, { approved: true });
+        }
       } else {
         // Regular field update
         updateContentPlan(id, { [field]: value });

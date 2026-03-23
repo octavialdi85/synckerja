@@ -894,13 +894,26 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '180px',
         maxWidth: '180px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <Select value={plan.status || 'none'} onValueChange={value => {
-          if (value === 'none') {
-            onStatusChange(plan.id, '');
-          } else {
-            onStatusChange(plan.id, value);
-          }
-        }}>
+          <Select
+            value={plan.approved ? 'Approved' : (plan.status || 'none')}
+            onValueChange={value => {
+              if (value === 'none') {
+                if (plan.approved) {
+                  onFieldChange(plan.id, 'completion_date', null);
+                  onFieldChange(plan.id, 'approved', false);
+                }
+                onStatusChange(plan.id, '');
+                return;
+              }
+              if (plan.approved && value !== 'Approved') {
+                onFieldChange(plan.id, 'completion_date', null);
+                onFieldChange(plan.id, 'approved', false);
+                onStatusChange(plan.id, value);
+                return;
+              }
+              onStatusChange(plan.id, value);
+            }}
+          >
               <SelectTrigger className="h-8 text-xs border-gray-200 text-left">
                 <SelectValue />
               </SelectTrigger>
