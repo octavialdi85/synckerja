@@ -317,6 +317,8 @@ const DailyTaskContent = () => {
             contentTitle={previewPlan.title ?? undefined}
             contentType={previewPlan.content_type?.name}
             postDate={previewPlan.post_date ?? undefined}
+            serviceName={previewPlan.service?.name ?? null}
+            picProductionName={previewPlan.pic_production?.full_name ?? null}
             onCarouselChange={() => {
               queryClient.invalidateQueries({ queryKey: ['social-media-plan', previewPlan.id] });
               queryClient.invalidateQueries({ queryKey: ['social-media-carousel', previewPlan.id] });

@@ -2593,6 +2593,10 @@ const idTranslations: TranslationDictionary = {
   "socialMediaDashboard.carousel.clearAllHint": "Untuk mengunggah hasil revisi, hapus semua gambar terlebih dahulu.",
   "socialMediaDashboard.carousel.clearing": "Menghapus...",
   "socialMediaDashboard.carousel.clearAllFirst": "Hapus semua gambar terlebih dahulu",
+  "socialMediaDashboard.reviewModal.service": "Layanan",
+  "socialMediaDashboard.reviewModal.noService": "—",
+  "socialMediaDashboard.reviewModal.picProduction": "PIC Produksi",
+  "socialMediaDashboard.reviewModal.noPicProduction": "—",
 
   "subscription.overview.pageTitle": "Ringkasan Langganan",
   "subscription.overview.pageSubtitle": "Status paket dan penggunaan",
@@ -6643,6 +6647,10 @@ const enTranslations: TranslationDictionary = {
   "socialMediaDashboard.carousel.clearAllHint": "To upload revision result, clear all images first.",
   "socialMediaDashboard.carousel.clearing": "Clearing...",
   "socialMediaDashboard.carousel.clearAllFirst": "Clear all images first",
+  "socialMediaDashboard.reviewModal.service": "Service",
+  "socialMediaDashboard.reviewModal.noService": "—",
+  "socialMediaDashboard.reviewModal.picProduction": "PIC Production",
+  "socialMediaDashboard.reviewModal.noPicProduction": "—",
 
   "subscription.overview.pageTitle": "Subscription Overview",
   "subscription.overview.pageSubtitle": "Plan status and usage",

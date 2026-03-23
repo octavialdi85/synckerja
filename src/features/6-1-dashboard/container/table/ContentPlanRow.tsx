@@ -1149,6 +1149,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           onProductionStatusChange(plan.id, null);
         }
     }} socialMediaPlanId={plan.id} planTitle={plan.title} contentTitle={plan.title} contentType={contentTypeName} postDate={plan.post_date}
+    serviceName={plan.service?.name ?? null}
+    picProductionName={plan.pic_production?.full_name ?? null}
     onCarouselChange={onCarouselChange}
     onCarouselFirstUploadSuccess={onCarouselFirstUploadSuccess}
     onCarouselAllRemoved={onCarouselAllRemoved}

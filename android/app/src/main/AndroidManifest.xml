@@ -95,8 +95,7 @@
     </application>
 
     <!-- Permissions -->
-
-    <!-- Strip broad media permissions if pulled in from libraries (Play Photo/Video policy). -->
+    <!-- Strip broad media/storage permissions if merged in from AARs (Play Photo/Video policy). -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />

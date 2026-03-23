@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
-import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2, Upload, GripVertical, Trash2, ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2, Upload, GripVertical, Trash2, ImageIcon, ChevronDown, ChevronUp, User, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OptimizedCommentPanel } from './OptimizedCommentPanel';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
@@ -169,6 +169,10 @@ interface GoogleDriveLinkDialogProps {
   contentTitle?: string;
   contentType?: string;
   postDate?: string;
+  /** Service name (from joined services.name) */
+  serviceName?: string | null;
+  /** PIC Production display name (from joined employees.full_name) */
+  picProductionName?: string | null;
   productionApproved?: boolean; // Lock input field if production is approved
   productionStatus?: string | null; // When 'Request Revision', show "Clear all carousel" button
   onCarouselChange?: () => void; // Called after carousel images change (for cache invalidation)
@@ -190,6 +194,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   contentTitle,
   contentType,
   postDate,
+  serviceName,
+  picProductionName,
   productionApproved = false,
   productionStatus,
   onCarouselChange,
@@ -763,7 +769,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
               <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium text-sm text-gray-900">Preview</h4>
-                  <div className="flex items-center gap-4 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs justify-end">
                     <div className="flex items-center gap-1">
                       <FileText className="h-3 w-3 text-gray-600" />
                       <span className="text-gray-700 font-medium">Title:</span>
@@ -778,6 +784,24 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                       <Calendar className="h-3 w-3 text-gray-600" />
                       <span className="text-gray-700 font-medium">Date:</span>
                       <span className="text-gray-800">{postDate ? formatDisplayDate(postDate) : 'No date'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Briefcase className="h-3 w-3 text-gray-600 flex-shrink-0" />
+                      <span className="text-gray-700 font-medium flex-shrink-0">{t('socialMediaDashboard.reviewModal.service', 'Service')}:</span>
+                      <span className="text-gray-800 truncate max-w-[180px]" title={serviceName?.trim() || undefined}>
+                        {serviceName?.trim()
+                          ? serviceName.trim()
+                          : t('socialMediaDashboard.reviewModal.noService', '—')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <User className="h-3 w-3 text-gray-600 flex-shrink-0" />
+                      <span className="text-gray-700 font-medium flex-shrink-0">{t('socialMediaDashboard.reviewModal.picProduction', 'PIC Production')}:</span>
+                      <span className="text-gray-800 truncate max-w-[180px]" title={picProductionName?.trim() || undefined}>
+                        {picProductionName?.trim()
+                          ? picProductionName.trim()
+                          : t('socialMediaDashboard.reviewModal.noPicProduction', '—')}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -1400,6 +1400,8 @@ const SocialMediaContent = () => {
               contentTitle={notificationPreviewPlan.title ?? undefined}
               contentType={notificationPreviewPlan.content_type?.name}
               postDate={notificationPreviewPlan.post_date ?? undefined}
+              serviceName={notificationPreviewPlan.service?.name ?? null}
+              picProductionName={notificationPreviewPlan.pic_production?.full_name ?? null}
               onApprove={() => {
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved', true);
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', new Date().toISOString());
