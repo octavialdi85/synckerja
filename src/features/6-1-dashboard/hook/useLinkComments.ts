@@ -34,14 +34,39 @@ export const useLinkComments = (socialMediaPlanId: string, linkUrl?: string) => 
     return addCommentMutation.mutateAsync(params);
   }, [addCommentMutation.mutateAsync]);
 
+  const safeUpdateComment = useCallback(async (commentId: string, commentText: string) => {
+    if (!commentId || typeof commentId !== 'string') {
+      throw new Error('Comment id is required');
+    }
+    if (commentText === undefined || commentText === null || typeof commentText !== 'string') {
+      throw new Error('Comment text is required');
+    }
+    if (!commentText.trim()) {
+      throw new Error('Comment text cannot be empty');
+    }
+
+    return updateCommentMutation.mutateAsync({
+      commentId,
+      commentText: commentText.trim()
+    });
+  }, [updateCommentMutation.mutateAsync]);
+
+  const safeDeleteComment = useCallback(async (commentId: string) => {
+    if (!commentId || typeof commentId !== 'string') {
+      throw new Error('Comment id is required');
+    }
+
+    return deleteCommentMutation.mutateAsync(commentId);
+  }, [deleteCommentMutation.mutateAsync]);
+
   // Memoize return object to prevent unnecessary re-renders
   return useMemo(() => ({
     comments,
     isLoading,
     error,
     addComment: safeAddComment,
-    updateComment: updateCommentMutation.mutate,
-    deleteComment: deleteCommentMutation.mutate,
+    updateComment: safeUpdateComment,
+    deleteComment: safeDeleteComment,
     isAddingComment: addCommentMutation.isPending,
     isUpdatingComment: updateCommentMutation.isPending,
     isDeletingComment: deleteCommentMutation.isPending
@@ -50,10 +75,10 @@ export const useLinkComments = (socialMediaPlanId: string, linkUrl?: string) => 
     isLoading,
     error,
     safeAddComment,
+    safeUpdateComment,
+    safeDeleteComment,
     addCommentMutation.isPending,
-    updateCommentMutation.mutate,
     updateCommentMutation.isPending,
-    deleteCommentMutation.mutate,
     deleteCommentMutation.isPending
   ]);
 };
