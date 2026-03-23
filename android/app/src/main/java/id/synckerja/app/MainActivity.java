@@ -15,6 +15,9 @@ import android.util.Log;
 import android.view.View;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.core.os.BundleCompat;
@@ -42,10 +45,17 @@ public class MainActivity extends BridgeActivity {
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         // Custom plugins MUST register before super.onCreate() so Capacitor bridge exposes them
         // to JS (PluginHeaders). Otherwise: "ShareIntent plugin is not implemented on android".
+        ActivityResultLauncher<PickVisualMediaRequest> photoPickLauncher =
+            registerForActivityResult(
+                new ActivityResultContracts.PickMultipleVisualMedia(20),
+                uris -> PhotoPickerPlugin.deliverPickerResult(MainActivity.this, uris));
+        PhotoPickerPlugin.setPhotoPickLauncher(photoPickLauncher);
+
         registerPlugin(ZoomDisablePlugin.class);
         registerPlugin(SafeAreaInsetsPlugin.class);
         registerPlugin(NoOverscrollPlugin.class);
         registerPlugin(ShareIntentPlugin.class);
+        registerPlugin(PhotoPickerPlugin.class);
         super.onCreate(savedInstanceState);
         // Solid black system navigation bar (3-button / gesture strip) + light icons — re-apply after Bridge.
         applyBlackSystemNavigationBar();

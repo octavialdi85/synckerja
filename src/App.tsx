@@ -25,7 +25,7 @@ import MobileCreateOrganization from "./mobile/login/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
 import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
-import { TermsOfServicePage, PrivacyPolicyPage } from "./features/policy";
+import { TermsOfServicePage, PrivacyPolicyPage, AccountDeletionPage } from "./features/policy";
 import NotFound from "./features/1-login/pages/NotFound";
 import { Capacitor } from "@capacitor/core";
 import { tryConsumeShareBack } from "@/mobile/shareIntent/shareBackGuard";
@@ -537,6 +537,7 @@ const App = () => (
               <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
               <Route path="/policy/terms" element={<TermsOfServicePage />} />
               <Route path="/policy/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/policy/account-deletion" element={<AccountDeletionPage />} />
               
               {/* Public Candidate Application Route */}
               <Route path="/candidate/apply" element={

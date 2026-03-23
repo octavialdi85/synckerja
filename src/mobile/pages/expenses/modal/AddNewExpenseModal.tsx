@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/features/ui/alert";
 import { AlertCircle, Camera, FileText, Upload, X } from "lucide-react";
 import { CameraModal } from "@/mobile/components/CameraModal";
-import { Camera as CapacitorCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { pickReceiptImageFiles } from "@/mobile/utils/pickReceiptFromGallery";
 import {
   addExpenseSchema,
   type AddExpenseFormData,
@@ -626,25 +626,11 @@ export function AddNewExpenseModal({
 
   const handlePickReceiptFromGallery = async () => {
     try {
-      const photo = await CapacitorCamera.getPhoto({
-        source: CameraSource.Photos,
-        resultType: CameraResultType.Uri,
-        quality: 85,
-      });
-      if (!photo.webPath) {
-        toast.error(t("expenses.receiptPickFailed", "Failed to pick receipt file"));
-        return;
+      const files = await pickReceiptImageFiles({ maxItems: 20, mediaType: "imageOnly" });
+      if (!files.length) return;
+      for (const file of files) {
+        addReceiptFilesSafe(file);
       }
-      const response = await fetch(photo.webPath);
-      const blob = await response.blob();
-      const mimeType = (blob.type || photo.format || "image/jpeg").toLowerCase();
-      const extension = mimeType.includes("png")
-        ? "png"
-        : mimeType.includes("webp")
-          ? "webp"
-          : "jpg";
-      const file = new File([blob], `expense_receipt_${Date.now()}.${extension}`, { type: mimeType });
-      addReceiptFilesSafe(file);
       requestAnimationFrame(() => {
         receiptSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });

@@ -1,8 +1,8 @@
 import { Capacitor } from "@capacitor/core";
-import type { ShareIntentFile } from "@/plugins/share-intent";
-
 /** Build web `File` objects from native absolute paths copied into app cache. */
-export async function shareIntentFilesToFiles(items: ShareIntentFile[]): Promise<File[]> {
+export async function shareIntentFilesToFiles(
+  items: Array<{ path: string; name: string; mimeType: string }>,
+): Promise<File[]> {
   const out: File[] = [];
   for (const item of items) {
     const url = Capacitor.convertFileSrc(item.path);

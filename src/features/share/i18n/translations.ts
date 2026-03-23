@@ -4037,7 +4037,23 @@ const idTranslations: TranslationDictionary = {
   "detectFromImage.errorCharacterNoReferencePhoto": "Karakter yang dipilih belum punya foto referensi. Tambahkan di Digital Assets > Karakter.",
   "detectFromImage.errorCharacterReferenceLoadFailed": "Gagal memuat foto referensi karakter.",
   "detectFromImage.errorRequestTooLarge": "Request gagal (timeout atau payload terlalu besar). Kurangi jumlah atau ukuran gambar referensi lalu coba lagi.",
-  "detectFromImage.errorPayloadTooLarge": "Gambar referensi terlalu banyak atau terlalu besar. Kurangi jumlah gambar atau gunakan file lebih kecil agar tetap di bawah batas request."
+  "detectFromImage.errorPayloadTooLarge": "Gambar referensi terlalu banyak atau terlalu besar. Kurangi jumlah gambar atau gunakan file lebih kecil agar tetap di bawah batas request.",
+  "policy.accountDeletion.title": "Penghapusan akun dan data",
+  "policy.accountDeletion.lastUpdated": "Terakhir diperbarui: 23 Maret 2026",
+  "policy.accountDeletion.intro": "Halaman ini menjelaskan cara meminta penghapusan akun ProfitLoop Anda dan data terkait, sesuai kebijakan toko aplikasi dan perlindungan data.",
+  "policy.accountDeletion.scopeTitle": "Apa yang dihapus",
+  "policy.accountDeletion.scopeBody": "Setelah permintaan diverifikasi, kami akan menonaktifkan akun Anda dan menjadwalkan penghapusan data pribadi yang terkait dengan akun tersebut di layanan kami, kecuali data yang wajib kami simpan untuk kewajiban hukum, pajak, atau sengketa.",
+  "policy.accountDeletion.timelineTitle": "Jangka waktu",
+  "policy.accountDeletion.timelineBody": "Penghapusan biasanya selesai dalam waktu singkat setelah permintaan disetujui. Salinan cadangan sistem dapat menunda penghapusan penuh hingga sekitar 30 hari, sebagaimana dijelaskan di Kebijakan Privasi kami.",
+  "policy.accountDeletion.howTitle": "Cara mengajukan penghapusan",
+  "policy.accountDeletion.howStep1": "Kirim email dari alamat yang terdaftar di akun Anda ke tim kami (lihat kontak di bawah) dengan subjek yang jelas, misalnya: \"Permintaan penghapusan akun ProfitLoop\".",
+  "policy.accountDeletion.howStep2": "Cantumkan nama lengkap, email akun, dan organisasi/workspace (jika ada) agar kami dapat memverifikasi pemilik akun.",
+  "policy.accountDeletion.howStep3": "Kami akan mengonfirmasi permintaan Anda dan memproses sesuai prosedur internal serta ketentuan hukum yang berlaku.",
+  "policy.accountDeletion.contactTitle": "Kontak",
+  "policy.accountDeletion.contactBody": "Untuk permintaan penghapusan akun dan pertanyaan privasi lainnya:",
+  "policy.accountDeletion.privacyLink": "Kebijakan Privasi",
+  "policy.accountDeletion.backToApp": "Kembali ke aplikasi",
+  "policy.accountDeletion.brand": "ProfitLoop"
 };
 
 const enTranslations: TranslationDictionary = {
@@ -8074,7 +8090,23 @@ const enTranslations: TranslationDictionary = {
   "detectFromImage.errorCharacterNoReferencePhoto": "Selected character has no reference photo. Add one in Digital Assets > Character.",
   "detectFromImage.errorCharacterReferenceLoadFailed": "Failed to load character reference photo.",
   "detectFromImage.errorRequestTooLarge": "Request failed (timeout or payload too large). Use fewer or smaller reference images and try again.",
-  "detectFromImage.errorPayloadTooLarge": "Too many or too large reference images. Remove some images or use smaller files to stay under the request limit."
+  "detectFromImage.errorPayloadTooLarge": "Too many or too large reference images. Remove some images or use smaller files to stay under the request limit.",
+  "policy.accountDeletion.title": "Account and data deletion",
+  "policy.accountDeletion.lastUpdated": "Last updated: 23 March 2026",
+  "policy.accountDeletion.intro": "This page explains how to request deletion of your ProfitLoop account and related data, in line with app store policies and data protection requirements.",
+  "policy.accountDeletion.scopeTitle": "What we delete",
+  "policy.accountDeletion.scopeBody": "After we verify your request, we will deactivate your account and schedule deletion of personal data associated with your account in our services, except where we must retain information for legal, tax, or dispute obligations.",
+  "policy.accountDeletion.timelineTitle": "Timeline",
+  "policy.accountDeletion.timelineBody": "Deletion is usually completed shortly after your request is approved. System backups may delay complete erasure for up to approximately 30 days, as described in our Privacy Policy.",
+  "policy.accountDeletion.howTitle": "How to request deletion",
+  "policy.accountDeletion.howStep1": "Send an email from the address registered on your account to our team (see below) with a clear subject line, for example: \"ProfitLoop account deletion request\".",
+  "policy.accountDeletion.howStep2": "Include your full name, account email, and organization/workspace (if any) so we can verify account ownership.",
+  "policy.accountDeletion.howStep3": "We will confirm your request and process it according to our internal procedures and applicable law.",
+  "policy.accountDeletion.contactTitle": "Contact",
+  "policy.accountDeletion.contactBody": "For account deletion requests and other privacy questions:",
+  "policy.accountDeletion.privacyLink": "Privacy Policy",
+  "policy.accountDeletion.backToApp": "Back to app",
+  "policy.accountDeletion.brand": "ProfitLoop"
 };
 
 export const defaultTranslations: Record<AppLanguage, TranslationDictionary> = {

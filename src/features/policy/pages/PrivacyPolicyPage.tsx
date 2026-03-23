@@ -123,6 +123,17 @@ export default function PrivacyPolicyPage() {
           <section className={sectionClass}>
             <h2 className={headingClass}>Data Deletion and Deactivation</h2>
             <p className={paraClass}>You can delete or deactivate your account and data via your account settings or by contacting us. Note: Backup retention may delay full deletion for up to 30 days.</p>
+            <p className={paraClass}>
+              For step-by-step account deletion instructions (including the URL required for app store listings), see our{' '}
+              <Link to="/policy/account-deletion" className="text-blue-600 hover:underline">
+                Account and data deletion
+              </Link>{' '}
+              page, or open{' '}
+              <a href={`${BASE_URL}/policy/account-deletion`} className="text-blue-600 hover:underline break-all" target="_blank" rel="noopener noreferrer">
+                {`${BASE_URL}/policy/account-deletion`}
+              </a>
+              .
+            </p>
           </section>
 
           <section className={sectionClass}>

@@ -24,7 +24,7 @@ import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { CameraModal } from "@/mobile/components/CameraModal";
 import { MobileIncomeTransactionDateField } from "../components/MobileIncomeTransactionDateField";
 import { toast } from "sonner";
-import { Camera as CapacitorCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { pickReceiptImageFiles } from "@/mobile/utils/pickReceiptFromGallery";
 import { format } from "date-fns";
 import type { ExpenseReceiptAutofillData } from "@/mobile/pages/expenses/services/analyzeExpenseReceiptWithAI";
 import { isOtherIncomeType } from "@/features/4-1-dashboard/utils/incomeOtherType";
@@ -348,26 +348,10 @@ export function MobileAddIncomeTransactionModal({
 
   const handlePickReceiptFromGallery = useCallback(async () => {
     try {
-      const photo = await CapacitorCamera.getPhoto({
-        source: CameraSource.Photos,
-        resultType: CameraResultType.Uri,
-        quality: 85,
-      });
-      if (!photo.webPath) {
-        toast.error(t("expenses.receiptPickFailed", "Failed to pick receipt file"));
-        return;
-      }
+      const files = await pickReceiptImageFiles({ maxItems: 10, mediaType: "imageOnly" });
+      if (!files.length) return;
 
-      const response = await fetch(photo.webPath);
-      const blob = await response.blob();
-      const mimeType = (blob.type || photo.format || "image/jpeg").toLowerCase();
-      const extension = mimeType.includes("png")
-        ? "png"
-        : mimeType.includes("webp")
-          ? "webp"
-          : "jpg";
-      const file = new File([blob], `income_receipt_${Date.now()}.${extension}`, { type: mimeType });
-
+      const file = files[0];
       const validationError = getReceiptValidationError(file);
       if (validationError === "size") {
         toast.error(t("expenses.receiptTooLarge", "File must be less than 10MB"));
