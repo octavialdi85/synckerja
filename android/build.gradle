@@ -1,5 +1,18 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
+// Cordova template adds flatDir (Gradle warns). Patch on disk before subprojects configure — no Node required.
+def _cordovaGradle = file("${rootDir}/capacitor-cordova-android-plugins/build.gradle")
+if (_cordovaGradle.exists()) {
+    try {
+        String t = _cordovaGradle.getText("UTF-8")
+        String stripped = t.replaceAll(/\s*flatDir\s*\{[^}]*\}/, "")
+        if (!stripped.equals(t)) {
+            _cordovaGradle.write(stripped, "UTF-8")
+        }
+    } catch (Throwable ignored) {
+    }
+}
+
 buildscript {
     
     repositories {

@@ -1329,33 +1329,43 @@ export function ExpenseDashboard() {
                 <tr>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Expense</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tableAmount', 'Amount')}
+                  </th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tableWithdrawalFromBalance', 'Withdrawal')}
+                  </th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tablePaymentDate', 'Payment Date')}
+                  </th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
                     {t('expenses.tableTransactionId', 'Transaction ID')}
                   </th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Payment Date</th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Next Payment</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Type</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Category</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Department</th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Amount</th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Withdrawal From Balance</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Description</th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request By</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Recurring</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Status</th>
                   <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm" title={t('expenses.receipt', 'Receipt')}>{t('expenses.receipt', 'Receipt')}</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tableRequestBy', 'Request By')}
+                  </th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">
+                    {t('expenses.tableNextPayment', 'Next Payment')}
+                  </th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {(isLoading || isLoadingPurchaseRequests) ? (
                   <tr>
-                    <td colSpan={14} className="py-8 text-center text-gray-500">
+                    <td colSpan={15} className="py-8 text-center text-gray-500">
                       Loading expenses...
                     </td>
                   </tr>
                 ) : allExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="py-8 text-center text-gray-500">
+                    <td colSpan={15} className="py-8 text-center text-gray-500">
                       No expenses found. Click "Add Expense" to create your first expense.
                     </td>
                   </tr>
@@ -1389,6 +1399,19 @@ export function ExpenseDashboard() {
                             {requestTitle || expense.expense_name || '-'}
                           </div>
                         </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">{formatCurrency(expense.amount)}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={
+                            (expense as any).withdrawal_from_balance_bank_account?.name 
+                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
+                              || '-'
+                          }>
+                            {(expense as any).withdrawal_from_balance_bank_account?.name 
+                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
+                              || '-'}
+                          </div>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[140px] sm:max-w-[180px] min-w-0">
                           <div
                             className="truncate text-xs sm:text-sm"
@@ -1397,8 +1420,6 @@ export function ExpenseDashboard() {
                             {expense.transaction_reference?.trim() || '—'}
                           </div>
                         </td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
                           <div className="truncate text-xs sm:text-sm" title={expense.expense_type}>
                             {expense.expense_type}
@@ -1414,26 +1435,9 @@ export function ExpenseDashboard() {
                             {expense.department || 'N/A'}
                           </div>
                         </td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">{formatCurrency(expense.amount)}</td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
-                          <div className="truncate text-xs sm:text-sm" title={
-                            (expense as any).withdrawal_from_balance_bank_account?.name 
-                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
-                              || '-'
-                          }>
-                            {(expense as any).withdrawal_from_balance_bank_account?.name 
-                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
-                              || '-'}
-                          </div>
-                        </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
                           <div className="truncate text-xs sm:text-sm" title={expense.description || '-'}>
                             {expense.description || '-'}
-                          </div>
-                        </td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[120px] sm:max-w-[150px] min-w-0">
-                          <div className="truncate text-xs sm:text-sm" title={requesterName || '-'}>
-                            {requesterName || '-'}
                           </div>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
@@ -1455,6 +1459,12 @@ export function ExpenseDashboard() {
                             )}
                           </div>
                         </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[120px] sm:max-w-[150px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={requesterName || '-'}>
+                            {requesterName || '-'}
+                          </div>
+                        </td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

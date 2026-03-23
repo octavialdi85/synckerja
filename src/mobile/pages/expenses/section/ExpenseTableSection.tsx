@@ -488,13 +488,16 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                     {t("expenses.tableExpense", "Expense")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
-                    {t("expenses.tableTransactionId", "Transaction ID")}
+                    {t("expenses.tableAmount", "Amount")}
+                  </th>
+                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
+                    {t("expenses.tableWithdrawalFromBalance", "Withdrawal")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tablePaymentDate", "Payment Date")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
-                    {t("expenses.tableNextPayment", "Next Payment")}
+                    {t("expenses.tableTransactionId", "Transaction ID")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tableType", "Type")}
@@ -506,16 +509,7 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                     {t("expenses.tableDepartment", "Department")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
-                    {t("expenses.tableAmount", "Amount")}
-                  </th>
-                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
-                    {t("expenses.tableWithdrawalFromBalance", "Withdrawal From Balance")}
-                  </th>
-                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tableDescription", "Description")}
-                  </th>
-                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
-                    {t("expenses.tableRequestBy", "Request By")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tableRecurring", "Recurring")}
@@ -527,6 +521,12 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                     {t("expenses.receipt", "Receipt")}
                   </th>
                   <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
+                    {t("expenses.tableRequestBy", "Request By")}
+                  </th>
+                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
+                    {t("expenses.tableNextPayment", "Next Payment")}
+                  </th>
+                  <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                     {t("expenses.tableActions", "Actions")}
                   </th>
                 </tr>
@@ -536,19 +536,19 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                   Array.from({ length: 6 }).map((_, rowIndex) => (
                     <tr key={rowIndex} className="border-b">
                       <td className="py-2 px-2"><Skeleton className="h-4 w-full max-w-[120px]" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-16" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-28" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-16" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-14" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
-                      <td className="py-2 px-2"><Skeleton className="h-4 w-full max-w-[80px]" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-28" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-20" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-4 w-12" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-5 w-16 rounded-full" /></td>
                       <td className="py-2 px-2 text-center"><Skeleton className="h-5 w-5 rounded-full mx-auto" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-full max-w-[80px]" /></td>
+                      <td className="py-2 px-2"><Skeleton className="h-4 w-16" /></td>
                       <td className="py-2 px-2"><Skeleton className="h-8 w-8 rounded" /></td>
                     </tr>
                   ))
@@ -585,6 +585,17 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                             {requestTitle}
                           </div>
                         </td>
+                        <td className="py-2 px-2 font-medium whitespace-nowrap text-xs">
+                          {formatCurrency(expense.amount)}
+                        </td>
+                        <td className="py-2 px-2 max-w-[150px] min-w-0">
+                          <div className="truncate text-xs" title={withdrawalLabel}>
+                            {withdrawalLabel}
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 whitespace-nowrap text-xs">
+                          {format(new Date(expense.create_date), "dd MMM yyyy")}
+                        </td>
                         <td className="py-2 px-2 max-w-[120px] sm:max-w-[160px] min-w-0">
                           <div
                             className="truncate text-xs font-mono"
@@ -592,14 +603,6 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                           >
                             {expense.transaction_reference?.trim() || "—"}
                           </div>
-                        </td>
-                        <td className="py-2 px-2 whitespace-nowrap text-xs">
-                          {format(new Date(expense.create_date), "dd MMM yyyy")}
-                        </td>
-                        <td className="py-2 px-2 whitespace-nowrap text-xs">
-                          {expense.next_payment_date
-                            ? format(new Date(expense.next_payment_date), "dd MMM yyyy")
-                            : "-"}
                         </td>
                         <td className="py-2 px-2 max-w-[200px] min-w-0">
                           <div className="truncate text-xs" title={expense.expense_type}>
@@ -616,22 +619,9 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                             {expense.department || "N/A"}
                           </div>
                         </td>
-                        <td className="py-2 px-2 font-medium whitespace-nowrap text-xs">
-                          {formatCurrency(expense.amount)}
-                        </td>
-                        <td className="py-2 px-2 max-w-[150px] min-w-0">
-                          <div className="truncate text-xs" title={withdrawalLabel}>
-                            {withdrawalLabel}
-                          </div>
-                        </td>
                         <td className="py-2 px-2 max-w-[200px] min-w-0">
                           <div className="truncate text-xs" title={expense.description || "-"}>
                             {expense.description || "-"}
-                          </div>
-                        </td>
-                        <td className="py-2 px-2 max-w-[120px] min-w-0">
-                          <div className="truncate text-xs" title={requesterName}>
-                            {requesterName}
                           </div>
                         </td>
                         <td className="py-2 px-2 whitespace-nowrap">
@@ -652,6 +642,16 @@ export function ExpenseTableSection({ expenseTable }: ExpenseTableSectionProps) 
                               <span className="text-muted-foreground">—</span>
                             )}
                           </div>
+                        </td>
+                        <td className="py-2 px-2 max-w-[120px] min-w-0">
+                          <div className="truncate text-xs" title={requesterName}>
+                            {requesterName}
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 whitespace-nowrap text-xs">
+                          {expense.next_payment_date
+                            ? format(new Date(expense.next_payment_date), "dd MMM yyyy")
+                            : "-"}
                         </td>
                         <td className="py-2 px-2 whitespace-nowrap">
                           <DropdownMenu>

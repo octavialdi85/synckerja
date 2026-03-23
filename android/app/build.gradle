@@ -7,8 +7,8 @@ android {
         applicationId "id.synckerja.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.1.0"
+        versionCode 11
+        versionName "1.1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -24,9 +24,16 @@ android {
     }
 }
 
-repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+// Android modules do not expose the JVM "testClasses" task; IDEs / some Gradle runs still invoke :app:testClasses.
+tasks.register('testClasses') {
+    group = 'verification'
+    description = 'Compiles debug unit test sources (alias for IDE compatibility).'
+}
+
+afterEvaluate {
+    def compileUnitTests = tasks.findByName('compileDebugUnitTestJavaWithJavac')
+    if (compileUnitTests != null) {
+        tasks.named('testClasses').configure { dependsOn(compileUnitTests) }
     }
 }
 
