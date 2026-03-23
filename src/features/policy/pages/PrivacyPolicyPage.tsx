@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { POLICY_CONTACT_EMAIL, policyContactMailtoHref } from '@/features/policy/contact';
 
 const sectionClass = 'mb-6';
 const headingClass = 'text-lg font-semibold text-slate-800 mt-8 mb-4 first:mt-0';
@@ -149,7 +150,11 @@ export default function PrivacyPolicyPage() {
           <section className={sectionClass}>
             <h2 className={headingClass}>Contact Us</h2>
             <p className={paraClass}>
-              For privacy-related concerns or to exercise your rights, contact us: <a href={`${BASE_URL}/contact-us`} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">{BASE_URL}/contact-us</a>
+              For privacy-related concerns or to exercise your rights, contact us at{' '}
+              <a href={policyContactMailtoHref()} className="text-blue-600 hover:underline break-all">
+                {POLICY_CONTACT_EMAIL}
+              </a>
+              .
             </p>
           </section>
         </div>

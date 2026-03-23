@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { POLICY_CONTACT_EMAIL, policyContactMailtoHref } from "@/features/policy/contact";
 
 const BASE_URL = "https://app.profitloop.id";
 
@@ -84,12 +85,10 @@ export default function AccountDeletionPage() {
             </p>
             <p className={paraClass}>
               <a
-                href={`${BASE_URL}/contact-us`}
+                href={policyContactMailtoHref()}
                 className="text-blue-600 hover:underline break-all"
-                target="_blank"
-                rel="noopener noreferrer"
               >
-                {`${BASE_URL}/contact-us`}
+                {POLICY_CONTACT_EMAIL}
               </a>
             </p>
             <p className={paraClass}>

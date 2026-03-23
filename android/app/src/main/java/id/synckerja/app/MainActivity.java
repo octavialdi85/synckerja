@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.View;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
@@ -42,7 +41,7 @@ public class MainActivity extends BridgeActivity {
         // Edge-to-edge MUST be set before super.onCreate() so the window is configured
         // before the WebView is added. Otherwise WindowInsets stay 0 and content is covered.
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        setStatusBarColorCompat(Color.TRANSPARENT);
         // Custom plugins MUST register before super.onCreate() so Capacitor bridge exposes them
         // to JS (PluginHeaders). Otherwise: "ShareIntent plugin is not implemented on android".
         ActivityResultLauncher<PickVisualMediaRequest> photoPickLauncher =
@@ -87,24 +86,28 @@ public class MainActivity extends BridgeActivity {
         decor.postDelayed(this::applyBlackSystemNavigationBar, 400);
     }
 
+    /** Window#setStatusBarColor is deprecated from API 35; still used for WebView edge-to-edge setup. */
+    @SuppressWarnings("deprecation")
+    private void setStatusBarColorCompat(int color) {
+        getWindow().setStatusBarColor(color);
+    }
+
+    /** Window#setNavigationBarColor is deprecated from API 35; still used for solid nav bar over WebView. */
+    @SuppressWarnings("deprecation")
+    private void setNavigationBarColorCompat(int color) {
+        getWindow().setNavigationBarColor(color);
+    }
+
     /**
      * Opaque black navigation bar app-wide (not transparent over WebView, which reads as white).
      * Clears APPEARANCE_LIGHT_NAVIGATION_BARS so system buttons stay white/light on black.
      */
     private void applyBlackSystemNavigationBar() {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        getWindow().setNavigationBarColor(Color.BLACK);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController c = getWindow().getInsetsController();
-            if (c != null) {
-                c.setSystemBarsAppearance(
-                    0,
-                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-                );
-            }
-        } else {
-            WindowInsetsControllerCompat controller =
-                new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+        setNavigationBarColorCompat(Color.BLACK);
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (controller != null) {
             controller.setAppearanceLightNavigationBars(false);
         }
     }
