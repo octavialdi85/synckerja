@@ -20,6 +20,7 @@ const CONTENT_PLANS_SELECT = `
   pic_production_id,
   pic_production_source,
   google_drive_link,
+  production_revision_baseline_link,
   production_status,
   production_revision_count,
   production_completion_date,

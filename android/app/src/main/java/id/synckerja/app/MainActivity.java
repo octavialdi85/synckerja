@@ -55,12 +55,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NoOverscrollPlugin.class);
         registerPlugin(ShareIntentPlugin.class);
         registerPlugin(PhotoPickerPlugin.class);
+        registerPlugin(NotificationLaunchPlugin.class);
         super.onCreate(savedInstanceState);
         // Solid black system navigation bar (3-button / gesture strip) + light icons — re-apply after Bridge.
         applyBlackSystemNavigationBar();
         scheduleNavigationBarReapply();
         createLiveChatNotificationChannel();
         createAppNotificationsChannel();
+        NotificationLaunchStore.captureFromIntent(getIntent());
         handleShareIntent(getIntent());
     }
 
@@ -68,6 +70,7 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        NotificationLaunchStore.captureFromIntent(intent);
         handleShareIntent(intent);
     }
 
@@ -130,17 +133,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void createAppNotificationsChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm == null) return;
-        NotificationChannel channel = new NotificationChannel(
-            NOTIFICATIONS_CHANNEL_ID,
-            "Notifikasi Aplikasi",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        channel.setDescription("Komentar, persetujuan tugas, dan notifikasi lain");
-        channel.enableVibration(true);
-        nm.createNotificationChannel(channel);
+        AppNotificationChannels.ensureAppNotificationsChannel(this);
     }
 
     private static Uri getSendStreamUri(Intent intent) {

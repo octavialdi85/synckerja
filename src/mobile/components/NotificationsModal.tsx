@@ -26,12 +26,16 @@ import { usePublicReviewToken } from "@/features/6-1-dashboard/hook/usePublicRev
 import { useToast } from "@/features/ui/use-toast";
 import type { CompletionApprovalRow } from "@/features/8-2-DailyTask/services/completionApprovalService";
 import { supabase } from "@/integrations/supabase/client";
+import { SocialMediaLinksMobileModal } from "@/mobile/components/SocialMediaLinksMobileModal";
 
 export interface NotificationsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** When opening from push tap (e.g. plan_status_change), open directly on this tab */
   initialTab?: "comments" | "tasks" | "updates";
+  initialPostedLinksPlanId?: string;
+  initialPostedLinksPlanTitle?: string;
+  initialPostedLinksForceOpen?: boolean;
 }
 
 function getDisplayTitle(row: CompletionApprovalRow): string {
@@ -53,13 +57,57 @@ function getEntityTypeLabel(entityType: string, t: (k: string, fallback: string)
   return t("dailyTask.approval.entitySubstep", "Sub-step");
 }
 
+function isDoneToPostedNotification(item: PlanStatusChangeNotificationRow): boolean {
+  const kindParts = (item.change_kind ?? "")
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+
+  const isDoneKind = kindParts.includes("done");
+  if (!isDoneKind) return false;
+
+  const newValue = (item.new_value ?? "").trim().toLowerCase();
+  if (newValue === "posted" || newValue === "sudah diposting") return true;
+
+  const firstBodyLine = (item.body ?? "").split("\n")[0]?.trim().toLowerCase() ?? "";
+  if (!firstBodyLine) return false;
+
+  const notPostedToPosted =
+    firstBodyLine.includes("not posted") &&
+    firstBodyLine.includes("posted") &&
+    !firstBodyLine.includes("posted to not posted");
+  const belumToSudah =
+    firstBodyLine.includes("belum diposting") &&
+    firstBodyLine.includes("sudah diposting") &&
+    !firstBodyLine.includes("sudah diposting -> belum diposting");
+
+  const result = notPostedToPosted || belumToSudah;
+  return result;
+}
+
+function notifDebugUpdates(event: string, payload?: unknown) {
+  try {
+    const body = payload == null ? "" : ` ${JSON.stringify(payload)}`;
+    console.info(`[NOTIF_DEBUG][updatesTab] ${event}${body}`);
+  } catch {
+    console.info(`[NOTIF_DEBUG][updatesTab] ${event} [payload-unserializable]`);
+  }
+}
+
 /**
  * Modal fullscreen notifikasi untuk halaman home Android.
  * Tab Comments: notifikasi komentar (unread); klik = mark read, tutup modal, navigate ke /review.
  * Tab Tasks: Pending Approval; tombol "View Content" sama seperti jobdesc → navigate ke /review.
  * Mengikuti aturan .cursor/rules/modal-android-fullscreen.mdc.
  */
-export function NotificationsModal({ open, onOpenChange, initialTab }: NotificationsModalProps) {
+export function NotificationsModal({
+  open,
+  onOpenChange,
+  initialTab,
+  initialPostedLinksPlanId,
+  initialPostedLinksPlanTitle,
+  initialPostedLinksForceOpen = false,
+}: NotificationsModalProps) {
   const isMobile = useIsMobile();
   const { t, dateLocale } = useAppTranslation();
   const navigate = useNavigate();
@@ -73,8 +121,12 @@ export function NotificationsModal({ open, onOpenChange, initialTab }: Notificat
     if (open && initialTab) setActiveTab(initialTab);
   }, [open, initialTab]);
 
+  const currentEmployeeId = (currentEmployee as { id?: string } | null)?.id ?? null;
+
   const handleClose = () => {
-    queryClient.invalidateQueries({ queryKey: getCompletionApprovalCountQueryKey(organizationId ?? null, currentEmployee?.id ?? null) });
+    queryClient.invalidateQueries({
+      queryKey: getCompletionApprovalCountQueryKey(organizationId ?? null, currentEmployeeId),
+    });
     onOpenChange(false);
   };
 
@@ -135,7 +187,12 @@ export function NotificationsModal({ open, onOpenChange, initialTab }: Notificat
             <TasksTab onOpenChange={onOpenChange} />
           </TabsContent>
           <TabsContent value="updates" className="flex-1 min-h-0 mt-0 overflow-hidden flex flex-col data-[state=inactive]:hidden">
-            <UpdatesTab onOpenChange={onOpenChange} />
+            <UpdatesTab
+              onOpenChange={onOpenChange}
+              initialPostedLinksPlanId={initialPostedLinksPlanId}
+              initialPostedLinksPlanTitle={initialPostedLinksPlanTitle}
+              initialPostedLinksForceOpen={initialPostedLinksForceOpen}
+            />
           </TabsContent>
         </Tabs>
 
@@ -453,7 +510,17 @@ function TasksTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   );
 }
 
-function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+function UpdatesTab({
+  onOpenChange,
+  initialPostedLinksPlanId,
+  initialPostedLinksPlanTitle,
+  initialPostedLinksForceOpen,
+}: {
+  onOpenChange: (open: boolean) => void;
+  initialPostedLinksPlanId?: string;
+  initialPostedLinksPlanTitle?: string;
+  initialPostedLinksForceOpen?: boolean;
+}) {
   const { t, dateLocale } = useAppTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -461,8 +528,79 @@ function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void })
   const unreadNotifications = notifications.filter((n) => n.read_at == null);
   const { getOrCreate } = usePublicReviewToken();
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [linksModalPlanId, setLinksModalPlanId] = useState<string | null>(null);
+  const [linksModalPlanTitle, setLinksModalPlanTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initialPostedLinksPlanId) return;
+    if (linksModalPlanId === initialPostedLinksPlanId) return;
+
+    notifDebugUpdates("initial posted-links check", {
+      initialPostedLinksPlanId,
+      initialPostedLinksPlanTitle: initialPostedLinksPlanTitle ?? "",
+      initialPostedLinksForceOpen: !!initialPostedLinksForceOpen,
+      unreadCount: unreadNotifications.length,
+    });
+
+    if (initialPostedLinksForceOpen) {
+      setLinksModalPlanId(initialPostedLinksPlanId);
+      setLinksModalPlanTitle(initialPostedLinksPlanTitle ?? null);
+      notifDebugUpdates("modal opened by force flag", {
+        planId: initialPostedLinksPlanId,
+      });
+      return;
+    }
+
+    const matched = unreadNotifications.find(
+      (item) =>
+        item.social_media_plan_id === initialPostedLinksPlanId &&
+        isDoneToPostedNotification(item)
+    );
+    if (matched) {
+      setLinksModalPlanId(initialPostedLinksPlanId);
+      setLinksModalPlanTitle(matched.plan_title ?? initialPostedLinksPlanTitle ?? null);
+      notifDebugUpdates("modal opened by matched notification", {
+        planId: initialPostedLinksPlanId,
+        matchedNotificationId: matched.id,
+        matchedTitle: matched.title,
+        matchedBody: matched.body,
+      });
+    } else {
+      notifDebugUpdates("no matched done->posted notification for plan", {
+        planId: initialPostedLinksPlanId,
+        unreadPlanNotificationIds: unreadNotifications
+          .filter((item) => item.social_media_plan_id === initialPostedLinksPlanId)
+          .map((item) => item.id),
+      });
+    }
+  }, [
+    initialPostedLinksPlanId,
+    initialPostedLinksPlanTitle,
+    initialPostedLinksForceOpen,
+    unreadNotifications,
+    linksModalPlanId,
+  ]);
 
   const handleItemClick = async (item: PlanStatusChangeNotificationRow) => {
+    notifDebugUpdates("item clicked", {
+      id: item.id,
+      change_kind: item.change_kind,
+      old_value: item.old_value,
+      new_value: item.new_value,
+      title: item.title,
+      body: item.body,
+      social_media_plan_id: item.social_media_plan_id,
+    });
+    if (isDoneToPostedNotification(item)) {
+      setLinksModalPlanId(item.social_media_plan_id);
+      setLinksModalPlanTitle(item.plan_title ?? null);
+      notifDebugUpdates("opened links modal from tapped notification", {
+        planId: item.social_media_plan_id,
+        notificationId: item.id,
+      });
+      return;
+    }
+
     onOpenChange(false);
     setLoadingId(item.id);
     try {
@@ -502,78 +640,98 @@ function UpdatesTab({ onOpenChange }: { onOpenChange: (open: boolean) => void })
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 pt-4 pb-4">
-      {error ? (
-        <p className="text-sm text-destructive py-2">
-          {t("mobileHome.notificationsUpdatesError", "Failed to load updates.")}
-          <button type="button" onClick={() => refetch()} className="ml-2 underline font-medium">
-            {t("mobileHome.retry", "Retry")}
-          </button>
-        </p>
-      ) : isLoading && notifications.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-2 flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-          {t("mobileHome.loading", "Loading...")}
-        </p>
-      ) : unreadNotifications.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("mobileHome.notificationsNoUpdates", "No updates")}</p>
-      ) : (
-        <>
-          <div className="flex justify-end mb-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={() => markAllRead()}
-            >
-              {t("mobileHome.notificationsMarkAllRead", "Mark all as read")}
-            </Button>
-          </div>
-          <ul className="space-y-2">
-            {unreadNotifications.map((item) => (
-              <li key={item.id}>
-                <div
-                  className={cn(
-                    "rounded-lg border border-border p-2 transition-colors",
-                    item.read_at == null ? "bg-muted/50 hover:bg-muted/70" : "bg-background"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleItemClick(item)}
-                    disabled={loadingId !== null}
-                    className="block w-full text-left text-sm"
-                  >
-                    <span className="font-medium text-foreground">{item.title}</span>
-                    {(item.body?.trim() ?? "") && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.body}</p>}
-                  </button>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(item.created_at), { addSuffix: true, locale: dateLocale })}
-                    </span>
-                    {item.read_at == null && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 shrink-0 border-input text-xs"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          markOneRead(item.id);
-                        }}
-                      >
-                        {t("reviewCommentNotifications.markAsRead", "Mark as read")}
-                      </Button>
+    <>
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 pt-4 pb-4">
+        {error ? (
+          <p className="text-sm text-destructive py-2">
+            {t("mobileHome.notificationsUpdatesError", "Failed to load updates.")}
+            <button type="button" onClick={() => refetch()} className="ml-2 underline font-medium">
+              {t("mobileHome.retry", "Retry")}
+            </button>
+          </p>
+        ) : isLoading && notifications.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+            {t("mobileHome.loading", "Loading...")}
+          </p>
+        ) : unreadNotifications.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("mobileHome.notificationsNoUpdates", "No updates")}</p>
+        ) : (
+          <>
+            <div className="flex justify-end mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => markAllRead()}
+              >
+                {t("mobileHome.notificationsMarkAllRead", "Mark all as read")}
+              </Button>
+            </div>
+            <ul className="space-y-2">
+              {unreadNotifications.map((item) => (
+                <li key={item.id}>
+                  <div
+                    className={cn(
+                      "rounded-lg border border-border p-2 transition-colors",
+                      item.read_at == null ? "bg-muted/50 hover:bg-muted/70" : "bg-background"
                     )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleItemClick(item)}
+                      disabled={loadingId !== null}
+                      className="block w-full text-left text-sm"
+                    >
+                      <span className="font-medium text-foreground">{item.title}</span>
+                      {(item.body?.trim() ?? "") && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.body}</p>}
+                    </button>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(item.created_at), { addSuffix: true, locale: dateLocale })}
+                      </span>
+                      {item.read_at == null && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 shrink-0 border-input text-xs"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            markOneRead(item.id);
+                          }}
+                        >
+                          {t("reviewCommentNotifications.markAsRead", "Mark as read")}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      <SocialMediaLinksMobileModal
+        open={linksModalPlanId !== null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setLinksModalPlanId(null);
+            setLinksModalPlanTitle(null);
+          }
+        }}
+        socialMediaPlanId={linksModalPlanId}
+        planTitle={linksModalPlanTitle}
+        onBack={() => {
+          setLinksModalPlanId(null);
+          setLinksModalPlanTitle(null);
+          onOpenChange(false);
+          navigate("/", { replace: true });
+        }}
+      />
+    </>
   );
 }

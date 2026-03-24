@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { useSocialMediaData, useSocialMediaMutations } from '@/features/6-1-dashboard/hook/useOptimizedSocialMediaState';
 import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
@@ -16,6 +17,15 @@ import { AddContentDialog } from './modal/AddContentDialog';
 import { RealtimeSocialMediaProvider } from '@/features/6-1-dashboard/hook/RealtimeSocialMediaProvider';
 import OptimizedErrorBoundary from '@/features/6-1-dashboard/OptimizedErrorBoundary';
 import { PICFilterProvider } from '@/features/6-1-dashboard/PICFilterContext';
+import GoogleDriveLinkDialog from '@/features/6-1-dashboard/modal/GoogleDriveLinkDialog';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { useSyncPicProduction } from '@/features/6-1-dashboard/hook/useSyncPicProduction';
+import {
+  getGoogleDriveLinkNonEmptyUpdates,
+  getProductionResubmitAfterRevisionUpdates,
+} from '@/features/6-1-dashboard/utils/googleDriveLinkSavePolicy';
+import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 
 const ContentCalendarContent: React.FC = () => {
   const navigate = useNavigate();
@@ -27,9 +37,53 @@ const ContentCalendarContent: React.FC = () => {
   const [showAddContentDialog, setShowAddContentDialog] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState('content-calendar');
   const [selectedService, setSelectedService] = useState<string>('all');
-  
+  const [previewPlanId, setPreviewPlanId] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
   const { contentPlans, organizationId, services } = useSocialMediaData();
-  const { addContentPlan, refreshMasterData } = useSocialMediaMutations();
+  const { addContentPlan, refreshMasterData, updateContentPlan } = useSocialMediaMutations();
+  const { data: currentEmployee } = useCurrentEmployee();
+  const { syncPicProduction } = useSyncPicProduction();
+
+  const handleProductionResubmitForReview = useCallback(
+    (planId: string) => {
+      updateContentPlan(planId, getProductionResubmitAfterRevisionUpdates());
+    },
+    [updateContentPlan]
+  );
+
+  const handleCarouselFirstUploadSuccess = useCallback(
+    (planId: string) => {
+      const plan = contentPlans.find((p) => p.id === planId);
+      if (plan?.pic_production_source === 'task_steps_assigned') return;
+      const employeeId = currentEmployee?.id;
+      if (!employeeId) return;
+      updateContentPlan(planId, {
+        pic_production_id: employeeId,
+        pic_production_source: 'google_drive_link',
+        production_status: 'Need Review',
+        production_completion_date: new Date().toISOString(),
+      });
+    },
+    [contentPlans, currentEmployee?.id, updateContentPlan]
+  );
+
+  const handleCarouselAllRemoved = useCallback(
+    async (planId: string) => {
+      const plan = contentPlans.find((p) => p.id === planId);
+      if (!plan) return;
+      try {
+        await syncPicProduction(planId, null, plan.pic_production_id, plan.pic_production_source);
+        updateContentPlan(planId, {
+          production_status: null,
+          production_completion_date: null,
+        });
+      } catch (error) {
+        devLog.error('Error resetting PIC Production after carousel all removed (calendar):', error);
+      }
+    },
+    [contentPlans, syncPicProduction, updateContentPlan]
+  );
 
   // Filter content plans by selected service
   const filteredContentPlans = useMemo(() => {
@@ -38,6 +92,15 @@ const ContentCalendarContent: React.FC = () => {
     }
     return contentPlans.filter(plan => plan.service_id === selectedService);
   }, [contentPlans, selectedService]);
+
+  const previewPlan = useMemo(() => {
+    if (!previewPlanId) return null;
+    return (
+      filteredContentPlans.find((p) => p.id === previewPlanId) ??
+      contentPlans.find((p) => p.id === previewPlanId) ??
+      null
+    );
+  }, [previewPlanId, filteredContentPlans, contentPlans]);
 
   // Calendar calculations
   const monthStart = startOfMonth(currentDate);
@@ -363,6 +426,9 @@ const ContentCalendarContent: React.FC = () => {
                             getDayInfo={getDayInfo}
                             onDayClick={handleDayClick}
                             onPlanClick={handlePlanClick}
+                            onOpenPreview={(plan) => {
+                              if (plan?.id) setPreviewPlanId(plan.id);
+                            }}
                           />
                         </div>
 
@@ -431,6 +497,78 @@ const ContentCalendarContent: React.FC = () => {
         selectedDate={selectedDate}
         editingPlan={editingPlan}
       />
+
+      {previewPlan && (
+        <GoogleDriveLinkDialog
+          isOpen
+          onClose={() => setPreviewPlanId(null)}
+          googleDriveLink={previewPlan.google_drive_link || ''}
+          productionApproved={previewPlan.production_approved || false}
+          productionStatus={previewPlan.production_status ?? undefined}
+          revisionBaselineLink={previewPlan.production_revision_baseline_link ?? null}
+          onResubmitForReview={() => handleProductionResubmitForReview(previewPlan.id)}
+          onSave={async (link) => {
+            const normalized = link?.trim() ? link.trim() : null;
+            if (!normalized) {
+              const plan = previewPlan;
+              if (plan.pic_production_source === 'google_drive_link') {
+                try {
+                  await syncPicProduction(
+                    previewPlan.id,
+                    null,
+                    plan.pic_production_id,
+                    plan.pic_production_source
+                  );
+                } catch (error) {
+                  devLog.error('Error syncing pic_production_id (calendar clear link):', error);
+                }
+              }
+              updateContentPlan(previewPlan.id, {
+                google_drive_link: null,
+                production_completion_date: null,
+                production_status: null,
+              });
+              return;
+            }
+            const patch = getGoogleDriveLinkNonEmptyUpdates(
+              previewPlan,
+              normalized,
+              currentEmployee?.id
+            );
+            if (Object.keys(patch).length === 0) return;
+            const needsPicToast =
+              patch.production_status === 'Need Review' &&
+              !currentEmployee?.id &&
+              previewPlan.pic_production_source !== 'task_steps_assigned';
+            updateContentPlan(previewPlan.id, patch);
+            if (needsPicToast) {
+              toast.warning(
+                'Google Drive link saved, but could not auto-assign PIC Production (employee not found)'
+              );
+            }
+          }}
+          socialMediaPlanId={previewPlan.id}
+          planTitle={previewPlan.title ?? undefined}
+          contentTitle={previewPlan.title ?? undefined}
+          contentType={previewPlan.content_type?.name}
+          postDate={previewPlan.post_date ?? undefined}
+          serviceName={previewPlan.service?.name ?? null}
+          picProductionName={previewPlan.pic_production?.full_name ?? null}
+          onApprove={() => {
+            updateContentPlan(previewPlan.id, {
+              production_approved: true,
+              production_approved_date: new Date().toISOString(),
+              production_status: 'Approved',
+            });
+          }}
+          onCarouselChange={() => {
+            queryClient.invalidateQueries({ queryKey: ['social-media-carousel'] });
+            queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
+          }}
+          onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
+          onCarouselAllRemoved={handleCarouselAllRemoved}
+        />
+      )}
     </StandardLayout>
   );
 };

@@ -16,7 +16,8 @@ const config: CapacitorConfig = {
       smallIcon: 'splash_white_logo',
     },
     SplashScreen: {
-      launchAutoHide: false,
+      // Fail-safe: auto hide splash even if JS-side SplashScreen plugin fails.
+      launchAutoHide: true,
     },
   },
 };

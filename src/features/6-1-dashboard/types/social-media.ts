@@ -17,6 +17,8 @@ export interface ContentPlan {
   pic_production_id: string | null;
   pic_production_source: 'task_steps_assigned' | 'google_drive_link' | null;
   google_drive_link: string | null;
+  /** Snapshot of google_drive_link when production_status became Request Revision (DB trigger + app reads). */
+  production_revision_baseline_link?: string | null;
   production_status: string | null;
   production_revision_count: number;
   production_completion_date: string | null;

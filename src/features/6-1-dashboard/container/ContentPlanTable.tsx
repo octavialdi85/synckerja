@@ -40,6 +40,7 @@ interface ContentPlanTableProps {
   handleUnapproval?: (planId: string) => Promise<void>; // Hook untuk un-approval dengan task step deletion
   onCarouselFirstUploadSuccess?: (planId: string) => void; // When first carousel image uploaded, auto-populate PIC Production
   onCarouselAllRemoved?: (planId: string) => void; // When all carousel images removed, reset PIC Production
+  onProductionResubmitForReview?: (planId: string) => void | Promise<void>;
 }
 
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
@@ -62,7 +63,8 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   requestApproval,
   handleUnapproval,
   onCarouselFirstUploadSuccess,
-  onCarouselAllRemoved
+  onCarouselAllRemoved,
+  onProductionResubmitForReview
 }) => {
   const planIds = useMemo(() => contentPlans.map((p) => p.id), [contentPlans]);
   const { countsMap: carouselCountsMap, refetch: refetchCarouselCounts } = useCarouselCountsMap(planIds);
@@ -289,6 +291,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
               onCarouselChange={onCarouselChange}
               onCarouselFirstUploadSuccess={onCarouselFirstUploadSuccess}
               onCarouselAllRemoved={onCarouselAllRemoved}
+              onProductionResubmitForReview={onProductionResubmitForReview}
             />
           ))}
         </tbody>

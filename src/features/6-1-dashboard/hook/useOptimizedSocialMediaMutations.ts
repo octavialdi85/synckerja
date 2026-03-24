@@ -15,7 +15,7 @@ import { devLog } from '@/config/logger';
 const SOCIAL_MEDIA_PLANS_UPDATE_KEYS = new Set([
   'organization_id', 'post_date', 'content_type_id', 'pic_id', 'service_id', 'sub_service_id',
   'title', 'content_pillar_id', 'brief', 'status', 'revision_count', 'approved', 'completion_date',
-  'pic_production_id', 'pic_production_source', 'google_drive_link', 'production_status',
+  'pic_production_id', 'pic_production_source', 'google_drive_link', 'production_revision_baseline_link', 'production_status',
   'production_revision_count', 'production_completion_date', 'production_approved', 'production_approved_date',
   'post_link', 'post_link_created_by', 'done', 'actual_post_date', 'on_time_status', 'status_content',
   'created_at', 'updated_at',
@@ -144,13 +144,14 @@ export const useOptimizedSocialMediaMutations = () => {
             });
           }
 
-          // When Google Drive link is set: auto-complete linked step and create pending approval for assigner
+          // When link is saved for review: complete step + pending approval. Skip if only tweaking link
+          // while still in Request Revision (e.g. folder URL unchanged semantically). Resubmit-from-revision
+          // (Need Review without link in payload) is handled below.
           const linkValue = updates.google_drive_link;
-          if (
-            organizationId &&
-            typeof linkValue === 'string' &&
-            linkValue.trim().length > 0
-          ) {
+          const linkUpdateNonEmpty =
+            typeof linkValue === 'string' && linkValue.trim().length > 0;
+          const afterNeedReview = updatedData.production_status === 'Need Review';
+          if (organizationId && linkUpdateNonEmpty && afterNeedReview) {
             completeStepAndCreateApprovalFromDriveLink({
               organizationId,
               socialMediaPlanId: variables.id,
@@ -163,6 +164,31 @@ export const useOptimizedSocialMediaMutations = () => {
               }
             }).catch((err) => {
               devLog.error('completeStepAndCreateApprovalFromDriveLink rejected', err);
+              toast.error('Action failed.');
+            });
+          }
+
+          const resubmitAfterRevision =
+            organizationId &&
+            updates.production_status === 'Need Review' &&
+            oldPlan?.production_status === 'Request Revision' &&
+            !linkUpdateNonEmpty;
+          const driveLinkStillPresent =
+            typeof updatedData.google_drive_link === 'string' &&
+            updatedData.google_drive_link.trim().length > 0;
+          if (resubmitAfterRevision && driveLinkStillPresent) {
+            completeStepAndCreateApprovalFromDriveLink({
+              organizationId,
+              socialMediaPlanId: variables.id,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('completeStepAndCreateApprovalFromDriveLink failed (resubmit)', {
+                  planId: variables.id,
+                  message: error.message,
+                });
+              }
+            }).catch((err) => {
+              devLog.error('completeStepAndCreateApprovalFromDriveLink rejected (resubmit)', err);
               toast.error('Action failed.');
             });
           }

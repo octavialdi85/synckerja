@@ -1,24 +1,40 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { Capacitor } from "@capacitor/core";
 
 // Suppress expected browser errors (CORS/404 for KOL tables)
 if (typeof window !== 'undefined') {
-  // Register service worker for Live Chat Web Push (so push works when tab is closed)
+  const isNative = Capacitor.isNativePlatform();
+
+  // Web only: keep service worker. Native (Capacitor): unregister to prevent stale cached chunks.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
-      .then((reg) => {
-        if (import.meta.env.DEV) {
-          // Optional: log in dev
-        }
-      })
-      .catch(() => {});
+    if (isNative) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => {
+          void reg.unregister();
+        });
+      }).catch(() => {});
+
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => {
+            void caches.delete(key);
+          });
+        }).catch(() => {});
+      }
+    } else {
+      navigator.serviceWorker
+        .register('/sw.js', { scope: '/' })
+        .catch(() => {});
+    }
   }
 
   const originalError = console.error;
   const originalWarn = console.warn;
   const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalDebug = console.debug;
   
   // Filter out expected errors
   console.error = (...args: any[]) => {
@@ -127,6 +143,18 @@ if (typeof window !== 'undefined') {
   const SUPPRESS_KOL_LOGS_IN_DEV = true; // Suppress all KOL logs to reduce console noise
   
   console.log = (...args: any[]) => {
+    // Avoid noisy "Msg: undefined" on Android WebView when log payload is empty.
+    if (
+      args.length === 0 ||
+      args.every((arg) => {
+        if (arg === undefined || arg === null || arg === "") return true;
+        const normalized = String(arg).trim().toLowerCase();
+        return normalized === "undefined" || normalized === "null";
+      })
+    ) {
+      return;
+    }
+
     const message = args.join(' ').toLowerCase();
     const isKOLLog = 
       message.includes('kol') ||
@@ -151,6 +179,25 @@ if (typeof window !== 'undefined') {
       // In development, allow all logs (normal for debugging)
       originalLog.apply(console, args);
     }
+  };
+
+  // Capacitor console bridge may emit "Msg: undefined" from info/debug too.
+  const shouldDropEmptyConsolePayload = (args: any[]) =>
+    args.length === 0 ||
+    args.every((arg) => {
+      if (arg === undefined || arg === null || arg === "") return true;
+      const normalized = String(arg).trim().toLowerCase();
+      return normalized === "undefined" || normalized === "null";
+    });
+
+  console.info = (...args: any[]) => {
+    if (shouldDropEmptyConsolePayload(args)) return;
+    originalInfo.apply(console, args);
+  };
+
+  console.debug = (...args: any[]) => {
+    if (shouldDropEmptyConsolePayload(args)) return;
+    originalDebug.apply(console, args);
   };
   
   // Suppress network errors for expected 404s/CORS/400

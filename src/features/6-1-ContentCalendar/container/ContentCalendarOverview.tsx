@@ -4,6 +4,7 @@ import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { ContentBalanceTab } from '@/features/6-1-dashboard/container/RightSection/ContentBalanceTab';
 import { ContentPillarTracker } from '@/features/6-1-dashboard/container/RightSection/ContentPillarTracker';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface MonthlyStats {
   total: number;
@@ -31,6 +32,7 @@ export const ContentCalendarOverview = ({
   currentDate,
   serviceFilter,
 }: ContentCalendarOverviewProps) => {
+  const { t } = useAppTranslation();
   const monthName = format(currentDate, 'MMMM yyyy');
 
   // Calculate upcoming posts (next 7 days)
@@ -74,7 +76,7 @@ export const ContentCalendarOverview = ({
           <div className="flex items-center justify-between p-2 bg-red-50 rounded">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-red-600" />
-              <span className="text-xs text-gray-600">Not Approved</span>
+              <span className="text-xs text-gray-600">{t('contentCalendar.legend.notApproved')}</span>
             </div>
             <span className="text-sm font-semibold text-red-600">{monthlyStats.red}</span>
           </div>
@@ -82,7 +84,7 @@ export const ContentCalendarOverview = ({
           <div className="flex items-center justify-between p-2 bg-orange-50 rounded">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-orange-600" />
-              <span className="text-xs text-gray-600">Approved (No Production)</span>
+              <span className="text-xs text-gray-600">{t('contentCalendar.legend.contentPlanApproved')}</span>
             </div>
             <span className="text-sm font-semibold text-orange-600">{monthlyStats.orange}</span>
           </div>
@@ -90,7 +92,7 @@ export const ContentCalendarOverview = ({
           <div className="flex items-center justify-between p-2 bg-amber-50 rounded">
             <div className="flex items-center gap-2">
               <FileEdit className="h-4 w-4 text-amber-600" />
-              <span className="text-xs text-gray-600">Production Approved</span>
+              <span className="text-xs text-gray-600">{t('contentCalendar.legend.productionApproved')}</span>
             </div>
             <span className="text-sm font-semibold text-amber-600">{monthlyStats.yellow}</span>
           </div>
@@ -98,7 +100,7 @@ export const ContentCalendarOverview = ({
           <div className="flex items-center justify-between p-2 bg-green-50 rounded">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span className="text-xs text-gray-600">Completed</span>
+              <span className="text-xs text-gray-600">{t('contentCalendar.legend.completed')}</span>
             </div>
             <span className="text-sm font-semibold text-green-600">{monthlyStats.green}</span>
           </div>
@@ -106,7 +108,7 @@ export const ContentCalendarOverview = ({
           <div className="flex items-center justify-between p-2 bg-green-100 rounded border border-green-300">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-700" />
-              <span className="text-xs text-gray-700 font-medium">Completed (Late)</span>
+              <span className="text-xs text-gray-700 font-medium">{t('contentCalendar.legend.completedLate')}</span>
             </div>
             <span className="text-sm font-semibold text-green-700">{monthlyStats.greenWithLate}</span>
           </div>

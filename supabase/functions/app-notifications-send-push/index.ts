@@ -220,7 +220,19 @@ Deno.serve(async (req: Request) => {
       title = typeof record.title === "string" && record.title.trim() ? record.title.trim() : "Update status";
       body = typeof record.body === "string" && record.body.trim() ? record.body.trim() : "Plan status updated";
       const planId = typeof record.social_media_plan_id === "string" ? record.social_media_plan_id : "";
-      dataPayload = { url: "/", openNotifications: "true", notificationType: "plan_status_change", social_media_plan_id: planId };
+      const planChangeKind = typeof record.change_kind === "string" ? record.change_kind : "";
+      const planNewValue = typeof record.new_value === "string" ? record.new_value : "";
+      const planTitle = typeof record.plan_title === "string" ? record.plan_title : "";
+      dataPayload = {
+        url: "/",
+        openNotifications: "true",
+        notificationType: "plan_status_change",
+        social_media_plan_id: planId,
+        plan_change_kind: planChangeKind,
+        plan_new_value: planNewValue,
+        plan_body: body,
+        plan_title: planTitle,
+      };
     } else if (table === "daily_task_notifications") {
       targetUserId = typeof record.user_id === "string" ? record.user_id : null;
       const notifTitle = typeof record.title === "string" ? record.title.trim() : "";

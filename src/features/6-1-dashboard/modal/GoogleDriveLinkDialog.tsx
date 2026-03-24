@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -19,11 +19,13 @@ import { usePublicReviewToken } from '../hook/usePublicReviewToken';
 import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { useCarouselImages, getCarouselImagePublicUrl, CAROUSEL_QUERY_KEY } from '../hook/useCarouselImages';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
-import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
 import {
-  completeStepAndCreateApprovalFromDriveLink,
-  revertStepCompletionFromDriveLinkRemovalWithRpc,
-} from '@/features/8-2-DailyTask/services/completionApprovalService';
+  getEmbedUrl as getEmbedUrlFromUtils,
+  getDirectVideoUrl,
+  isFileLink,
+  linksSemanticallyEqual,
+} from '../utils/previewUtils';
+import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
 import { setGoogleDriveModalOpenPlanId } from '../hook/briefModalOpenRef';
 
 const getEmbedUrl = (url: string) => {
@@ -178,6 +180,10 @@ interface GoogleDriveLinkDialogProps {
   picProductionName?: string | null;
   productionApproved?: boolean; // Lock input field if production is approved
   productionStatus?: string | null; // When 'Request Revision', show "Clear all carousel" button
+  /** DB baseline when status became Request Revision (same as google_drive_link until reviewer requests revision). */
+  revisionBaselineLink?: string | null;
+  /** Promote to Need Review when URL unchanged (e.g. folder) but PIC confirms resubmission. */
+  onResubmitForReview?: () => void | Promise<void>;
   onCarouselChange?: () => void; // Called after carousel images change (for cache invalidation)
   onCarouselFirstUploadSuccess?: (planId: string) => void; // Called when first carousel image is uploaded (to auto-populate PIC Production)
   onCarouselAllRemoved?: (planId: string) => void; // Called when all carousel images are removed (to reset PIC Production)
@@ -201,6 +207,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   picProductionName,
   productionApproved = false,
   productionStatus,
+  revisionBaselineLink = null,
+  onResubmitForReview,
   onCarouselChange,
   onCarouselFirstUploadSuccess,
   onCarouselAllRemoved
@@ -300,7 +308,39 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     }
   };
 
-  // POINT 1: Handle close with production status update
+  const effectiveBaseline = (revisionBaselineLink ?? googleDriveLink ?? '').trim();
+  const showResubmitForReview = useMemo(
+    () =>
+      !isCarouselMode &&
+      !productionApproved &&
+      productionStatus === 'Request Revision' &&
+      Boolean(onResubmitForReview) &&
+      currentLink.trim().length > 0 &&
+      linksSemanticallyEqual(currentLink, effectiveBaseline),
+    [
+      isCarouselMode,
+      productionApproved,
+      productionStatus,
+      onResubmitForReview,
+      currentLink,
+      effectiveBaseline,
+    ]
+  );
+
+  const handleResubmitForReviewClick = async () => {
+    if (!onResubmitForReview) return;
+    try {
+      await onResubmitForReview();
+      toast.success(
+        t('googleDrivePreview.resubmitForReviewSuccess', 'Dikirim ulang untuk review.')
+      );
+    } catch (e) {
+      devLog.error('onResubmitForReview failed', e);
+      toast.error(t('googleDrivePreview.resubmitForReviewFailed', 'Gagal mengirim ulang. Coba lagi.'));
+    }
+  };
+
+  /** Do not force Need Review on close when link unchanged (fixes Request Revision / folder workflows). */
   const handleClose = async () => {
     if (isCarouselMode) {
       onCarouselChange?.();
@@ -313,65 +353,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
       return;
     }
 
-    // Save any pending changes before closing - this ensures all updates go through proper mutation
     if (currentLink !== googleDriveLink) {
-      // Call onSave to ensure changes are saved through proper mutation (which updates cache)
-      // onSave will trigger handleFieldChange which handles clearing production_completion_date
       onSave(currentLink);
-    } else if (currentLink && currentLink.trim() !== '') {
-      // If link is filled and unchanged, ensure production status is updated
-      try {
-        const {
-          supabase
-        } = await import('@/integrations/supabase/client');
-        const completionDate = new Date().toISOString();
-        const {
-          data,
-          error
-        } = await supabase.from('social_media_plans').update({
-          production_status: 'Need Review',
-          production_completion_date: completionDate
-        }).eq('id', socialMediaPlanId)
-        .select()
-        .single();
-        
-        if (error) {
-          devLog.error('Error updating production status:', error);
-          toast.error('Failed to update production status');
-        } else {
-          devLog.debug('Production status updated to Need Review with completion date');
-          // Update cache with new data using correct query key
-          if (organizationId && data) {
-            queryClient.setQueryData(
-              ['social-media-plans', organizationId],
-              (oldData: any) => {
-                if (!oldData) return oldData;
-                return oldData.map((plan: any) => 
-                  plan.id === socialMediaPlanId ? { ...plan, ...data } : plan
-                );
-              }
-            );
-            // Also invalidate to ensure all related queries refresh
-            queryClient.invalidateQueries({ queryKey: ['social-media-plans', organizationId] });
-          }
-          // This path bypasses useOptimizedSocialMediaMutations onSuccess — still need pending approval row + step sync
-          if (organizationId) {
-            completeStepAndCreateApprovalFromDriveLink({
-              organizationId,
-              socialMediaPlanId,
-            }).then(({ error }) => {
-              if (error) {
-                devLog.warn('completeStepAndCreateApprovalFromDriveLink after handleClose direct update failed', {
-                  socialMediaPlanId,
-                  message: error.message,
-                });
-              }
-            });
-          }
-        }
-      } catch (error) {
-        devLog.error('Error in handleClose:', error);
-      }
     } else if (googleDriveLink && (!currentLink || currentLink.trim() === '')) {
       // If link was removed (had link before, but now empty), clear production_completion_date
       // This should be handled by onSave, but we do it here as backup
@@ -553,6 +536,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                   production_approved: false,
                   production_approved_date: null,
                   production_revision_count: newProductionRevisionCount,
+                  production_revision_baseline_link: plan.google_drive_link ?? googleDriveLink ?? null,
                 };
               }
               return plan;
@@ -1112,6 +1096,24 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>
+                {showResubmitForReview && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    {t(
+                      'googleDrivePreview.resubmitForReviewHint',
+                      'Link sama dengan versi saat revisi diminta (mis. folder Drive). Setelah memperbarui file di folder, kirim ulang untuk review.'
+                    )}
+                  </p>
+                )}
+                {showResubmitForReview && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="mt-1 h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                    onClick={() => void handleResubmitForReviewClick()}
+                  >
+                    {t('googleDrivePreview.resubmitForReview', 'Kirim ulang untuk review')}
+                  </Button>
+                )}
               </div>
               )}
               {isCarouselMode && (

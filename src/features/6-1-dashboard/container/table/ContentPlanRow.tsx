@@ -61,6 +61,7 @@ interface ContentPlanRowProps {
   onCarouselChange?: () => void;
   onCarouselFirstUploadSuccess?: (planId: string) => void;
   onCarouselAllRemoved?: (planId: string) => void;
+  onProductionResubmitForReview?: (planId: string) => void | Promise<void>;
 }
 export const ContentPlanRow = memo<ContentPlanRowProps>(({
   plan,
@@ -88,7 +89,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   carouselImageCount = 0,
   onCarouselChange,
   onCarouselFirstUploadSuccess,
-  onCarouselAllRemoved
+  onCarouselAllRemoved,
+  onProductionResubmitForReview
 }) => {
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
   const [isSocialLinksDialogOpen, setIsSocialLinksDialogOpen] = useState(false);
@@ -1174,7 +1176,12 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     onCarouselChange={onCarouselChange}
     onCarouselFirstUploadSuccess={onCarouselFirstUploadSuccess}
     onCarouselAllRemoved={onCarouselAllRemoved}
-    // POINT 3: Add handlers for production approval sync
+    revisionBaselineLink={plan.production_revision_baseline_link ?? null}
+    onResubmitForReview={
+      onProductionResubmitForReview
+        ? () => onProductionResubmitForReview(plan.id)
+        : undefined
+    }
     onApprove={() => {
       const approvedDate = new Date().toISOString();
       onFieldChange(plan.id, 'production_approved', true);

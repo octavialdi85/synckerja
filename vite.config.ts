@@ -21,11 +21,7 @@ export default defineConfig(({ mode }) => ({
     }),
   ].filter(Boolean),
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-      },
-    },
+    chunkSizeWarningLimit: 1200,
   },
   resolve: {
     alias: {

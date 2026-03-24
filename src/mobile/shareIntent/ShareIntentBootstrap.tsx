@@ -17,6 +17,7 @@ export function ShareIntentBootstrap() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !user?.id) return;
+    if (!Capacitor.isPluginAvailable("ShareIntent")) return;
 
     const goIfNeeded = async () => {
       try {
@@ -37,7 +38,7 @@ export function ShareIntentBootstrap() {
       void goIfNeeded();
     }).then((handle) => {
       removeListener = () => handle.remove();
-    });
+    }).catch(() => {});
 
     return () => {
       void removeListener?.();

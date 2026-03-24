@@ -7,6 +7,7 @@ import { Badge } from '@/features/ui/badge';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useBatchSocialMediaLinks } from '../hooks/useBatchSocialMediaLinks';
+import { ContentPlanBriefDisplay } from './ContentPlanBriefDisplay';
 
 interface DayDetailsDialogProps {
   open: boolean;
@@ -64,7 +65,7 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
         <DialogHeader className="sticky top-0 bg-background z-10 pb-4 border-b">
           <DialogTitle>
             Content Plans - {selectedDate && format(selectedDate, 'dd MMMM yyyy', { locale: id })}
@@ -162,8 +163,8 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
                               <strong>PIC:</strong> {plan?.pic?.full_name || 'Unassigned'}
                             </div>
                             
-                            {/* Brief */}
-                            <p className="text-sm text-muted-foreground">{plan?.brief || 'No description'}</p>
+                            {/* Brief / script: markdown + markdown table → same table UI as brief modal */}
+                            <ContentPlanBriefDisplay brief={plan?.brief} />
                             
                             {/* NEW: Green cards - Display all social media links */}
                             {planStatus === 'green' && planLinks.length > 0 && (

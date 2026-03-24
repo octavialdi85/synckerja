@@ -36,6 +36,15 @@ function getGreetingKey(hour: number): 'morning' | 'noon' | 'afternoon' | 'night
   return 'morning';
 }
 
+function notifDebugHome(event: string, payload?: unknown) {
+  try {
+    const body = payload == null ? "" : ` ${JSON.stringify(payload)}`;
+    console.info(`[NOTIF_DEBUG][home] ${event}${body}`);
+  } catch {
+    console.info(`[NOTIF_DEBUG][home] ${event} [payload-unserializable]`);
+  }
+}
+
 let confetti: ((opts?: object) => void) | undefined;
 try {
   // Optional import to avoid build error if package not installed
@@ -73,14 +82,40 @@ const Absensi = () => {
   });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [initialNotificationsTab, setInitialNotificationsTab] = useState<"comments" | "tasks" | "updates" | undefined>(undefined);
+  const [initialPostedLinksPlanId, setInitialPostedLinksPlanId] = useState<string | undefined>(undefined);
+  const [initialPostedLinksPlanTitle, setInitialPostedLinksPlanTitle] = useState<string | undefined>(undefined);
+  const [initialPostedLinksForceOpen, setInitialPostedLinksForceOpen] = useState<boolean>(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
-    const state = location.state as { reopenNotifications?: boolean; openNotificationsTab?: "comments" | "tasks" | "updates" } | null;
+    const state = location.state as {
+      reopenNotifications?: boolean;
+      openNotificationsTab?: "comments" | "tasks" | "updates";
+      openPostedLinksModal?: boolean;
+      openPostedLinksForceOpen?: boolean;
+      openPostedLinksPlanId?: string;
+      openPostedLinksPlanTitle?: string;
+    } | null;
+    notifDebugHome("location.state", state);
     if (state?.reopenNotifications) {
       setNotificationsOpen(true);
       setInitialNotificationsTab(state.openNotificationsTab);
+      if (state.openPostedLinksPlanId) {
+        setInitialPostedLinksPlanId(state.openPostedLinksPlanId);
+        setInitialPostedLinksPlanTitle(state.openPostedLinksPlanTitle || undefined);
+        setInitialPostedLinksForceOpen(!!state.openPostedLinksForceOpen || !!state.openPostedLinksModal);
+        notifDebugHome("prepared initial posted-links state", {
+          initialTab: state.openNotificationsTab,
+          planId: state.openPostedLinksPlanId,
+          forceOpen: !!state.openPostedLinksForceOpen || !!state.openPostedLinksModal,
+        });
+      } else {
+        setInitialPostedLinksPlanId(undefined);
+        setInitialPostedLinksPlanTitle(undefined);
+        setInitialPostedLinksForceOpen(false);
+        notifDebugHome("no posted-links plan id in route state");
+      }
       navigate(".", { replace: true, state: {} });
     }
   }, [location.state, navigate]);
@@ -116,7 +151,7 @@ const Absensi = () => {
   const { totalCount: notificationBadgeCount } = useNotificationBadgeCount();
   const currentHour = new Date().getHours();
   const greetingKey = getGreetingKey(currentHour);
-  const greeting = t(`home.greeting.${greetingKey}`);
+  const greeting = t(`home.greeting.${greetingKey}`, "Hello");
   const displayName = profileLoading ? '...' : (profile?.full_name ?? t('mobileHome.user', 'User'));
 
   useEffect(() => {
@@ -960,10 +995,18 @@ const Absensi = () => {
         <NotificationsModal
           open={notificationsOpen}
           onOpenChange={(open) => {
-            if (!open) setInitialNotificationsTab(undefined);
+            if (!open) {
+              setInitialNotificationsTab(undefined);
+              setInitialPostedLinksPlanId(undefined);
+              setInitialPostedLinksPlanTitle(undefined);
+              setInitialPostedLinksForceOpen(false);
+            }
             setNotificationsOpen(open);
           }}
           initialTab={initialNotificationsTab}
+          initialPostedLinksPlanId={initialPostedLinksPlanId}
+          initialPostedLinksPlanTitle={initialPostedLinksPlanTitle}
+          initialPostedLinksForceOpen={initialPostedLinksForceOpen}
         />
       </div>
     </SidebarProvider>

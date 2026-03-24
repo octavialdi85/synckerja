@@ -67,6 +67,7 @@ export function useAppNotificationsFCM() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isPluginAvailable("PushNotifications")) return;
 
     const run = async () => {
       try {
@@ -133,7 +134,7 @@ export function useAppNotificationsFCM() {
       timeoutRef.current = setTimeout(handleAppActive, 2000);
     };
 
-    setup();
+    setup().catch(() => {});
     return () => {
       handlesRef.current.forEach((h) => h.remove());
       handlesRef.current = [];

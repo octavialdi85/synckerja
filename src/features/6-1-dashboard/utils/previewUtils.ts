@@ -29,3 +29,53 @@ export function isFileLink(url: string): boolean {
 export function isYouTubeLink(url: string): boolean {
   return url.includes('youtube.com') || url.includes('youtu.be');
 }
+
+/** Google Drive file id from /file/d/{id}/ or open?id= (and similar). */
+export function extractGoogleDriveFileId(url: string): string | null {
+  if (!url?.trim()) return null;
+  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/i);
+  if (fileMatch) return fileMatch[1];
+  if (url.includes('drive.google.com') && /[?&]id=([a-zA-Z0-9-_]+)/i.test(url)) {
+    const openMatch = url.match(/[?&]id=([a-zA-Z0-9-_]+)/i);
+    if (openMatch) return openMatch[1];
+  }
+  return null;
+}
+
+/** Google Drive folder id from /drive/folders/{id}. */
+export function extractGoogleDriveFolderId(url: string): string | null {
+  if (!url?.trim()) return null;
+  const m = url.match(/\/folders\/([a-zA-Z0-9-_]+)/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Canonical form for comparing whether two Drive URLs refer to the same file or folder.
+ * File: `file:{id}`; folder: `folder:{id}`; otherwise trimmed lowercase origin+path without query.
+ */
+export function normalizeGoogleDriveUrl(url: string): string {
+  const raw = url?.trim() ?? '';
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (isFolderLink(lower)) {
+    const id = extractGoogleDriveFolderId(raw);
+    return id ? `folder:${id}` : lower.split('?')[0].split('#')[0];
+  }
+  const fileId = extractGoogleDriveFileId(raw);
+  if (fileId && lower.includes('drive.google.com')) {
+    return `file:${fileId}`;
+  }
+  try {
+    const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return lower.split('?')[0].split('#')[0];
+  }
+}
+
+export function linksSemanticallyEqual(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  return normalizeGoogleDriveUrl(a ?? '') === normalizeGoogleDriveUrl(b ?? '');
+}

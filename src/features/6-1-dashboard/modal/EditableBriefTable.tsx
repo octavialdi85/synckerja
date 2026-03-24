@@ -43,6 +43,8 @@ interface EditableBriefTableProps {
   onChange?: (newTableData: string[][]) => void;
   /** When true, table is always editable (no Edit button), onChange called on every cell change */
   alwaysEditable?: boolean;
+  /** When true, no edit/actions column (display-only, e.g. content calendar modal) */
+  readOnly?: boolean;
   className?: string;
 }
 
@@ -51,6 +53,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   onSave,
   onChange,
   alwaysEditable = false,
+  readOnly = false,
   className = '',
 }) => {
   const { t } = useAppTranslation();
@@ -218,7 +221,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                 {cell}
               </th>
             ))}
-                {!alwaysEditable && (
+                {!alwaysEditable && !readOnly && (
                 <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
                   {isEditing ? (
                     <div className="flex gap-1 justify-start">
@@ -284,7 +287,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                     )}
                   </td>
                 ))}
-                {!alwaysEditable && (
+                {!alwaysEditable && !readOnly && (
                   <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px] max-w-[72px] whitespace-nowrap overflow-hidden align-middle">
                     {onSave && (
                       <DropdownMenu>

@@ -13,6 +13,7 @@ export function useLiveChatFCM() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isPluginAvailable("PushNotifications")) return;
 
     const setup = async () => {
       const h = await PushNotifications.addListener(
@@ -39,7 +40,7 @@ export function useLiveChatFCM() {
       handlesRef.current = [h];
     };
 
-    setup();
+    setup().catch(() => {});
 
     return () => {
       handlesRef.current.forEach((h) => h.remove());

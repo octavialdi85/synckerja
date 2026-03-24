@@ -26,6 +26,10 @@ import TitleDialog from './modal/TitleDialog';
 import EditTargetDialog from './modal/EditTargetDialog';
 import GoogleDriveLinkDialog from './modal/GoogleDriveLinkDialog';
 import type { ContentPlan } from './types/social-media';
+import {
+  getGoogleDriveLinkNonEmptyUpdates,
+  getProductionResubmitAfterRevisionUpdates,
+} from './utils/googleDriveLinkSavePolicy';
 
 // Import optimized hooks
 import { useSocialMediaData, useSocialMediaMutations } from "./hook/useOptimizedSocialMediaState";
@@ -197,7 +201,7 @@ const SocialMediaContent = () => {
 
   // Fetch single plan when opening preview from notification (plan may not be in current table filter)
   const PLAN_SELECT = `
-    id, organization_id, post_date, content_type_id, pic_id, service_id, sub_service_id, title, content_pillar_id, brief, status, revision_count, approved, completion_date, pic_production_id, pic_production_source, google_drive_link, production_status, production_revision_count, production_completion_date, production_approved, production_approved_date, post_link, post_link_created_by, done, actual_post_date, on_time_status, status_content, created_at, updated_at,
+    id, organization_id, post_date, content_type_id, pic_id, service_id, sub_service_id, title, content_pillar_id, brief, status, revision_count, approved, completion_date, pic_production_id, pic_production_source, google_drive_link, production_revision_baseline_link, production_status, production_revision_count, production_completion_date, production_approved, production_approved_date, post_link, post_link_created_by, done, actual_post_date, on_time_status, status_content, created_at, updated_at,
     content_type:content_types(id, name), service:services(id, name), sub_service:sub_services(id, name), content_pillar:content_pillars(id, name, color), pic:employees!social_media_plans_pic_id_fkey(id, full_name), pic_production:employees!social_media_plans_pic_production_id_fkey(id, full_name), post_link_creator:employees!social_media_plans_post_link_created_by_fkey(id, full_name)
   `;
   const { data: notificationPreviewPlanFetched } = useQuery({
@@ -768,6 +772,13 @@ const SocialMediaContent = () => {
   // Track plans yang sedang pending approval (untuk prevent multiple updates)
   const pendingApprovalPlansRef = useRef<Set<string>>(new Set());
 
+  const handleProductionResubmitForReview = useCallback(
+    (planId: string) => {
+      updateContentPlan(planId, getProductionResubmitAfterRevisionUpdates());
+    },
+    [updateContentPlan]
+  );
+
   const handleFieldChange = useCallback(async (id: string, field: string, value: any) => {
     // Skip update jika plan sedang pending approval (dari previous approved/completion_date call)
     if (pendingApprovalPlansRef.current.has(id)) {
@@ -879,43 +890,21 @@ const SocialMediaContent = () => {
           : '';
 
       if (field === 'google_drive_link' && linkStr.length > 0) {
-        const plan = contentPlans.find(p => p.id === id);
-        const completionDate = new Date().toISOString();
-        const linkWithNeedReview = {
-          google_drive_link: linkStr,
-          production_status: 'Need Review' as const,
-          production_completion_date: completionDate,
-        };
-
-        if (plan?.pic_production_source === 'task_steps_assigned') {
-          devLog.debug('🔗 Google Drive link added, but PIC Production already set from task_steps_assigned:', {
-            planId: id,
-            link: linkStr,
-            currentPicProductionId: plan.pic_production_id,
-          });
-          updateContentPlan(id, { ...linkWithNeedReview });
+        const plan = contentPlans.find((p) => p.id === id);
+        const patch = getGoogleDriveLinkNonEmptyUpdates(plan, linkStr, currentEmployee?.id);
+        if (Object.keys(patch).length === 0) {
           return;
         }
-
-        const employeeId = currentEmployee?.id;
-
-        if (!employeeId) {
-          devLog.debug('⚠️ Cannot auto-assign PIC Production: Employee ID not found');
-          updateContentPlan(id, { ...linkWithNeedReview });
-          toast.warning('Google Drive link saved, but could not auto-assign PIC Production (employee not found)');
-          return;
+        const needsPicToast =
+          patch.production_status === 'Need Review' &&
+          !currentEmployee?.id &&
+          plan?.pic_production_source !== 'task_steps_assigned';
+        updateContentPlan(id, patch);
+        if (needsPicToast) {
+          toast.warning(
+            'Google Drive link saved, but could not auto-assign PIC Production (employee not found)'
+          );
         }
-
-        devLog.debug('🔗 Google Drive link added, auto-assigning PIC Production:', {
-          planId: id,
-          link: linkStr,
-          employeeId,
-        });
-        updateContentPlan(id, {
-          ...linkWithNeedReview,
-          pic_production_id: employeeId,
-          pic_production_source: 'google_drive_link',
-        });
         return;
       }
 
@@ -1402,6 +1391,7 @@ const SocialMediaContent = () => {
                                     handleUnapproval={handleUnapproval}
                                     onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
                                     onCarouselAllRemoved={handleCarouselAllRemoved}
+                                    onProductionResubmitForReview={handleProductionResubmitForReview}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
@@ -1492,6 +1482,10 @@ const SocialMediaContent = () => {
               }}
               onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
               onCarouselAllRemoved={handleCarouselAllRemoved}
+              revisionBaselineLink={notificationPreviewPlan.production_revision_baseline_link ?? null}
+              onResubmitForReview={() =>
+                handleProductionResubmitForReview(notificationPreviewPlan.id)
+              }
             />
           )}
 

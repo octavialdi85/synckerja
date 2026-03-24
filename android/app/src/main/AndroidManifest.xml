@@ -18,6 +18,10 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_icon_tint" />
+        <!-- Same channel as MainActivity / SynckerjaFirebaseMessagingService (IMPORTANCE_HIGH for heads-up + shade). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="notifications" />
 
         <!-- Use our FCM service so we can set large icon (ic_notification_large) for heads-up/shade. -->
         <service

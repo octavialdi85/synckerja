@@ -16,6 +16,12 @@ const cordovaPluginsGradle = path.join(
   __dirname,
   "../android/capacitor-cordova-android-plugins/build.gradle"
 );
+const androidPublicPluginsDir = path.join(
+  __dirname,
+  "../android/app/src/main/assets/public/plugins"
+);
+const androidPublicPluginsPlaceholderJs = path.join(androidPublicPluginsDir, "placeholder.js");
+const androidPublicPluginsReadme = path.join(androidPublicPluginsDir, "README.txt");
 
 const LOCAL_PLUGINS = [
   { pkg: "synckerja-zoom-disable", classpath: "id.synckerja.app.ZoomDisablePlugin" },
@@ -56,4 +62,18 @@ if (fs.existsSync(cordovaPluginsGradle)) {
     fs.writeFileSync(cordovaPluginsGradle, g);
     console.log("patch-android-capacitor-plugins: removed flatDir from capacitor-cordova-android-plugins/build.gradle");
   }
+}
+
+// Keep public/plugins available for Capacitor WebView lookups to avoid noisy startup warning.
+fs.mkdirSync(androidPublicPluginsDir, { recursive: true });
+// Use a JS placeholder (not .txt) so nothing non-JS is accidentally parsed as script by WebView.
+if (!fs.existsSync(androidPublicPluginsPlaceholderJs)) {
+  fs.writeFileSync(
+    androidPublicPluginsPlaceholderJs,
+    "// Placeholder file to keep public/plugins directory available in Android assets.\n"
+  );
+  console.log("patch-android-capacitor-plugins: created public/plugins placeholder asset");
+}
+if (fs.existsSync(androidPublicPluginsReadme)) {
+  fs.unlinkSync(androidPublicPluginsReadme);
 }

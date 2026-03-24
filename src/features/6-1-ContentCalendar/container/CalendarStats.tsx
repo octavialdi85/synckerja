@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar, AlertCircle, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface CalendarStatsProps {
   monthlyStats: {
@@ -13,56 +14,59 @@ interface CalendarStatsProps {
 }
 
 export const CalendarStats: React.FC<CalendarStatsProps> = ({ monthlyStats }) => {
+  const { t } = useAppTranslation();
+
+  /* Order: total → content plan → production → posted (completed) */
   const statsCards = [
     {
-      title: 'Total Content',
+      titleKey: 'contentCalendar.stats.totalContent',
+      subtitleKey: 'contentCalendar.stats.allContentThisMonth',
       value: monthlyStats.total.toString(),
-      subtitle: 'All content this month',
       icon: Calendar,
       iconColor: 'text-blue-500',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200'
     },
     {
-      title: 'Not Approved',
+      titleKey: 'contentCalendar.legend.notApproved',
+      subtitleKey: 'contentCalendar.stats.notApprovedSubtitle',
       value: monthlyStats.red.toString(),
-      subtitle: 'Not approved yet',
       icon: AlertCircle,
       iconColor: 'text-red-500',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200'
     },
     {
-      title: 'Approved (No Production)',
+      titleKey: 'contentCalendar.legend.contentPlanApproved',
+      subtitleKey: 'contentCalendar.stats.contentPlanApprovedSubtitle',
       value: monthlyStats.orange.toString(),
-      subtitle: 'Approved, no production',
       icon: Clock,
       iconColor: 'text-orange-500',
       bgColor: 'bg-orange-50',
       borderColor: 'border-orange-200'
     },
     {
-      title: 'Production Approved',
+      titleKey: 'contentCalendar.legend.productionApproved',
+      subtitleKey: 'contentCalendar.stats.productionApprovedSubtitle',
       value: monthlyStats.yellow.toString(),
-      subtitle: 'Production approved',
       icon: AlertTriangle,
       iconColor: 'text-amber-500',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-200'
     },
     {
-      title: 'Completed',
+      titleKey: 'contentCalendar.legend.completed',
+      subtitleKey: 'contentCalendar.stats.completedSubtitle',
       value: monthlyStats.green.toString(),
-      subtitle: 'Completed on time',
       icon: CheckCircle,
       iconColor: 'text-green-500',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-200'
     },
     {
-      title: 'Completed (Late)',
+      titleKey: 'contentCalendar.legend.completedLate',
+      subtitleKey: 'contentCalendar.stats.completedLateSubtitle',
       value: monthlyStats.greenWithLate.toString(),
-      subtitle: 'Completed but late',
       icon: CheckCircle,
       iconColor: 'text-green-600',
       bgColor: 'bg-green-100',
@@ -75,13 +79,13 @@ export const CalendarStats: React.FC<CalendarStatsProps> = ({ monthlyStats }) =>
       {statsCards.map((stat, index) => (
         <div key={index} className={`${stat.bgColor} ${stat.borderColor} border rounded-md p-4 flex flex-col`}>
           <div className="flex items-center justify-between mb-3 flex-shrink-0">
-            <h3 className="text-sm font-medium text-gray-900">{stat.title}</h3>
+            <h3 className="text-sm font-medium text-gray-900">{t(stat.titleKey)}</h3>
             <stat.icon className={`w-5 h-5 ${stat.iconColor} flex-shrink-0`} />
           </div>
           
           <div className="flex flex-col flex-1 justify-end">
             <div className="text-2xl font-bold text-gray-900 text-left">{stat.value}</div>
-            <div className="text-xs text-gray-600 text-left mt-1">{stat.subtitle}</div>
+            <div className="text-xs text-gray-600 text-left mt-1">{t(stat.subtitleKey)}</div>
           </div>
         </div>
       ))}

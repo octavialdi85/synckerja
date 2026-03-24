@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { AuthProvider } from "@/features/1-login";
+import { AuthProvider, useCentralizedUserData } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { PermissionConfigurationProvider } from "@/features/1-layouts/sidebar/usePermissionConfiguration";
 import { CurrentOrgProvider } from "@/features/1-login/contexts/CurrentOrgContext";
@@ -36,18 +36,22 @@ import MobileProfile from "./mobile/pages/home/Profile";
 import MobileSchedule from "./mobile/pages/home/Schedule";
 import MobileClientVisit from "./mobile/pages/home/ClientVisit";
 import MobileReports from "./mobile/pages/home/Reports";
-import PasswordManagerPage from "./features/8-PasswordManager/PasswordManagerPage";
+const PasswordManagerPage = lazy(() => import("./features/8-PasswordManager/PasswordManagerPage"));
 import DesktopDailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
 import { DailyTaskProvider } from "./features/8-2-DailyTask/DailyTaskContext";
 import MobileDailyTaskPage from "./mobile/pages/daily task/DailyTaskPage";
-import DesktopMeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
-import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
-import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
-import ProductKnowledgePage from "./features/6-1-ProductKnowledge/ProductKnowledgePage";
-import ScriptGeneratorPage from "./features/6-1-ScriptGenerator/ScriptGeneratorPage";
-import SettingsPage from "./features/6-1-Settings/SettingsPage";
+const DesktopMeetingNotesPage = lazy(() => import("./features/8-1-meeting-notes/MeetingNotesPage"));
+const SocialMediaDashboardPage = lazy(() => import("./features/6-1-dashboard/SocialMediaDashboardPage"));
+const ContentCalendarPage = lazy(() => import("./features/6-1-ContentCalendar/ContentCalendarPage"));
+const ProductKnowledgePage = lazy(() => import("./features/6-1-ProductKnowledge/ProductKnowledgePage"));
+const ScriptGeneratorPage = lazy(() => import("./features/6-1-ScriptGenerator/ScriptGeneratorPage"));
+const SettingsPage = lazy(() => import("./features/6-1-Settings/SettingsPage"));
 import { ReviewRouteGate } from "./features/6-1-dashboard/ReviewRouteGate";
-import { KOLDashboardPage } from "./features/6_4_1_dashboard";
+const KOLDashboardPage = lazy(() =>
+  import("./features/6_4_1_dashboard").then((module) => ({
+    default: module.KOLDashboardPage,
+  }))
+);
 import UserSettingsPage from "./features/Settings/SettingsPage";
 import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
 import OverviewTabPageDesktop from "./features/10-overview/OverviewTabPage";
@@ -55,8 +59,8 @@ import PlansTabPageDesktop from "./features/10-Plans/PlansTabPage";
 import ManagementTabPageMobile from "./mobile/pages/subscription/ManagementTabPage";
 import OverviewTabPageMobile from "./mobile/pages/subscription/OverviewTabPage";
 import PlansTabPageMobile from "./mobile/pages/subscription/PlansTabPage";
-import EmployeePage from "./features/2-1-employees/EmployeePage";
-import AddEmployeePage from "./features/2-1-employees/add-employee/AddEmployeePage";
+const EmployeePage = lazy(() => import("./features/2-1-employees/EmployeePage"));
+const AddEmployeePage = lazy(() => import("./features/2-1-employees/add-employee/AddEmployeePage"));
 import FirstLogin from "./features/2-1-employees/employee-invitation/FirstLogin";
 import OKRPage from "./features/1-okr/OKRPage";
 import EmployeePersonalInfo from "./features/2-1-employees/MyInfo/PersonalInformation/pages/EmployeePersonalInfo";
@@ -73,16 +77,28 @@ import EmployeePayroll from "./features/2-1-employees/MyInfo/Payroll/pages/Emplo
 import { ReprimandManagementPage } from "./features/2-1-reprimand";
 import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
-import AttendancePage from "./features/2-3-attendance/AttendancePage";
+const AttendancePage = lazy(() => import("./features/2-3-attendance/AttendancePage"));
 import { CompanyDashboardPage } from "./features/2-8-dashboard";
-import DashboardOverview from "./features/2_2_dashboard/DashboardOverview";
-import { JobOpeningsPage } from "./features/2_2_dashboard/JobOpeningsPage";
-import { ApplicationsPageWrapper } from "./features/2_2_dashboard/ApplicationsPageWrapper";
-import { IntervieweesPage } from "./features/2_2_Interviewees/IntervieweesPage";
-import JobApplication from "./features/2_2_Applications/JobApplication";
-import JobPreview from "./features/2_2_Applications/JobPreview";
+const DashboardOverview = lazy(() => import("./features/2_2_dashboard/DashboardOverview"));
+const JobOpeningsPage = lazy(() =>
+  import("./features/2_2_dashboard/JobOpeningsPage").then((module) => ({
+    default: module.JobOpeningsPage,
+  }))
+);
+const ApplicationsPageWrapper = lazy(() =>
+  import("./features/2_2_dashboard/ApplicationsPageWrapper").then((module) => ({
+    default: module.ApplicationsPageWrapper,
+  }))
+);
+const IntervieweesPage = lazy(() =>
+  import("./features/2_2_Interviewees/IntervieweesPage").then((module) => ({
+    default: module.IntervieweesPage,
+  }))
+);
+const JobApplication = lazy(() => import("./features/2_2_Applications/JobApplication"));
+const JobPreview = lazy(() => import("./features/2_2_Applications/JobPreview"));
 import ApplicationThankYou from "./features/2_2_Applications/ApplicationThankYou";
-import CandidateProfile from "./features/2_2_Applications/CandidateProfile";
+const CandidateProfile = lazy(() => import("./features/2_2_Applications/CandidateProfile"));
 import CandidateProfileThankYou from "./features/2_2_Applications/CandidateProfileThankYou";
 import CandidateProfileInterviewees from "./features/2_2_Interviewees/CandidateProfile";
 import { CompanyCompanyAssetsPage } from "@/features/2-8-company-assets";
@@ -100,43 +116,146 @@ import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/Dai
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage";
 import MobileHabitTrackerPage from "./mobile/pages/habits/HabitTrackerMobilePage";
-import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
+const MobileMeetingNotesPage = lazy(() => import("./mobile/pages/meeting notes/MeetingNotesPage"));
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import MobileLiveChatPage from "./mobile/pages/livechat/LiveChatPage";
 import { NativeSafeAreaWrapper } from "./mobile/components/NativeSafeAreaWrapper";
 import { useAppNotificationsFCM } from "./mobile/hooks/useAppNotificationsFCM";
 import { usePushNotificationHandlers } from "./mobile/hooks/usePushNotificationHandlers";
 import { useLiveChatFCM } from "./mobile/pages/livechat/hooks/useLiveChatFCM";
-import { CalculatorServicesPage } from "./features/8-3-calculator/services";
-import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
-import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
-import { PricingTools as PricingToolsPage } from "./features/8_2_pricing-tools/pages";
-import { DefaultPricesPage } from "./features/8_2_1_default_prices/pages";
-import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
-import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
-import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
+const CalculatorServicesPage = lazy(() =>
+  import("./features/8-3-calculator/services").then((module) => ({
+    default: module.CalculatorServicesPage,
+  }))
+);
+const CalculatorSalesPage = lazy(() =>
+  import("./features/8-3-calculator/Sales").then((module) => ({
+    default: module.CalculatorSalesPage,
+  }))
+);
+const PPh21CalculatorPage = lazy(() =>
+  import("./features/8-4-pph-21/pages").then((module) => ({
+    default: module.PPh21Calculator,
+  }))
+);
+const PricingToolsPage = lazy(() =>
+  import("./features/8_2_pricing-tools/pages").then((module) => ({
+    default: module.PricingTools,
+  }))
+);
+const DefaultPricesPage = lazy(() =>
+  import("./features/8_2_1_default_prices/pages").then((module) => ({
+    default: module.DefaultPricesPage,
+  }))
+);
+const PromoSimulationPage = lazy(() =>
+  import("./features/8_2_2_promo-simulation/pages").then((module) => ({
+    default: module.PromoSimulationPage,
+  }))
+);
+const SalesOperationsPage = lazy(() =>
+  import("./features/5-2-activities/SalesOperationsPage").then((module) => ({
+    default: module.SalesOperationsPage,
+  }))
+);
+const ConsultantDashboardPage = lazy(() =>
+  import("./features/5-3-dashboard/ConsultantDashboardPage").then((module) => ({
+    default: module.ConsultantDashboardPage,
+  }))
+);
 import { LeadsManagementPage } from "./mobile/pages/leads-management";
 import {
   IncomeBankAccountPage as MobileIncomeBankAccountPage,
   IncomeDashboardPage as MobileIncomeDashboardPage,
   IncomeTransactionPage as MobileIncomeTransactionPage,
 } from "./mobile/pages/incomes";
-import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
-import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, EmailConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
-import { IncomeDashboard } from "./features/4-1-dashboard";
-import { IncomeTransactionPage } from "./features/4-1-transaction";
-import { ExpenseDashboard } from "./features/4_2_dashboard";
+const CRMDashboardPage = lazy(() =>
+  import("./features/5-3-dashboard/CRMDashboardPage").then((module) => ({
+    default: module.CRMDashboardPage,
+  }))
+);
+const WhatsAppConnectPage = lazy(() =>
+  import("./features/5-3-whatsapp").then((module) => ({
+    default: module.WhatsAppConnectPage,
+  }))
+);
+const WhatsAppInboxPage = lazy(() =>
+  import("./features/5-3-whatsapp").then((module) => ({
+    default: module.WhatsAppInboxPage,
+  }))
+);
+const InstagramConnectPage = lazy(() =>
+  import("./features/5-3-whatsapp").then((module) => ({
+    default: module.InstagramConnectPage,
+  }))
+);
+const EmailConnectPage = lazy(() =>
+  import("./features/5-3-whatsapp").then((module) => ({
+    default: module.EmailConnectPage,
+  }))
+);
+const MetaOAuthCallbackPage = lazy(() =>
+  import("./features/5-3-whatsapp").then((module) => ({
+    default: module.MetaOAuthCallbackPage,
+  }))
+);
+const IncomeDashboard = lazy(() =>
+  import("./features/4-1-dashboard").then((module) => ({
+    default: module.IncomeDashboard,
+  }))
+);
+const IncomeTransactionPage = lazy(() =>
+  import("./features/4-1-transaction").then((module) => ({
+    default: module.IncomeTransactionPage,
+  }))
+);
+const ExpenseDashboard = lazy(() =>
+  import("./features/4_2_dashboard").then((module) => ({
+    default: module.ExpenseDashboard,
+  }))
+);
 import ExpenseDashboardPageMobile from "./mobile/pages/expenses/ExpenseDashboardPage";
 import ShareReceiptValidationPage from "./mobile/pages/share/ShareReceiptValidationPage";
 import { ShareIntentBootstrap } from "./mobile/shareIntent/ShareIntentBootstrap";
-import { DebtPage } from "./features/4_2_debt";
-import { ApprovalsPage } from "./features/4_2_approvals";
-import { PaymentProcessPage } from "./features/4_2_payment-process/PaymentProcessPage";
-import { ReminderBillsPage } from "./features/4_2_reminder-bills/ReminderBillsPage";
+const DebtPage = lazy(() =>
+  import("./features/4_2_debt").then((module) => ({
+    default: module.DebtPage,
+  }))
+);
+const ApprovalsPage = lazy(() =>
+  import("./features/4_2_approvals").then((module) => ({
+    default: module.ApprovalsPage,
+  }))
+);
+const PaymentProcessPage = lazy(() =>
+  import("./features/4_2_payment-process/PaymentProcessPage").then((module) => ({
+    default: module.PaymentProcessPage,
+  }))
+);
+const ReminderBillsPage = lazy(() =>
+  import("./features/4_2_reminder-bills/ReminderBillsPage").then((module) => ({
+    default: module.ReminderBillsPage,
+  }))
+);
 import Purchase from "./features/9_request-form/pages/Purchase/Purchase";
 import Reimbursement from "./features/9_request-form/pages/Reimbursement/Reimbursement";
 import CashAdvance from "./features/9_request-form/pages/CashAdvance/CashAdvance";
 import Loan from "./features/9_request-form/pages/Loan/Loan";
+
+let hasRequestedNativeSplashHide = false;
+const hideNativeSplashOnce = () => {
+  if (hasRequestedNativeSplashHide) return;
+  hasRequestedNativeSplashHide = true;
+  import("@capacitor/core").then(({ Capacitor }) => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isPluginAvailable("SplashScreen")) return;
+    import("@capacitor/splash-screen")
+      .then(({ SplashScreen }) => {
+        void SplashScreen.hide().catch(() => {});
+      })
+      .catch(() => {});
+  }).catch(() => {});
+};
 
 // Import debug utilities in development (non-blocking so server restart doesn't break the app)
 if (import.meta.env.DEV) {
@@ -191,6 +310,25 @@ const NativePushSetup = () => {
   return null;
 };
 
+const DeferredNativeBootstraps = () => {
+  const [isReady, setIsReady] = useState(!Capacitor.isNativePlatform());
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    // Delay non-critical native listeners so first paint is faster on cold start.
+    const timer = window.setTimeout(() => setIsReady(true), 900);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!isReady) return null;
+  return (
+    <>
+      <NativePushSetup />
+      <ShareIntentBootstrap />
+    </>
+  );
+};
+
 // Android hardware back button: go back in-app instead of exiting (only when running in Capacitor native).
 // Use window.history.back() so the WebView history and React Router stay in sync; navigate(-1)
 // can leave the WebView in a state where the next route render is blank on some devices.
@@ -199,6 +337,7 @@ const NativeBackButtonHandler = () => {
     let remove: (() => void) | undefined;
     import('@capacitor/core').then(({ Capacitor }) => {
       if (!Capacitor.isNativePlatform()) return;
+      if (!Capacitor.isPluginAvailable("App")) return;
       import('@capacitor/app').then(({ App }) => {
         remove = App.addListener('backButton', () => {
           if (tryConsumeShareBack()) return;
@@ -206,8 +345,8 @@ const NativeBackButtonHandler = () => {
             window.history.back();
           }
         });
-      });
-    });
+      }).catch(() => {});
+    }).catch(() => {});
     return () => {
       remove?.();
     };
@@ -219,12 +358,7 @@ const NativeBackButtonHandler = () => {
 const NativeSplashBootstrap = () => {
   useEffect(() => {
     let cancelled = false;
-    import("@capacitor/core").then(({ Capacitor }) => {
-      if (cancelled || !Capacitor.isNativePlatform()) return;
-      import("@capacitor/splash-screen").then(({ SplashScreen }) => {
-        if (!cancelled) void SplashScreen.hide();
-      });
-    });
+    if (!cancelled) hideNativeSplashOnce();
     return () => {
       cancelled = true;
     };
@@ -263,12 +397,7 @@ const HomeRouteElement = () => {
   const useDesktop = useDesktopLayout();
   useEffect(() => {
     if (useDesktop) return;
-    import('@capacitor/core').then(({ Capacitor }) => {
-      if (!Capacitor.isNativePlatform()) return;
-      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
-        void SplashScreen.hide();
-      });
-    });
+    hideNativeSplashOnce();
   }, [useDesktop]);
   const content = useDesktop ? <ModernHomePage key={location.pathname} /> : <MobileHome key={location.pathname} />;
   return <HomeFadeIn>{content}</HomeFadeIn>;
@@ -439,6 +568,151 @@ const LeadsManagementRouteElement = () => {
   return isMobile ? <LeadsManagementPage /> : <ConsultantDashboardPage />;
 };
 
+type IdleCallbackHandle = number;
+type IdleCallback = (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void;
+
+const runWhenIdle = (callback: IdleCallback): IdleCallbackHandle => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    return window.requestIdleCallback(callback, { timeout: 3500 });
+  }
+  return window.setTimeout(
+    () => callback({ didTimeout: false, timeRemaining: () => 0 }),
+    1200
+  );
+};
+
+const cancelIdleRun = (handle: IdleCallbackHandle) => {
+  if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(handle);
+    return;
+  }
+  window.clearTimeout(handle);
+};
+
+const isPublicPath = (pathname: string) => {
+  return (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/verify-email" ||
+    pathname === "/email-verified" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/terms-and-conditions" ||
+    pathname.startsWith("/policy/") ||
+    pathname.startsWith("/candidate/") ||
+    pathname.startsWith("/apply/") ||
+    pathname.startsWith("/review/")
+  );
+};
+
+const prefetchCommonPostLoginRoutes = () => {
+  void import("./features/8-2-DailyTask/DailyTaskPage");
+  void import("./features/8-1-meeting-notes/MeetingNotesPage");
+};
+
+const prefetchSalesRoleRoutes = () => {
+  void import("./features/5-3-dashboard/ConsultantDashboardPage");
+  void import("./features/5-3-dashboard/CRMDashboardPage");
+  void import("./features/5-3-whatsapp");
+};
+
+const prefetchMarketingRoleRoutes = () => {
+  void import("./features/6-1-dashboard/SocialMediaDashboardPage");
+  void import("./features/6-1-ContentCalendar/ContentCalendarPage");
+  void import("./features/6-1-ScriptGenerator/ScriptGeneratorPage");
+};
+
+const prefetchHrRoleRoutes = () => {
+  void import("./features/2-1-employees/EmployeePage");
+  void import("./features/2_2_dashboard/DashboardOverview");
+  void import("./features/2_2_dashboard/JobOpeningsPage");
+};
+
+const prefetchFinanceRoleRoutes = () => {
+  void import("./features/4-1-dashboard");
+  void import("./features/4-1-transaction");
+  void import("./features/4_2_dashboard");
+};
+
+const RouteChunkPrefetcher = () => {
+  const location = useLocation();
+  const { userRole } = useCentralizedUserData();
+  const lastPrefetchKeyRef = useRef<string>("");
+  const hasCompletedPrimaryPrefetchRef = useRef(false);
+
+  useEffect(() => {
+    if (isPublicPath(location.pathname)) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    const prefetchKey = `${userRole ?? "guest"}:${location.pathname}`;
+    if (lastPrefetchKeyRef.current === prefetchKey) return;
+    lastPrefetchKeyRef.current = prefetchKey;
+
+    const isNative = Capacitor.isNativePlatform();
+    const startDelayMs = isNative ? 8000 : 1800;
+    let idleHandle: IdleCallbackHandle | null = null;
+
+    const startTimer = window.setTimeout(() => {
+      idleHandle = runWhenIdle(() => {
+      prefetchCommonPostLoginRoutes();
+
+      // On native cold start, do only minimal first prefetch pass.
+      if (isNative && !hasCompletedPrimaryPrefetchRef.current) {
+        hasCompletedPrimaryPrefetchRef.current = true;
+        return;
+      }
+
+      if (userRole === "owner" || userRole === "admin") {
+        if (location.pathname.startsWith("/digital-marketing/") || location.pathname.startsWith("/kol-management")) {
+          prefetchMarketingRoleRoutes();
+          return;
+        }
+        if (location.pathname.startsWith("/employees") || location.pathname.startsWith("/recruitment")) {
+          prefetchHrRoleRoutes();
+          return;
+        }
+        if (location.pathname.startsWith("/incomes/") || location.pathname.startsWith("/expenses/")) {
+          prefetchFinanceRoleRoutes();
+          return;
+        }
+        prefetchSalesRoleRoutes();
+        return;
+      }
+
+      if (userRole === "hr") {
+        prefetchHrRoleRoutes();
+        return;
+      }
+
+      if (location.pathname.startsWith("/operations/") || location.pathname.startsWith("/tools/")) {
+        prefetchSalesRoleRoutes();
+      }
+
+      if (location.pathname.startsWith("/digital-marketing/") || location.pathname.startsWith("/kol-management")) {
+        prefetchMarketingRoleRoutes();
+      }
+
+      if (location.pathname.startsWith("/employees") || location.pathname.startsWith("/recruitment")) {
+        prefetchHrRoleRoutes();
+      }
+
+      if (location.pathname.startsWith("/incomes/") || location.pathname.startsWith("/expenses/")) {
+        prefetchFinanceRoleRoutes();
+      }
+      });
+    }, startDelayMs);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      if (idleHandle !== null) {
+        cancelIdleRun(idleHandle);
+      }
+    };
+  }, [location.pathname, userRole]);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -455,13 +729,14 @@ const App = () => (
                 v7_relativeSplatPath: true
               }}
             >
-              <NativePushSetup />
+              <RouteChunkPrefetcher />
+              <DeferredNativeBootstraps />
               <NativeBackButtonHandler />
               <NativeSplashBootstrap />
-              <ShareIntentBootstrap />
               <NativeSafeAreaWrapper>
                 <SecurityWrapper>
                   <SubscriptionExpiryGuard>
+                    <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading...</div>}>
                     <Routes>
                     {/* ======= PROTECTED ROUTES ======= */}
                     {/* PROTECTION SYSTEM */}
@@ -1142,6 +1417,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
                   </Routes>
+                    </Suspense>
                 </SubscriptionExpiryGuard>
                 </SecurityWrapper>
               </NativeSafeAreaWrapper>

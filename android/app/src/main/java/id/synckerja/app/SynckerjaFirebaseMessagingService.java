@@ -3,25 +3,45 @@ package id.synckerja.app;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.Manifest;
 import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
+import android.util.Log;
 import java.util.Map;
 
 /**
- * Custom FCM service: large icon = ic_notification_large (heads-up, 8dp).
- * Launcher uses ic_launcher_foreground_small (home screen).
+ * Custom FCM service: large icon = ic_notification_large (heads-up, shade).
+ * Ensures notification channel exists (including before MainActivity runs) so posts are not dropped.
  */
 public class SynckerjaFirebaseMessagingService extends FirebaseMessagingService {
 
+    private static final String TAG = "SynckerjaFCM";
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        AppNotificationChannels.ensureAppNotificationsChannel(this);
+    }
+
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
+        AppNotificationChannels.ensureAppNotificationsChannel(this);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "POST_NOTIFICATIONS not granted; shade/heads-up may be blocked. Open app and allow notifications.");
+            }
+        }
+
         String channelId = getChannelId(remoteMessage);
         String title = getTitle(remoteMessage);
         String body = getBody(remoteMessage);
@@ -40,8 +60,8 @@ public class SynckerjaFirebaseMessagingService extends FirebaseMessagingService 
         }
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.splash_white_logo);
+        NotificationCompat.Builder builder =
+            new NotificationCompat.Builder(this, channelId).setSmallIcon(R.drawable.splash_white_logo);
 
         Bitmap largeIconBitmap = drawableToBitmap(R.drawable.ic_notification_large);
         if (largeIconBitmap != null) {
@@ -50,15 +70,29 @@ public class SynckerjaFirebaseMessagingService extends FirebaseMessagingService 
 
         builder.setContentTitle(title != null ? title : getString(R.string.app_name))
             .setContentText(body != null ? body : "")
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
             .setColor(ContextCompat.getColor(this, R.color.notification_icon_tint))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND | NotificationCompat.DEFAULT_VIBRATE)
             .setContentIntent(pendingIntent);
 
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null) {
+        if (nm == null) {
+            Log.e(TAG, "NotificationManager null");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !nm.areNotificationsEnabled()) {
+            Log.w(TAG, "App notifications disabled in system settings");
+        }
+
+        try {
             int id = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
             nm.notify(id, builder.build());
+        } catch (SecurityException e) {
+            Log.e(TAG, "nm.notify failed (permission?)", e);
         }
     }
 

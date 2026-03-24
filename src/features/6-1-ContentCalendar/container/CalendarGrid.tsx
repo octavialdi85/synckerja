@@ -1,7 +1,9 @@
 import React, { useMemo } from 'react';
-import { Plus, ExternalLink } from 'lucide-react';
+import { Plus, ExternalLink, Play } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { isSameDay } from 'date-fns';
 import { useBatchSocialMediaLinks } from '../hooks/useBatchSocialMediaLinks';
+import { getCalendarPlanCardTone, type CalendarCardTone } from '../utils/calendarPlanCardTone';
 
 const indonesianDays = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
@@ -10,14 +12,18 @@ interface CalendarGridProps {
   getDayInfo: (date: Date) => any;
   onDayClick: (date: Date, dayInfo: any) => void;
   onPlanClick?: (date: Date, plan: any) => void; // Optional: handler for clicking individual plan card
+  /** Production Need Review (grey) & Production Revision (red): open Google Drive preview modal */
+  onOpenPreview?: (plan: any) => void;
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
   calendarDays,
   getDayInfo,
   onDayClick,
-  onPlanClick
+  onPlanClick,
+  onOpenPreview
 }) => {
+  const { t } = useAppTranslation();
   // Extract plan IDs for green cards (done = true) to fetch links
   // Extract directly from calendarDays to avoid dependency on getDayInfo function
   const planIdsForLinks = useMemo(() => {
@@ -76,6 +82,79 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
     // Fallback to pic_id
     return plan?.pic?.full_name || 'Unassigned';
+  };
+
+  const cardShellClass = (tone: CalendarCardTone) => {
+    switch (tone) {
+      case 'green':
+        return 'bg-green-500 text-white shadow-lg shadow-green-300/50 ring-1 ring-green-300/20';
+      case 'yellow':
+        return 'bg-amber-400 text-gray-900';
+      case 'orange':
+        return 'bg-orange-500 text-white';
+      case 'red':
+        return 'bg-red-500 text-white shadow-lg shadow-red-300/50 ring-1 ring-red-300/20';
+      case 'prod-need-review':
+        return 'bg-gray-500 dark:bg-slate-600 text-white shadow-md ring-1 ring-gray-400/50 dark:ring-slate-500/50';
+      case 'prod-request-revision':
+        return 'bg-red-800 dark:bg-red-950 text-white shadow-md ring-1 ring-red-700/40 dark:ring-red-800/50';
+      default:
+        return 'bg-blue-50 border border-blue-200 text-blue-900';
+    }
+  };
+
+  const cardMetaLineClass = (tone: CalendarCardTone) => {
+    switch (tone) {
+      case 'green':
+        return 'text-emerald-50';
+      case 'yellow':
+        return 'text-gray-800';
+      case 'orange':
+        return 'text-orange-50';
+      case 'red':
+        return 'text-red-50';
+      case 'prod-need-review':
+        return 'text-gray-100 dark:text-slate-100';
+      case 'prod-request-revision':
+        return 'text-red-100 dark:text-red-50';
+      default:
+        return 'text-blue-700';
+    }
+  };
+
+  const cardTitleClass = (tone: CalendarCardTone) => {
+    switch (tone) {
+      case 'green':
+        return 'text-white';
+      case 'yellow':
+        return 'text-gray-900';
+      case 'orange':
+      case 'red':
+      case 'prod-need-review':
+      case 'prod-request-revision':
+        return 'text-white';
+      default:
+        return 'text-blue-900';
+    }
+  };
+
+  const cardSubMetaClass = (tone: CalendarCardTone) => {
+    switch (tone) {
+      case 'green':
+        return 'text-emerald-100';
+      case 'yellow':
+        return 'text-gray-700';
+      case 'orange':
+        return 'text-orange-100';
+      case 'red':
+        return 'text-red-100';
+      case 'prod-need-review':
+        return 'text-gray-200 dark:text-slate-200';
+      case 'prod-request-revision':
+        return 'text-red-100 dark:text-red-200';
+      default:
+        return 'text-blue-600';
+    }
   };
 
   return (
@@ -143,6 +222,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     } else if (approved && productionApproved && done) {
                       planStatus = 'green';
                     }
+
+                    const cardTone = getCalendarPlanCardTone(plan);
                     
                     // Get links for green cards (with null safety)
                     const planLinks = (plan?.id && linksByPlanId[plan.id]) || [];
@@ -164,13 +245,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                             onPlanClick(date, plan);
                           }
                         }}
-                        className={`text-xs space-y-0.5 p-1.5 rounded shadow-sm cursor-pointer hover:opacity-90 hover:shadow-md transition-all ${
-                          planStatus === 'green' ? 'bg-green-500 text-white shadow-lg shadow-green-300/50 ring-1 ring-green-300/20' :
-                          planStatus === 'yellow' ? 'bg-amber-400 text-gray-900' :
-                          planStatus === 'orange' ? 'bg-orange-500 text-white' :
-                          planStatus === 'red' ? 'bg-red-500 text-white shadow-lg shadow-red-300/50 ring-1 ring-red-300/20' :
-                          'bg-blue-50 border border-blue-200 text-blue-900'
-                        }`}
+                        className={`text-xs space-y-0.5 p-1.5 rounded shadow-sm cursor-pointer hover:opacity-90 hover:shadow-md transition-all ${cardShellClass(cardTone)}`}
                       >
                         {/* Late Status Text - Show if plan is green with late status */}
                         {planStatus === 'green' && hasLateStatus && onTimeStatus && (
@@ -180,13 +255,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         )}
                         
                         {/* Service - Sub Service - Pillar */}
-                        <div className={`truncate text-[10px] ${
-                          planStatus === 'green' ? 'text-emerald-50' :
-                          planStatus === 'yellow' ? 'text-gray-800' :
-                          planStatus === 'orange' ? 'text-orange-50' :
-                          planStatus === 'red' ? 'text-red-50' :
-                          'text-blue-700'
-                        }`}>
+                        <div className={`truncate text-[10px] ${cardMetaLineClass(cardTone)}`}>
                           {[
                             plan?.service?.name,
                             plan?.sub_service?.name,
@@ -195,30 +264,37 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         </div>
                         
                         {/* Title */}
-                        <div className={`font-semibold truncate ${
-                          planStatus === 'green' ? 'text-white' :
-                          planStatus === 'yellow' ? 'text-gray-900' :
-                          planStatus === 'orange' ? 'text-white' :
-                          planStatus === 'red' ? 'text-white' :
-                          'text-blue-900'
-                        }`}>
+                        <div className={`font-semibold truncate ${cardTitleClass(cardTone)}`}>
                           {plan?.title || 'Untitled'}
                         </div>
                         
                         {/* PIC, Content Type, Pillar */}
-                        <div className={`truncate text-[10px] ${
-                          planStatus === 'green' ? 'text-emerald-100' :
-                          planStatus === 'yellow' ? 'text-gray-700' :
-                          planStatus === 'orange' ? 'text-orange-100' :
-                          planStatus === 'red' ? 'text-red-100' :
-                          'text-blue-600'
-                        }`}>
+                        <div className={`truncate text-[10px] ${cardSubMetaClass(cardTone)}`}>
                           {[
                             getPicName(plan),
                             plan?.content_type?.name,
                             plan?.content_pillar?.name
                           ].filter(Boolean).join(' • ')}
                         </div>
+
+                        {(cardTone === 'prod-need-review' || cardTone === 'prod-request-revision') &&
+                          onOpenPreview && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenPreview(plan);
+                            }}
+                            className={`mt-1 flex w-full items-center justify-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold text-white ring-1 hover:opacity-95 ${
+                              cardTone === 'prod-request-revision'
+                                ? 'bg-white/20 ring-white/25 hover:bg-white/30'
+                                : 'bg-white/25 ring-white/30 hover:bg-white/35'
+                            }`}
+                          >
+                            <Play className="h-2.5 w-2.5 shrink-0 fill-current" aria-hidden />
+                            {t('contentCalendar.grid.preview', 'Preview')}
+                          </button>
+                        )}
                         
                         {/* NEW: Green cards - Display all social media links */}
                         {planStatus === 'green' && planLinks.length > 0 && (
@@ -259,8 +335,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         
                         {/* NEW: Yellow cards - Display google_drive_link */}
                         {hasGoogleDriveLink && (
-                          <div className="mt-1.5 pt-1.5 border-t border-amber-300/20">
-                            <div className="text-[9px] font-semibold text-gray-800 mb-0.5">
+                          <div
+                            className={`mt-1.5 pt-1.5 border-t ${
+                              cardTone === 'yellow'
+                                ? 'border-amber-300/20'
+                                : 'border-white/25'
+                            }`}
+                          >
+                            <div
+                              className={`text-[9px] font-semibold mb-0.5 ${
+                                cardTone === 'yellow' ? 'text-gray-800' : 'text-white/90'
+                              }`}
+                            >
                               Preview:
                             </div>
                             <a
@@ -270,7 +356,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                               onClick={(e) => {
                                 e.stopPropagation(); // Only stop on link click, not card click
                               }}
-                              className="flex items-center gap-1 text-[9px] text-gray-700 hover:text-gray-900 hover:underline truncate"
+                              className={`flex items-center gap-1 text-[9px] truncate hover:underline ${
+                                cardTone === 'yellow'
+                                  ? 'text-gray-700 hover:text-gray-900'
+                                  : 'text-white/85 hover:text-white'
+                              }`}
                               title={plan.google_drive_link}
                             >
                               <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
