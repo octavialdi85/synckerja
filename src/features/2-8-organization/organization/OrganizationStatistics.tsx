@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
+import { Card, CardContent } from '@/features/ui/card';
 import { Building2, Users, Briefcase, Crown } from 'lucide-react';
 
 interface OrganizationStatisticsProps {
@@ -53,17 +53,17 @@ export const OrganizationStatistics = ({ statistics }: OrganizationStatisticsPro
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="flex shrink-0 flex-col gap-3">
       {stats.map((stat) => (
-        <Card key={stat.title}>
+        <Card key={stat.title} className="shrink-0 shadow-sm">
           <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+            <div className="flex items-center gap-3">
+              <div className={`shrink-0 rounded-lg p-2 ${stat.bgColor}`}>
                 <stat.icon className={`h-5 w-5 ${stat.color}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
               </div>
             </div>
           </CardContent>

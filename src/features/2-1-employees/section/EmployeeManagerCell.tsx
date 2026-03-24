@@ -14,6 +14,9 @@ import {
 } from '@/features/ui/select';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 
+/** Radix Select requires a non-empty string; maps to null manager_id in DB */
+const MANAGER_NONE_VALUE = '__manager_none__';
+
 interface EmployeeManagerCellProps {
   employee: Employee;
   allEmployees: Employee[];
@@ -49,10 +52,12 @@ export const EmployeeManagerCell = memo(function EmployeeManagerCell({
 
   const handleValueChange = useCallback(
     async (managerId: string) => {
-      if (!managerId || managerId === employee.manager_id) return;
+      const nextId = managerId === MANAGER_NONE_VALUE ? null : managerId;
+      const currentId = employee.manager_id ?? null;
+      if (nextId === currentId) return;
       setSaving(true);
       try {
-        const { error } = await supabase.from('employees').update({ manager_id: managerId }).eq('id', employee.id);
+        const { error } = await supabase.from('employees').update({ manager_id: nextId }).eq('id', employee.id);
         if (error) {
           toast({
             title: t('employees.manager.updateError', 'Failed to update manager'),
@@ -97,7 +102,7 @@ export const EmployeeManagerCell = memo(function EmployeeManagerCell({
 
   return (
     <Select
-      value={employee.manager_id || undefined}
+      value={employee.manager_id ?? MANAGER_NONE_VALUE}
       onValueChange={handleValueChange}
       disabled={!canChange}
     >
@@ -105,6 +110,9 @@ export const EmployeeManagerCell = memo(function EmployeeManagerCell({
         <SelectValue placeholder={t('employees.manager.selectPlaceholder', 'Select manager')} />
       </SelectTrigger>
       <SelectContent position="popper" className="max-h-[280px]">
+        <SelectItem value={MANAGER_NONE_VALUE} className="text-xs text-muted-foreground">
+          {t('employees.manager.none', 'No manager')}
+        </SelectItem>
         {eligible.map((m) => (
           <SelectItem key={m.id} value={m.id} className="text-xs">
             {m.full_name}

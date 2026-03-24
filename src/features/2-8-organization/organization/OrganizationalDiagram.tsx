@@ -1,17 +1,8 @@
-
-import React, { useState, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
-import { Button } from '@/features/ui/button';
+import React, { useState, useRef, useCallback, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
+import { Card, CardContent } from '@/features/ui/card';
 import { Badge } from '@/features/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
-import { Input } from '@/features/ui/input';
-import { 
-  Building2, 
-  Search,
-  Crown,
-  ZoomIn,
-  ZoomOut
-} from 'lucide-react';
+import { Building2, Crown } from 'lucide-react';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { getPhotoUrl, getInitials } from '@/features/2-1-employees/hooks/photoUtils';
@@ -20,8 +11,15 @@ import { isEmployeeInOrganizationalStructure } from '@/features/2-1-employees/ut
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Alert, AlertDescription, AlertTitle } from '@/features/ui/alert';
 
-interface OrganizationalDiagramProps {
+export type OrganizationalDiagramHandle = {
+  resetView: () => void;
+};
+
+export interface OrganizationalDiagramProps {
   onEmployeeClick?: (employeeId: string) => void;
+  searchTerm: string;
+  zoomLevel: number;
+  onZoomLevelChange: (value: number) => void;
 }
 
 interface HierarchyNode {
@@ -32,11 +30,112 @@ interface HierarchyNode {
   children: HierarchyNode[];
 }
 
-export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagramProps) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
+export const OrganizationalDiagram = forwardRef<OrganizationalDiagramHandle, OrganizationalDiagramProps>(
+  function OrganizationalDiagram(
+    { onEmployeeClick, searchTerm, zoomLevel, onZoomLevelChange },
+    ref
+  ) {
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  zoomRef.current = zoomLevel;
+
+  const dragActiveRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+  const panRafRef = useRef<number | null>(null);
   const { t } = useAppTranslation();
+
+  const applyTransform = useCallback(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const { x, y } = panRef.current;
+    el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${zoomRef.current})`;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!dragActiveRef.current) {
+      panRef.current = { ...pan };
+    }
+    applyTransform();
+  }, [pan, applyTransform]);
+
+  useLayoutEffect(() => {
+    applyTransform();
+  }, [zoomLevel, applyTransform]);
+
+  const schedulePanTransform = useCallback(() => {
+    if (panRafRef.current != null) return;
+    panRafRef.current = requestAnimationFrame(() => {
+      panRafRef.current = null;
+      applyTransform();
+    });
+  }, [applyTransform]);
+
+  const handlePanePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-org-node]')) return;
+
+    dragActiveRef.current = true;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+      e.preventDefault();
+    }
+  }, []);
+
+  const handlePanePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragActiveRef.current) return;
+      const dx = e.clientX - lastPointerRef.current.x;
+      const dy = e.clientY - lastPointerRef.current.y;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      if (dx === 0 && dy === 0) return;
+      panRef.current = { x: panRef.current.x + dx, y: panRef.current.y + dy };
+      schedulePanTransform();
+    },
+    [schedulePanTransform]
+  );
+
+  const endPaneDrag = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (panRafRef.current != null) {
+        cancelAnimationFrame(panRafRef.current);
+        panRafRef.current = null;
+      }
+      applyTransform();
+
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        /* ignore */
+      }
+
+      const wasDragging = dragActiveRef.current;
+      dragActiveRef.current = false;
+
+      if (wasDragging) {
+        setPan((prev) => {
+          const next = panRef.current;
+          if (prev.x === next.x && prev.y === next.y) return prev;
+          return { x: next.x, y: next.y };
+        });
+      }
+    },
+    [applyTransform]
+  );
+
+  const resetView = useCallback(() => {
+    panRef.current = { x: 0, y: 0 };
+    setPan({ x: 0, y: 0 });
+    onZoomLevelChange(1);
+  }, [onZoomLevelChange]);
+
+  useImperativeHandle(ref, () => ({ resetView }), [resetView]);
 
   const { data: allEmployees = [], isLoading } = useEmployees();
   const { data: currentUserEmployee } = useCurrentUserEmployee();
@@ -171,11 +270,12 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
       <div key={node.id} className="flex flex-col items-center mb-8">
         {/* Employee Node */}
         <div className="relative">
-          <div 
+          <div
+            data-org-node
             className={`rounded-lg p-4 min-w-[200px] text-center shadow-lg cursor-pointer transition-all hover:shadow-xl ${
-              isOwner 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white' 
-                : node.level === 1 
+              isOwner
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                : node.level === 1
                   ? 'bg-gradient-to-r from-green-600 to-green-700 text-white'
                   : 'bg-white border-2 border-gray-200 text-gray-900'
             }`}
@@ -258,8 +358,8 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-6">
+      <Card className="flex h-full min-h-0 flex-col border-gray-200 shadow-sm">
+        <CardContent className="flex flex-1 items-center justify-center p-6">
           <div className="flex items-center justify-center py-8">
             <div className="text-gray-500">Loading organizational structure...</div>
           </div>
@@ -269,54 +369,22 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Organizational Structure
-          </CardTitle>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.1))}
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium min-w-[50px] text-center">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setZoomLevel(Math.min(2, zoomLevel + 0.1))}
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Search employees by name, email, or position..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        <div 
-          ref={containerRef}
-          className="overflow-auto max-h-[800px] p-4"
-          style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
+    <Card className="flex h-full min-h-0 flex-col border-gray-200 shadow-sm">
+      <CardContent className="flex flex-1 min-h-0 flex-col p-0 px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
+        <div
+          ref={viewportRef}
+          role="application"
+          aria-label={t('organization.diagram.panHint', 'Drag empty area to pan the chart (hand cursor).')}
+          className="relative flex min-h-[280px] w-full flex-1 basis-0 cursor-grab touch-none select-none overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/60 selection:bg-transparent active:cursor-grabbing dark:border-slate-700/80 dark:bg-slate-900/25"
+          onPointerDown={handlePanePointerDown}
+          onPointerMove={handlePanePointerMove}
+          onPointerUp={endPaneDrag}
+          onPointerCancel={endPaneDrag}
         >
+          <div
+            ref={innerRef}
+            className="mx-auto w-max max-w-none origin-top p-6 will-change-transform"
+          >
           {/* Organization Header */}
           <div className="text-center mb-8">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 inline-block shadow-lg">
@@ -377,8 +445,9 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
               </div>
             </div>
           )}
+          </div>
         </div>
       </CardContent>
     </Card>
   );
-};
+});
