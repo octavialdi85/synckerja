@@ -545,9 +545,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     const normalizedValue = value && value.trim().length > 0 ? value : null;
     
     if (normalizedValue) {
-      // If link is being added, trigger the existing auto-assignment logic and set production status to "Need Review"
+      // Single update: handleFieldChange(google_drive_link) sends link + Need Review + completion_date (+ PIC).
+      // Do not call onProductionStatusChange here — that batches only production_status and can race / leave the dropdown on "No Status".
       onFieldChange(plan.id, 'google_drive_link', normalizedValue);
-      onProductionStatusChange(plan.id, 'Need Review');
     } else {
       // If link is being cleared, also clear PIC Production and set production status to null
       // Standardize: Save as null instead of empty string for consistency
@@ -994,7 +994,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         maxWidth: '180px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select
-            value={plan.production_approved ? 'Approved' : (plan.production_status || 'none')}
+            value={
+              plan.production_approved
+                ? 'Approved'
+                : plan.production_status ||
+                  (plan.google_drive_link && String(plan.google_drive_link).trim().length > 0
+                    ? 'Need Review'
+                    : 'none')
+            }
             onValueChange={value => {
               if (value === 'none') {
                 onProductionStatusChange(plan.id, null);
@@ -1173,16 +1180,6 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       onFieldChange(plan.id, 'production_approved', true);
       onFieldChange(plan.id, 'production_approved_date', approvedDate);
       onProductionStatusChange(plan.id, 'Approved');
-    }} onRevision={() => {
-      // onProductionStatusChange already handles all required fields when value is "Request Revision":
-      // - production_status: 'Request Revision'
-      // - production_revision_count: incremented
-      // - production_completion_date: null
-      // - production_approved: false
-      // - production_approved_date: null
-      // So we just need to call it once
-      devLog.debug('onRevision callback called', { planId: plan.id, value: 'Request Revision' });
-      onProductionStatusChange(plan.id, 'Request Revision');
     }} />
 
       {/* Social Media Links Dialog */}

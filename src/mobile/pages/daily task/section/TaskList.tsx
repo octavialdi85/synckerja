@@ -37,6 +37,7 @@ import {
   isTaskCreator as checkIsTaskCreator,
 } from './utils/taskUtils';
 import { getEffectiveProgressAndCount } from '@/features/8-2-DailyTask/utils/taskUtils';
+import { getTaskCheckboxRule } from '@/features/8-2-DailyTask/utils/taskCheckboxRules';
 
 export const TaskList = () => {
   const {
@@ -136,8 +137,22 @@ export const TaskList = () => {
 
   const handleStatusToggle = useCallback(
     (task: Task) => {
-      // If task has no steps (has_substeps = FALSE), allow direct toggle with optimistic update
-      if (task.has_substeps === false) {
+      const visibleSteps = getVisibleSteps(task);
+      const { progress, totalCount } = getEffectiveProgressAndCount(visibleSteps);
+      const progressPct =
+        totalCount > 0
+          ? progress
+          : task.status === 'completed'
+            ? 100
+            : 0;
+      const checkboxRule = getTaskCheckboxRule({
+        task,
+        progress: progressPct,
+        visibleStepCount: visibleSteps.length,
+      });
+
+      // Tasks without steps can still be toggled manually.
+      if (!checkboxRule.taskHasSteps) {
         const newStatus = task.status === 'completed' ? 'pending' : 'completed';
         if (newStatus !== task.status) {
           toast({
@@ -157,13 +172,8 @@ export const TaskList = () => {
         return;
       }
 
-      // If task has steps, tidak bisa di-toggle langsung
-      const assignedProgress = calculateAssignedStepsProgress(task);
-      const visibleSteps = getVisibleSteps(task);
-      const isFullComplete = visibleSteps.length > 0 && assignedProgress === 100;
-
-      // Jika task sudah completed dan punya step, tidak bisa di-uncheck (we're already in "has steps" path)
-      if (task.status === 'completed') {
+      // Tasks with steps are always step-driven and cannot be toggled manually.
+      if (checkboxRule.isStepProgressFull) {
         toast({
           title: t('dailyTask.cannotUncheckTask', 'Cannot Uncheck Task'),
           description: t('dailyTask.cannotUncheckTaskDesc', 'Cannot uncheck task with steps. Please manage steps individually.'),
@@ -172,33 +182,13 @@ export const TaskList = () => {
         return;
       }
 
-      // Jika task belum completed, cek apakah semua step sudah selesai (we're in non-completed path here)
-      if (!isFullComplete) {
-        toast({
-          title: t('dailyTask.cannotCompleteTask', 'Cannot Complete Task'),
-          description: t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first'),
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Jika semua step sudah selesai, baru bisa checklist task
-      if (isFullComplete) {
-        toast({
-          title: t('dailyTask.taskCompleted', 'Task Completed'),
-          description: `"${task.title}" has been marked as completed`,
-        });
-        updateTask(task.id, { status: 'completed' }).catch((err) => {
-          logger.error('Error updating task status:', err);
-          toast({
-            title: 'Error',
-            description: 'Failed to update task status',
-            variant: 'destructive',
-          });
-        });
-      }
+      toast({
+        title: t('dailyTask.cannotCompleteTask', 'Cannot Complete Task'),
+        description: t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first'),
+        variant: 'destructive',
+      });
     },
-    [calculateAssignedStepsProgress, getVisibleSteps, toast, updateTask, t]
+    [getVisibleSteps, toast, updateTask, t]
   );
 
   const handlePriorityChange = useCallback(

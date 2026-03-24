@@ -855,9 +855,112 @@ const SocialMediaContent = () => {
         }
       }
 
+      // Brief cleared → align with "No Status" (status empty, un-approve, clear completion)
+      if (field === 'brief') {
+        const briefStr = value == null ? '' : String(value).trim();
+        if (briefStr === '') {
+          updateContentPlan(id, {
+            brief: '',
+            status: '',
+            completion_date: null,
+            approved: false,
+          });
+          return;
+        }
+      }
+
+      // Google Drive link BEFORE production_* batching: adding link must send one payload with
+      // production_status + production_completion_date (see linkWithNeedReview). If this ran after
+      // the batch block, a separate batched production_status-only update could race and confuse UI.
+
+      const linkStr =
+        field === 'google_drive_link' && value != null && value !== ''
+          ? String(value).trim()
+          : '';
+
+      if (field === 'google_drive_link' && linkStr.length > 0) {
+        const plan = contentPlans.find(p => p.id === id);
+        const completionDate = new Date().toISOString();
+        const linkWithNeedReview = {
+          google_drive_link: linkStr,
+          production_status: 'Need Review' as const,
+          production_completion_date: completionDate,
+        };
+
+        if (plan?.pic_production_source === 'task_steps_assigned') {
+          devLog.debug('🔗 Google Drive link added, but PIC Production already set from task_steps_assigned:', {
+            planId: id,
+            link: linkStr,
+            currentPicProductionId: plan.pic_production_id,
+          });
+          updateContentPlan(id, { ...linkWithNeedReview });
+          return;
+        }
+
+        const employeeId = currentEmployee?.id;
+
+        if (!employeeId) {
+          devLog.debug('⚠️ Cannot auto-assign PIC Production: Employee ID not found');
+          updateContentPlan(id, { ...linkWithNeedReview });
+          toast.warning('Google Drive link saved, but could not auto-assign PIC Production (employee not found)');
+          return;
+        }
+
+        devLog.debug('🔗 Google Drive link added, auto-assigning PIC Production:', {
+          planId: id,
+          link: linkStr,
+          employeeId,
+        });
+        updateContentPlan(id, {
+          ...linkWithNeedReview,
+          pic_production_id: employeeId,
+          pic_production_source: 'google_drive_link',
+        });
+        return;
+      }
+
+      if (field === 'google_drive_link' && (!value || String(value).trim().length === 0)) {
+        const pending = pendingBatchUpdatesRef.current.get(id);
+        if (pending?.updates?.production_status === 'Request Revision') {
+          return;
+        }
+        const plan = contentPlans.find(p => p.id === id);
+
+        if (plan?.pic_production_source === 'google_drive_link') {
+          devLog.debug('🔗 Google Drive link cleared, syncing pic_production_id:', { planId: id });
+          try {
+            await syncPicProduction(id, null, plan.pic_production_id, plan.pic_production_source);
+          } catch (error) {
+            devLog.error('Error syncing pic_production_id:', error);
+          }
+          updateContentPlan(id, {
+            google_drive_link: null,
+            production_completion_date: null,
+            production_status: null,
+          });
+        } else {
+          devLog.debug('🔗 Google Drive link cleared, but PIC Production from assignment remains:', {
+            planId: id,
+            currentSource: plan?.pic_production_source,
+          });
+          updateContentPlan(id, {
+            google_drive_link: null,
+            production_completion_date: null,
+            production_status: null,
+          });
+        }
+        return;
+      }
+
       // OPTIMIZED: Batch production_approved related fields to reduce database roundtrips
       // This prevents multiple trigger executions and improves performance
-      if (field === 'production_approved' || field === 'production_approved_date' || field === 'production_status' || field === 'production_completion_date') {
+      if (
+        field === 'production_approved' ||
+        field === 'production_approved_date' ||
+        field === 'production_status' ||
+        field === 'production_completion_date' ||
+        field === 'production_revision_count'
+      ) {
         // Clear existing timeout for this plan
         const existing = pendingBatchUpdatesRef.current.get(id);
         if (existing) {
@@ -891,91 +994,7 @@ const SocialMediaContent = () => {
         return;
       }
 
-      // Auto-assign PIC Production when Google Drive link is added
-      // IMPORTANT: Always send google_drive_link + production_status + production_completion_date in ONE update
-      // so the DB trigger (Need Review requires google_drive_link) sees the link and allows the update.
-      if (field === 'google_drive_link' && value && value.length > 0) {
-        const plan = contentPlans.find(p => p.id === id);
-        const completionDate = new Date().toISOString();
-        const linkWithNeedReview = {
-          google_drive_link: value,
-          production_status: 'Need Review' as const,
-          production_completion_date: completionDate,
-        };
-
-        if (plan?.pic_production_source === 'task_steps_assigned') {
-          devLog.debug('🔗 Google Drive link added, but PIC Production already set from task_steps_assigned:', {
-            planId: id,
-            link: value,
-            currentPicProductionId: plan.pic_production_id
-          });
-          updateContentPlan(id, { ...linkWithNeedReview });
-          return;
-        }
-
-        const employeeId = currentEmployee?.id;
-
-        if (!employeeId) {
-          devLog.debug('⚠️ Cannot auto-assign PIC Production: Employee ID not found');
-          updateContentPlan(id, { ...linkWithNeedReview });
-          toast.warning('Google Drive link saved, but could not auto-assign PIC Production (employee not found)');
-          return;
-        }
-
-        devLog.debug('🔗 Google Drive link added, auto-assigning PIC Production:', {
-          planId: id,
-          link: value,
-          employeeId: employeeId
-        });
-        updateContentPlan(id, {
-          ...linkWithNeedReview,
-          pic_production_id: employeeId,
-          pic_production_source: 'google_drive_link'
-        });
-      } else if (field === 'google_drive_link' && (!value || value.trim().length === 0)) {
-        // When Google Drive Link is cleared
-        // Avoid double UPDATE: if a pending batch already has production_status = 'Request Revision'
-        // (which includes google_drive_link: null), let the batch send one update instead.
-        const pending = pendingBatchUpdatesRef.current.get(id);
-        if (pending?.updates?.production_status === 'Request Revision') {
-          return;
-        }
-        const plan = contentPlans.find(p => p.id === id);
-        
-        if (plan?.pic_production_source === 'google_drive_link') {
-          // If pic_production_id was from Google Drive Link, sync based on assignment
-          devLog.debug('🔗 Google Drive link cleared, syncing pic_production_id:', {
-            planId: id
-          });
-          
-          // Sync pic_production_id based on assignment (if any)
-          try {
-            await syncPicProduction(id, null, plan.pic_production_id, plan.pic_production_source);
-          } catch (error) {
-            devLog.error('Error syncing pic_production_id:', error);
-            // Continue with update even if sync fails
-          }
-          
-          // Update google_drive_link, production_completion_date, and production_status
-          updateContentPlan(id, { 
-            [field]: null,
-            production_completion_date: null,
-            production_status: null
-          });
-        } else {
-          // If pic_production_id was from assignment, keep it
-          devLog.debug('🔗 Google Drive link cleared, but PIC Production from assignment remains:', {
-            planId: id,
-            currentSource: plan?.pic_production_source
-          });
-          
-          updateContentPlan(id, { 
-            [field]: null,
-            production_completion_date: null,
-            production_status: null
-          });
-        }
-      } else if (field === 'approved' && value === true) {
+      if (field === 'approved' && value === true) {
         // Toggle / flow approved tanpa modal (mis. shouldShowModal false karena post_date, atau status bukan Need Review):
         // jangan simpan hanya approved=true — selaraskan status + completion_date agar kolom Status tidak tertinggal "Need Review".
         const plan = contentPlans.find((p) => p.id === id);
@@ -1164,15 +1183,41 @@ const SocialMediaContent = () => {
     });
   }, []);
 
+  /** Same approval entry as table toggle / status → Approved: open Select Daily Task when shouldShowModal applies */
+  const tryStartApprovalFromBrief = useCallback(
+    (planId: string): boolean => {
+      const plan = contentPlans.find((p) => p.id === planId);
+      if (!plan) return false;
+      const oldStatus = plan.status || null;
+      const oldApproved = plan.approved || false;
+      const oldCompletionDate = plan.completion_date || null;
+      const opened = requestApproval(plan, oldStatus, oldApproved, oldCompletionDate);
+      if (opened) {
+        pendingApprovalPlansRef.current.add(planId);
+      }
+      return opened;
+    },
+    [contentPlans, requestApproval],
+  );
+
   const saveBrief = useCallback((brief: string, shouldUpdateStatus: boolean = false) => {
-    if (briefDialog.id) {
-      handleFieldChange(briefDialog.id, 'brief', brief);
+    if (!briefDialog.id) return;
+    const trimmed = brief.trim();
+    if (trimmed === '') {
+      void updateContentPlan(briefDialog.id, {
+        brief: trimmed,
+        status: '',
+        completion_date: null,
+        approved: false,
+      });
+    } else {
+      handleFieldChange(briefDialog.id, 'brief', trimmed);
       if (shouldUpdateStatus) {
         handleFieldChange(briefDialog.id, 'status', 'Need Review');
       }
-      closeBriefDialog();
     }
-  }, [briefDialog.id, handleFieldChange, closeBriefDialog]);
+    closeBriefDialog();
+  }, [briefDialog.id, handleFieldChange, closeBriefDialog, updateContentPlan]);
 
   // Title Dialog Handlers
   const openTitleDialog = useCallback((id: string, title: string | null, approved?: boolean) => {
@@ -1199,12 +1244,30 @@ const SocialMediaContent = () => {
     }
   }, [titleDialog.id, handleFieldChange]);
 
-  // Apply status/field updates from BriefDialog (e.g. approved, status)
-  const handleBriefStatusUpdate = useCallback((planId: string, updates: Record<string, any>) => {
-    Object.entries(updates).forEach(([field, value]) => {
-      handleFieldChange(planId, field, value);
-    });
-  }, [handleFieldChange]);
+  // Apply plan row updates from BriefDialog in one PATCH (brief save, approve, revision, etc.)
+  const handleBriefStatusUpdate = useCallback(
+    (planId: string, updates: Record<string, unknown>) => {
+      // BriefDialog already persisted to Supabase; merge immediately so STATUS / revision_count
+      // update without manual refresh. Realtime refetch is deferred while the modal is open.
+      if (organizationId) {
+        queryClient.setQueryData(
+          ['social-media-plans', organizationId],
+          (oldData: ContentPlan[] | undefined) => {
+            if (!oldData) return oldData;
+            return oldData.map((plan) =>
+              plan.id === planId ? ({ ...plan, ...updates } as ContentPlan) : plan
+            );
+          }
+        );
+        queryClient.invalidateQueries({
+          queryKey: ['social-media-plans', organizationId],
+          refetchType: 'none',
+        });
+      }
+      void updateContentPlan(planId, updates as Record<string, any>);
+    },
+    [updateContentPlan, organizationId, queryClient]
+  );
 
   // Signal to realtime hook: skip social_media_plans refetch while Brief modal is open
   useEffect(() => {
@@ -1377,6 +1440,8 @@ const SocialMediaContent = () => {
             onSave={saveBrief}
             socialMediaPlanId={briefDialog.id}
             onStatusUpdate={handleBriefStatusUpdate}
+            contentPlans={contentPlans}
+            tryStartApprovalFromBrief={tryStartApprovalFromBrief}
           />
 
           <TitleDialog 
@@ -1420,14 +1485,6 @@ const SocialMediaContent = () => {
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved', true);
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', new Date().toISOString());
                 handleFieldChange(notificationPreviewPlan.id, 'production_status', 'Approved');
-              }}
-              onRevision={() => {
-                const count = (notificationPreviewPlan.production_revision_count ?? 0) + 1;
-                handleFieldChange(notificationPreviewPlan.id, 'production_status', 'Request Revision');
-                handleFieldChange(notificationPreviewPlan.id, 'production_revision_count', count);
-                handleFieldChange(notificationPreviewPlan.id, 'production_completion_date', null);
-                handleFieldChange(notificationPreviewPlan.id, 'production_approved', false);
-                handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', null);
               }}
               onCarouselChange={() => {
                 queryClient.invalidateQueries({ queryKey: ['social-media-carousel'] });

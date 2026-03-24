@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, CheckSquare, Paperclip, User, Flag, Bell, AlertTriangle, History, Clock3, Edit, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, CheckSquare, Paperclip, User, UserPlus, Flag, Bell, AlertTriangle, History, Clock3, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import {
@@ -15,6 +15,7 @@ import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/
 import { getEffectiveProgressAndCount } from '@/features/8-2-DailyTask/utils/taskUtils';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { formatDate, formatDaysRemaining, getStatusLabel, getPriorityLabel, isTaskCreator } from '../utils/taskUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -53,6 +54,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   onPriorityChange,
   onAddStep,
 }) => {
+  const { t } = useAppTranslation();
   const isMobile = useIsMobile();
   const [revealedStepId, setRevealedStepId] = useState<string | null>(null);
   const userIsCreator = isTaskCreator(task, userId);
@@ -60,6 +62,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const displayProgress = visibleSteps.length === 0 ? progress : effectiveProgress;
   const displayCompleted = visibleSteps.length === 0 ? visibleSteps.filter((s) => s.is_completed).length : effectiveCompleted;
   const displayTotal = visibleSteps.length === 0 ? visibleSteps.length : effectiveTotal;
+  const isTaskCompletedVisual = displayProgress >= 100;
 
   /** Count of open Sub Step modals (any step can open one). When > 0, back button must not close this modal. */
   const [openSubStepModalCount, setOpenSubStepModalCount] = useState(0);
@@ -106,7 +109,13 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex flex-1 flex-col min-w-0">
-            <span className="text-sm font-semibold text-foreground break-words max-w-full">{task.title}</span>
+            <span
+              className={`text-sm font-semibold break-words max-w-full ${
+                isTaskCompletedVisual ? 'line-through text-muted-foreground' : 'text-foreground'
+              }`}
+            >
+              {task.title}
+            </span>
             <span className="text-xs text-muted-foreground">{displayProgress}% complete</span>
           </div>
         </div>
@@ -163,12 +172,29 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   PIC
                 </span>
-                <span className="inline-flex items-center gap-1 text-foreground min-w-0 max-w-full">
+                <span className="inline-flex items-center gap-1 text-foreground min-w-0 max-w-full flex-wrap">
                   <User className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
                   {task.assigned_to_name ? (
-                    <span className="break-words min-w-0">{task.assigned_to_name}</span>
+                    <span className="inline-flex items-center gap-1 min-w-0 flex-wrap">
+                      <span className="break-words min-w-0 font-medium">{task.assigned_to_name}</span>
+                      {task.assigned_by_name ? (
+                        <>
+                          <UserPlus className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+                          <span
+                            className="break-words min-w-0 text-muted-foreground text-sm"
+                            title={t('dailyTask.picAssignedByTooltip', 'Assigned by {{name}}', {
+                              name: task.assigned_by_name,
+                            })}
+                          >
+                            {task.assigned_by_name}
+                          </span>
+                        </>
+                      ) : null}
+                    </span>
                   ) : (
-                    <span className="italic text-muted-foreground">Unassigned</span>
+                    <span className="italic text-muted-foreground">
+                      {t('dailyTask.picUnassigned', 'Unassigned')}
+                    </span>
                   )}
                 </span>
               </div>

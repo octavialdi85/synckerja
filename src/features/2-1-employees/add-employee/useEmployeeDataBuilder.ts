@@ -35,6 +35,7 @@ export const buildEmployeeData = async (
     postal_code: formData.postal_code,
     
     // Employment Information - Use ONLY foreign key columns
+    manager_id: formData.manager_id,
     department_id: formData.department_id,
     job_position_id: formData.job_position_id,
     job_level_id: formData.job_level_id,

@@ -13,13 +13,14 @@ import {
   TaskListTableHeader,
   TaskListRow,
   TaskListDialogs,
-  isTaskFullyCompleteBySteps,
 } from './TaskList/index';
 import { useTaskListBlockers } from '../hooks/useTaskListBlockers';
 import { useTaskListDepartments } from '../hooks/useTaskListDepartments';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
+import { getEffectiveProgressAndCount } from '../utils/taskUtils';
+import { getTaskCheckboxRule } from '../utils/taskCheckboxRules';
 import './TaskList.css';
 
 export const TaskList = () => {
@@ -145,7 +146,15 @@ export const TaskList = () => {
   };
 
   const handleStatusToggle = (task: Task) => {
-    if (task.has_substeps === false) {
+    const visibleSteps = getVisibleStepsEffective(task);
+    const progress = getEffectiveProgressAndCount(visibleSteps).progress;
+    const checkboxRule = getTaskCheckboxRule({
+      task,
+      progress,
+      visibleStepCount: visibleSteps.length,
+    });
+
+    if (!checkboxRule.taskHasSteps) {
       const newStatus = task.status === 'completed' ? 'pending' : 'completed';
       if (newStatus !== task.status) {
         toast({
@@ -158,27 +167,25 @@ export const TaskList = () => {
       }
       return;
     }
-    const isFullComplete = isTaskFullyCompleteBySteps(task);
-    const newStatus = isFullComplete
-      ? task.status === 'completed'
-        ? 'pending'
-        : 'completed'
-      : 'pending';
-    if (newStatus !== task.status) {
+
+    // Tasks with steps are fully step-driven and cannot be toggled manually.
+    if (checkboxRule.isStepProgressFull) {
       toast({
-        title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
-        description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
-      });
-      updateTask(task.id, { status: newStatus }).catch(() => {
-        toast({ title: 'Error', description: 'Failed to update task status', variant: 'destructive' });
-      });
-    } else if (!isFullComplete && task.status !== 'completed') {
-      toast({
-        title: 'Cannot Complete Task',
-        description: 'Please complete all assigned steps first',
+        title: t('dailyTask.cannotUncheckTask', 'Cannot Uncheck Task'),
+        description: t(
+          'dailyTask.cannotUncheckTaskDesc',
+          'Cannot uncheck task with steps. Please manage steps individually.'
+        ),
         variant: 'destructive',
       });
+      return;
     }
+
+    toast({
+      title: t('dailyTask.cannotCompleteTask', 'Cannot Complete Task'),
+      description: t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first'),
+      variant: 'destructive',
+    });
   };
 
   const handleDateChange = async (taskId: string, date: Date) => {

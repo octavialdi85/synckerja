@@ -5,6 +5,17 @@ import { useDepartmentsCrud } from "../../MyInfo/Employment/hooks/crudMaster/use
 import { useJobPositionsCrud } from "../../MyInfo/Employment/hooks/crudMaster/useJobPositionsCrud";
 import { useJobLevelsCrud } from "../../MyInfo/Employment/hooks/crudMaster/useJobLevelsCrud";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
+import { useEmployees } from "../../hooks/useEmployees";
+import type { Employee } from "../../hooks/useEmployees";
+import { getEligibleManagersForEmployee } from "../../utils/employeeUtils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/features/ui/select";
 import { Button } from "@/features/ui/button";
 import { Plus, MoreVertical, Edit, Trash2, ChevronDown } from "lucide-react";
 import { MasterDataModal } from "@/features/share/MasterDataModal";
@@ -17,6 +28,8 @@ import {
 
 const DepartmentPositionSection: React.FC<EmploymentDataStepProps> = ({ formData, handleInputChange }) => {
   const { organizationId } = useCurrentOrg();
+  const { t } = useAppTranslation();
+  const { data: orgEmployees = [] } = useEmployees();
   
   const departmentsCrud = useDepartmentsCrud(organizationId);
   const jobLevelsCrud = useJobLevelsCrud(organizationId);
@@ -43,6 +56,38 @@ const DepartmentPositionSection: React.FC<EmploymentDataStepProps> = ({ formData
       }
     }
   }, [selectedDepartmentId, filteredJobPositions, formData.job_position_id]);
+
+  const syntheticNewHire = React.useMemo((): Employee => ({
+    id: '__new_hire__',
+    user_id: '',
+    full_name: '',
+    email: '',
+    organization_id: organizationId || '',
+    created_at: '',
+    updated_at: '',
+    department_id: formData.department_id || undefined,
+  }), [organizationId, formData.department_id]);
+
+  const eligibleManagers = React.useMemo(() => {
+    return getEligibleManagersForEmployee(syntheticNewHire, orgEmployees).sort((a, b) =>
+      (a.full_name || '').localeCompare(b.full_name || '', undefined, { sensitivity: 'base' })
+    );
+  }, [syntheticNewHire, orgEmployees]);
+
+  const hasOwnerOption = eligibleManagers.some((c) => c.is_organization_owner);
+
+  const eligibleManagerIds = React.useMemo(
+    () => eligibleManagers.map((e) => e.id).sort().join(','),
+    [eligibleManagers]
+  );
+
+  React.useEffect(() => {
+    if (!formData.manager_id) return;
+    const ok = eligibleManagers.some((e) => e.id === formData.manager_id);
+    if (!ok) {
+      handleInputChange('manager_id', '');
+    }
+  }, [eligibleManagerIds, formData.manager_id, eligibleManagers, handleInputChange]);
 
   const CustomDropdown = ({ 
     label, 
@@ -204,6 +249,33 @@ const DepartmentPositionSection: React.FC<EmploymentDataStepProps> = ({ formData
           onDelete={jobLevelsCrud.deleteItem}
           placeholder="Select job level"
         />
+      </div>
+
+      <div className="mt-6">
+        <label className="block text-sm font-medium mb-2">
+          {t('addEmployee.manager.label', 'Direct manager')} *
+        </label>
+        {!formData.department_id && !hasOwnerOption ? (
+          <p className="text-xs text-amber-600">
+            {t('employees.manager.noDepartmentHint', 'Set department first')}
+          </p>
+        ) : (
+          <Select
+            value={formData.manager_id || undefined}
+            onValueChange={(v) => handleInputChange('manager_id', v)}
+          >
+            <SelectTrigger className="h-10 w-full max-w-md text-sm">
+              <SelectValue placeholder={t('addEmployee.manager.placeholder', 'Select manager')} />
+            </SelectTrigger>
+            <SelectContent position="popper" className="max-h-[280px]">
+              {eligibleManagers.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="text-sm">
+                  {m.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Modals */}

@@ -20,7 +20,10 @@ import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { useCarouselImages, getCarouselImagePublicUrl, CAROUSEL_QUERY_KEY } from '../hook/useCarouselImages';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
-import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
+import {
+  completeStepAndCreateApprovalFromDriveLink,
+  revertStepCompletionFromDriveLinkRemovalWithRpc,
+} from '@/features/8-2-DailyTask/services/completionApprovalService';
 import { setGoogleDriveModalOpenPlanId } from '../hook/briefModalOpenRef';
 
 const getEmbedUrl = (url: string) => {
@@ -351,6 +354,20 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
             // Also invalidate to ensure all related queries refresh
             queryClient.invalidateQueries({ queryKey: ['social-media-plans', organizationId] });
           }
+          // This path bypasses useOptimizedSocialMediaMutations onSuccess — still need pending approval row + step sync
+          if (organizationId) {
+            completeStepAndCreateApprovalFromDriveLink({
+              organizationId,
+              socialMediaPlanId,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('completeStepAndCreateApprovalFromDriveLink after handleClose direct update failed', {
+                  socialMediaPlanId,
+                  message: error.message,
+                });
+              }
+            });
+          }
         }
       } catch (error) {
         devLog.error('Error in handleClose:', error);
@@ -451,46 +468,66 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .update(updateData)
         .eq('id', socialMediaPlanId)
         .select('production_status, production_approved, production_completion_date, production_revision_count')
-        .single();
-        
+        .maybeSingle();
+
       if (error) {
         devLog.error('Error updating production status for revision:', error);
-        toast.error('Failed to update production status');
+        toast.error(
+          error.message ||
+            t(
+              'googleDrivePreview.revisionSaveFailed',
+              'Failed to save Request Revision. Check your connection or try again.'
+            )
+        );
         return;
       }
-      
-      if (data?.production_status !== 'Request Revision') {
-        devLog.warn('production_status was not saved as Request Revision', {
+
+      if (!data || data.production_status !== 'Request Revision') {
+        devLog.error('production_status was not persisted as Request Revision', {
           expected: 'Request Revision',
           actual: data?.production_status,
+          noRow: !data,
         });
+        toast.error(
+          t(
+            'googleDrivePreview.revisionNotPersisted',
+            'Request Revision was not saved (no row updated or wrong status). You may lack permission, or the server rejected the change. Refresh and try again.'
+          )
+        );
+        return;
       }
 
-      // Uncomplete production step via RPC (without clearing link)
+      // Uncomplete assignee step + reject pending approval (await so it finishes before modal closes)
       if (organizationId) {
-        revertStepCompletionFromDriveLinkRemovalWithRpc({
+        const { error: revertErr } = await revertStepCompletionFromDriveLinkRemovalWithRpc({
           organizationId,
           socialMediaPlanId,
           rejectedByEmployeeId: currentEmployee?.id ?? undefined,
-        }).then(({ error }) => {
-          if (error) {
-            devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
-              planId: socialMediaPlanId,
-              message: error.message,
-            });
-          }
-        }).catch((err) => {
-          devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
         });
+        if (revertErr) {
+          devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+            planId: socialMediaPlanId,
+            message: revertErr.message,
+          });
+          toast.error(
+            t(
+              'googleDrivePreview.revisionStepRevertFailed',
+              'Status updated but failed to reopen the assigned task step. Please refresh or contact support.'
+            )
+          );
+        }
       }
 
-      toast.success('Production status updated to Request Revision');
+      toast.success(
+        t('googleDrivePreview.revisionSuccess', 'Production status updated to Request Revision')
+      );
       devLog.debug('Production completion date cleared and status set to Request Revision', {
         planId: socialMediaPlanId,
         newRevisionCount: newProductionRevisionCount,
         wasIncremented: shouldIncrement
       });
 
+      // Optional parent hook (e.g. analytics). Do not persist plan here — this dialog already saved + RPC above.
       if (onRevision) {
         onRevision();
         devLog.debug('onRevision callback executed', { planId: socialMediaPlanId });
@@ -530,27 +567,23 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
           });
         }
         
-        // Also invalidate and refetch to ensure data consistency
-        // Use a delay to allow onRevision callback and batch updates (30ms debounce) to complete first
-        // IMPORTANT: Delay must be long enough for batch updates to complete and database to save
+        queryClient.invalidateQueries({ queryKey: ['social-media-plan', socialMediaPlanId] });
+
+        // Delay refetch slightly so replicas/triggers settle (no competing batched PATCH from parent)
         setTimeout(() => {
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey,
-            refetchType: 'active' // Force refetch for active queries to update UI immediately
+            refetchType: 'active',
           });
-          
-          // Also invalidate all variations for backward compatibility
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey: ['social-media-plans'],
-            refetchType: 'active'
+            refetchType: 'active',
           });
-          
-          // Force immediate refetch to ensure UI updates
-          queryClient.refetchQueries({ 
+          queryClient.refetchQueries({
             queryKey,
-            type: 'active'
+            type: 'active',
           });
-        }, 500); // Increased delay to 500ms to ensure batch updates (30ms) + database save + trigger execution complete
+        }, 300);
       } else if (queryClient) {
         // Fallback if organizationId is not available
         queryClient.invalidateQueries({ 

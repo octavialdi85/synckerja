@@ -57,6 +57,23 @@ export const isEmployeeInOrganizationalStructure = (employee: {
 };
 
 /**
+ * Managers eligible for `employee`: same org implied by caller; not self;
+ * same department as employee unless candidate is organization owner.
+ */
+export const getEligibleManagersForEmployee = (
+  employee: Employee,
+  allEmployees: Employee[]
+): Employee[] => {
+  return allEmployees.filter((c) => {
+    if (c.id === employee.id) return false;
+    if (!isEmployeeInOrganizationalStructure(c)) return false;
+    if (c.is_organization_owner) return true;
+    if (!employee.department_id || !c.department_id) return false;
+    return c.department_id === employee.department_id;
+  });
+};
+
+/**
  * Get employee status for display
  * Returns the status name or 'Active' as default
  * If pending_removal is true, returns 'Pending Removal'

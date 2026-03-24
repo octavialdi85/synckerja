@@ -17,6 +17,8 @@ import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserE
 import { getPhotoUrl, getInitials } from '@/features/2-1-employees/hooks/photoUtils';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { isEmployeeInOrganizationalStructure } from '@/features/2-1-employees/utils/employeeUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { Alert, AlertDescription, AlertTitle } from '@/features/ui/alert';
 
 interface OrganizationalDiagramProps {
   onEmployeeClick?: (employeeId: string) => void;
@@ -34,6 +36,7 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
   const [searchTerm, setSearchTerm] = useState('');
   const [zoomLevel, setZoomLevel] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { t } = useAppTranslation();
 
   const { data: allEmployees = [], isLoading } = useEmployees();
   const { data: currentUserEmployee } = useCurrentUserEmployee();
@@ -45,130 +48,111 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
     [allEmployees]
   );
 
-  // Build hierarchy based on job levels
   const buildHierarchy = React.useMemo(() => {
-    if (!employees.length) return { nodes: [], organizationName: '' };
-
-    // Find organization owner
-    const owner = employees.find(emp => emp.is_organization_owner);
-    // Get organization name from context (current active organization)
     const organizationName = contextOrganizationName || organization?.company_name || 'Organization';
-
-    // Get job level order for sorting
-    const getJobLevelOrder = (levelName: string): number => {
-      const level = levelName?.toLowerCase() || '';
-      if (level.includes('owner') || level.includes('pemilik')) return 10;
-      if (level.includes('executive') || level.includes('eksekutif')) return 9;
-      if (level.includes('director') || level.includes('direktur')) return 8;
-      if (level.includes('manager') || level.includes('manajer')) return 7;
-      if (level.includes('supervisor') || level.includes('lead')) return 6;
-      if (level.includes('senior')) return 5;
-      if (level.includes('junior')) return 4;
-      if (level.includes('staff') || level.includes('karyawan')) return 3;
-      if (level.includes('intern') || level.includes('magang')) return 2;
-      return 1;
-    };
-
-    // Sort employees by job level order (highest first)
-    const sortedEmployees = [...employees].sort((a, b) => {
-      if (a.is_organization_owner && !b.is_organization_owner) return -1;
-      if (!a.is_organization_owner && b.is_organization_owner) return 1;
-      
-      const aLevel = getJobLevelOrder(a.job_level_name || '');
-      const bLevel = getJobLevelOrder(b.job_level_name || '');
-      return bLevel - aLevel;
-    });
-
-    // Create hierarchy nodes
-    const createNode = (employee: any, level: number): HierarchyNode => ({
-      id: employee.id,
-      employee,
-      level,
-      levelName: employee.job_level_name || 'Employee',
-      children: []
-    });
-
-    // Build the hierarchy tree
-    const rootNodes: HierarchyNode[] = [];
-    const processedEmployees = new Set<string>();
-
-    // Start with organization owner
-    if (owner) {
-      const ownerNode = createNode(owner, 0);
-      rootNodes.push(ownerNode);
-      processedEmployees.add(owner.id);
-
-      // Add other employees as children based on hierarchy
-      let currentLevel = [ownerNode];
-      let nextLevel: HierarchyNode[] = [];
-
-      for (const employee of sortedEmployees) {
-        if (processedEmployees.has(employee.id)) continue;
-
-        const employeeLevel = getJobLevelOrder(employee.job_level_name || '');
-        
-        // Find the best parent (employee with higher level)
-        let bestParent: HierarchyNode | null = null;
-        let bestParentLevel = -1;
-
-        const findBestParent = (nodes: HierarchyNode[]) => {
-          for (const node of nodes) {
-            const nodeLevel = getJobLevelOrder(node.employee.job_level_name || '');
-            if (nodeLevel > employeeLevel && nodeLevel > bestParentLevel) {
-              bestParent = node;
-              bestParentLevel = nodeLevel;
-            }
-            if (node.children.length > 0) {
-              findBestParent(node.children);
-            }
-          }
-        };
-
-        findBestParent(rootNodes);
-
-        const newNode = createNode(employee, bestParent ? bestParent.level + 1 : 1);
-        
-        if (bestParent) {
-          bestParent.children.push(newNode);
-        } else {
-          // If no suitable parent found, add to root level
-          rootNodes.push(newNode);
-        }
-
-        processedEmployees.add(employee.id);
-      }
-    } else {
-      // If no owner, create flat structure by job level
-      for (const employee of sortedEmployees) {
-        const node = createNode(employee, 0);
-        rootNodes.push(node);
-      }
+    if (!employees.length) {
+      return {
+        rootNodes: [] as HierarchyNode[],
+        orphanForest: [] as HierarchyNode[],
+        organizationName,
+        hasOrphans: false,
+        multipleRoots: false,
+        noRoot: false,
+      };
     }
 
-    return { nodes: rootNodes, organizationName };
+    const childrenByManager = new Map<string, typeof employees[number][]>();
+    for (const e of employees) {
+      if (!e.manager_id) continue;
+      const list = childrenByManager.get(e.manager_id) ?? [];
+      list.push(e);
+      childrenByManager.set(e.manager_id, list);
+    }
+
+    const createNode = (employee: (typeof employees)[number], depth: number): HierarchyNode => ({
+      id: employee.id,
+      employee,
+      level: depth,
+      levelName: employee.job_level_name || 'Employee',
+      children: [],
+    });
+
+    const buildTree = (emp: (typeof employees)[number], depth: number): HierarchyNode => {
+      const node = createNode(emp, depth);
+      for (const c of childrenByManager.get(emp.id) || []) {
+        node.children.push(buildTree(c, depth + 1));
+      }
+      return node;
+    };
+
+    const roots = employees.filter((e) => !e.manager_id);
+    const multipleRoots = roots.length > 1;
+    const noRoot = roots.length === 0;
+    const rootNodes = roots.map((r) => buildTree(r, 0));
+
+    const collectIds = (n: HierarchyNode, s: Set<string>) => {
+      s.add(n.id);
+      n.children.forEach((c) => collectIds(c, s));
+    };
+    const inMain = new Set<string>();
+    rootNodes.forEach((n) => collectIds(n, inMain));
+    const disconnected = employees.filter((e) => !inMain.has(e.id));
+    const hasOrphans = disconnected.length > 0;
+
+    const discSet = new Set(disconnected.map((d) => d.id));
+    const orphanRoots = disconnected.filter((e) => !e.manager_id || !discSet.has(e.manager_id));
+    const buildBounded = (emp: (typeof employees)[number], depth: number): HierarchyNode => {
+      const node = createNode(emp, depth);
+      for (const c of (childrenByManager.get(emp.id) || []).filter((x) => discSet.has(x.id))) {
+        node.children.push(buildBounded(c, depth + 1));
+      }
+      return node;
+    };
+    const orphanForest = orphanRoots.map((r) => buildBounded(r, 0));
+
+    return {
+      rootNodes,
+      orphanForest,
+      organizationName,
+      hasOrphans,
+      multipleRoots,
+      noRoot,
+    };
   }, [employees, contextOrganizationName, organization]);
 
-  // Filter nodes based on search
-  const filteredNodes = React.useMemo(() => {
-    if (!searchTerm) return buildHierarchy.nodes;
-    
-    const filterNodes = (nodes: HierarchyNode[]): HierarchyNode[] => {
-      return nodes.filter(node => {
-        const matchesSearch = node.employee.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          node.employee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          node.levelName.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const hasMatchingChildren = node.children.length > 0 && filterNodes(node.children).length > 0;
-        
-        return matchesSearch || hasMatchingChildren;
-      }).map(node => ({
-        ...node,
-        children: filterNodes(node.children)
-      }));
-    };
-    
-    return filterNodes(buildHierarchy.nodes);
-  }, [buildHierarchy.nodes, searchTerm]);
+  const filterTree = React.useCallback(
+    (nodes: HierarchyNode[]): HierarchyNode[] => {
+      if (!searchTerm) return nodes;
+      const q = searchTerm.toLowerCase();
+      const filterNodes = (list: HierarchyNode[]): HierarchyNode[] =>
+        list
+          .filter((node) => {
+            const matchesSearch =
+              node.employee.full_name.toLowerCase().includes(q) ||
+              (node.employee.email?.toLowerCase().includes(q) ?? false) ||
+              node.levelName.toLowerCase().includes(q);
+            const childFiltered = filterNodes(node.children);
+            const hasMatchingChildren = childFiltered.length > 0;
+            return matchesSearch || hasMatchingChildren;
+          })
+          .map((node) => ({
+            ...node,
+            children: filterNodes(node.children),
+          }));
+      return filterNodes(nodes);
+    },
+    [searchTerm]
+  );
+
+  const filteredRootNodes = React.useMemo(
+    () => filterTree(buildHierarchy.rootNodes),
+    [buildHierarchy.rootNodes, filterTree]
+  );
+
+  const filteredOrphanForest = React.useMemo(
+    () => filterTree(buildHierarchy.orphanForest),
+    [buildHierarchy.orphanForest, filterTree]
+  );
 
   const renderNode = (node: HierarchyNode) => {
     const isOwner = node.employee.is_organization_owner;
@@ -341,18 +325,56 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
                 <h2 className="text-2xl font-bold">{buildHierarchy.organizationName}</h2>
               </div>
             </div>
-            {filteredNodes.length > 0 && (
+            {(filteredRootNodes.length > 0 || filteredOrphanForest.length > 0) && (
               <div className="w-0.5 h-8 bg-gray-300 mx-auto mt-4"></div>
             )}
           </div>
 
-          {filteredNodes.length > 0 ? (
+          {buildHierarchy.noRoot && employees.length > 0 && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>{t('organization.diagram.noRoot', 'No hierarchy root')}</AlertTitle>
+              <AlertDescription>
+                {t('organization.diagram.noRoot', 'No employee without a manager (root). Check manager_id data and organization owner.')}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {buildHierarchy.multipleRoots && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>{t('organization.diagram.multipleRoots', 'Multiple roots')}</AlertTitle>
+              <AlertDescription>
+                {t('organization.diagram.multipleRoots', 'Multiple roots found; only the organization owner should have no manager.')}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {buildHierarchy.hasOrphans && (
+            <Alert className="mb-4 border-amber-200 bg-amber-50">
+              <AlertTitle>{t('organization.diagram.orphanWarning', 'Hierarchy warning')}</AlertTitle>
+              <AlertDescription>
+                {t('organization.diagram.orphanWarning', 'Some employees are not attached to the main tree.')}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {filteredRootNodes.length > 0 ? (
             <div className="flex flex-wrap justify-center gap-12">
-              {filteredNodes.map(node => renderNode(node))}
+              {filteredRootNodes.map((node) => renderNode(node))}
             </div>
-          ) : (
+          ) : filteredOrphanForest.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               {searchTerm ? 'No results found for your search.' : 'No employees found.'}
+            </div>
+          ) : null}
+
+          {filteredOrphanForest.length > 0 && (
+            <div className="mt-10 pt-8 border-t border-gray-200">
+              <p className="text-center text-sm font-medium text-gray-600 mb-6">
+                {t('organization.diagram.orphanWarning', 'Employees outside main tree')}
+              </p>
+              <div className="flex flex-wrap justify-center gap-12">
+                {filteredOrphanForest.map((node) => renderNode(node))}
+              </div>
             </div>
           )}
         </div>

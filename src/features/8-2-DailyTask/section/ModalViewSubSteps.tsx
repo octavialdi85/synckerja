@@ -529,7 +529,10 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       const list = steps ?? subSteps;
       const hasAny = (list?.length || 0) > 0;
       const allCompleted = hasAny && (list ?? []).every(s => s.is_completed);
-      const payload: any = { is_completed: allCompleted };
+      const payload: any = {
+        is_completed: allCompleted,
+        completed_at: allCompleted ? new Date().toISOString() : null,
+      };
       if (allCompleted) {
         payload.updated_at = new Date().toISOString();
       }

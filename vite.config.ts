@@ -31,5 +31,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Single React instance — avoids duplicate Context during HMR ("must be used within XProvider" while inside provider)
+    dedupe: ["react", "react-dom"],
   },
 }));

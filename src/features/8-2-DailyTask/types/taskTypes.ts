@@ -134,6 +134,8 @@ export interface Task {
   created_by: string;
   assigned_to?: string;
   assigned_to_name?: string | null;
+  /** Display name of employee who assigned the task (excludes self-assign). */
+  assigned_by_name?: string | null;
   has_reminder?: boolean;
   has_steps?: boolean;
   has_substeps?: boolean;

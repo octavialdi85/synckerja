@@ -6,6 +6,7 @@ import {
   fetchRejectedForAssignee,
   approveCompletion,
   rejectCompletion,
+  isStaleLinkRemovalRejection,
   type CompletionApprovalRow,
 } from '../services/completionApprovalService';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,8 +31,15 @@ function filterPendingExcludingProdApproved(rows: CompletionApprovalRow[]): Comp
       if (row.task_steps?.social_media_plans?.production_status === 'Request Revision') return false;
     }
 
-    // 2) Exclude approvals for steps/sub-steps that have been reopened (is_completed = false)
-    if (row.entity_type === 'step' && row.task_steps && row.task_steps.is_completed === false) {
+    // 2) Exclude reopened non-social step/sub-step approvals.
+    // For social linked steps (View Content), keep showing card when production is unapproved
+    // even if step is reopened, so reviewer can re-review content.
+    if (
+      row.entity_type === 'step' &&
+      row.task_steps &&
+      row.task_steps.is_completed === false &&
+      !row.task_steps?.social_media_plan_id
+    ) {
       return false;
     }
     if (row.entity_type === 'substep' && row.task_steps_to_steps && row.task_steps_to_steps.is_completed === false) {
@@ -75,6 +83,7 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
       const raw = rejectedRes.data ?? [];
       const seen = new Set<string>();
       const deduped = raw.filter((row) => {
+        if (isStaleLinkRemovalRejection(row)) return false;
         const key = getRejectionKeyForRow(row);
         if (!key || seen.has(key)) return false;
         seen.add(key);

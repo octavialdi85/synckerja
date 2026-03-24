@@ -3,6 +3,22 @@ import { calculateProgress, determineStatusFromProgress } from '../utils/taskUti
 
 export type CompletionEntityType = 'task' | 'step' | 'substep';
 
+/** Set when Google Drive link is cleared on the plan; UI hides this if the step is completed again. */
+export const LINK_REMOVED_FROM_PREVIEW_REJECT_REASON = 'Link removed from Preview';
+
+/** Rejected row is stale: link was removed then the step was re-completed (e.g. link re-added). */
+export function isStaleLinkRemovalRejection(row: {
+  entity_type: CompletionEntityType;
+  reject_reason: string | null;
+  task_steps?: { is_completed?: boolean | null } | null;
+}): boolean {
+  return (
+    row.reject_reason === LINK_REMOVED_FROM_PREVIEW_REJECT_REASON &&
+    row.entity_type === 'step' &&
+    row.task_steps?.is_completed === true
+  );
+}
+
 export interface CompletionApprovalRow {
   id: string;
   entity_type: CompletionEntityType;
@@ -91,7 +107,7 @@ export async function fetchPendingApprovalsForAssigner(
 }
 
 const REJECTED_SELECT =
-  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at, daily_tasks(title), task_steps(title), task_steps_to_steps(title), assignee:employees!assignee_employee_id(id, full_name)';
+  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at, daily_tasks(title), task_steps(title, is_completed), task_steps_to_steps(title, is_completed), assignee:employees!assignee_employee_id(id, full_name)';
 
 /** Minimal row for rejection lookup (Job Desc + main table). */
 export interface RejectedApprovalLookupRow {
@@ -227,6 +243,39 @@ export async function rejectCompletion(
 }
 
 /**
+ * task_steps.created_by references users.id; completion_approvals.assigner_employee_id must be employees.id.
+ */
+async function resolveAssignerEmployeeId(params: {
+  organizationId: string;
+  assignedByFromAssignment: string | null | undefined;
+  stepCreatedBy: string | null | undefined;
+}): Promise<{ employeeId: string | null; via: 'assignment' | 'created_by_employee' | 'created_by_user' | 'none' }> {
+  const { organizationId, assignedByFromAssignment, stepCreatedBy } = params;
+  if (assignedByFromAssignment) {
+    return { employeeId: assignedByFromAssignment, via: 'assignment' };
+  }
+  if (!stepCreatedBy) return { employeeId: null, via: 'none' };
+
+  const { data: asEmployee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', stepCreatedBy)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (asEmployee?.id) return { employeeId: asEmployee.id, via: 'created_by_employee' };
+
+  const { data: asUser } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('user_id', stepCreatedBy)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (asUser?.id) return { employeeId: asUser.id, via: 'created_by_user' };
+
+  return { employeeId: null, via: 'none' };
+}
+
+/**
  * When Google Drive link is saved in Preview: mark the linked step complete and create a
  * pending completion_approval so assigner sees it in Task Summary (without assignee checking complete on Daily Task).
  * Prefers Content step (is_concept_step = false); falls back to Concept step. Updates daily_tasks.status from progress.
@@ -240,39 +289,37 @@ export async function completeStepAndCreateApprovalFromDriveLink(params: {
     // 1. Find step(s) linked to this plan; prefer Content step
     const { data: contentSteps, error: stepsErr } = await supabase
       .from('task_steps')
-      .select('id, task_id, is_concept_step')
+      .select('id, task_id, is_concept_step, assigned_to, created_by')
       .eq('social_media_plan_id', socialMediaPlanId)
       .eq('is_concept_step', false)
       .limit(1);
     if (stepsErr) return { error: new Error(stepsErr.message) };
 
-    let stepRow: { id: string; task_id: string; is_concept_step: boolean } | null = contentSteps?.[0] ?? null;
+    let stepRow: {
+      id: string;
+      task_id: string;
+      is_concept_step: boolean;
+      assigned_to?: string | null;
+      created_by?: string | null;
+    } | null = contentSteps?.[0] ?? null;
     if (!stepRow) {
       const { data: conceptSteps, error: conceptErr } = await supabase
         .from('task_steps')
-        .select('id, task_id, is_concept_step')
+        .select('id, task_id, is_concept_step, assigned_to, created_by')
         .eq('social_media_plan_id', socialMediaPlanId)
         .eq('is_concept_step', true)
         .limit(1);
       if (conceptErr) return { error: new Error(conceptErr.message) };
       stepRow = conceptSteps?.[0] ?? null;
     }
-    if (!stepRow) return { error: null };
+    if (!stepRow) {
+      return { error: null };
+    }
 
     const stepId = stepRow.id;
     const taskId = stepRow.task_id;
 
-    // 2. Get assignment for this step (assignee + assigner)
-    const { data: assignment, error: assignErr } = await supabase
-      .from('task_steps_assigned')
-      .select('employee_id, assigned_by')
-      .eq('task_step_id', stepId)
-      .order('assigned_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (assignErr) return { error: new Error(assignErr.message) };
-
-    // 3. Mark step complete
+    // 2. Mark step complete first (must not depend on assignment read permissions)
     const completedAt = new Date().toISOString();
     const { error: updateStepErr } = await supabase
       .from('task_steps')
@@ -280,27 +327,59 @@ export async function completeStepAndCreateApprovalFromDriveLink(params: {
       .eq('id', stepId);
     if (updateStepErr) return { error: new Error(updateStepErr.message) };
 
-    // 4. Create completion_approval only if we have assignment and no existing pending
-    if (assignment?.employee_id && assignment?.assigned_by) {
-      const { data: existingPending } = await supabase
+    // 3. Get assignment for this step (assignee + assigner).
+    // If RLS blocks this read, fallback to task_steps.assigned_to/created_by.
+    const { data: assignment } = await supabase
+      .from('task_steps_assigned')
+      .select('employee_id, assigned_by')
+      .eq('task_step_id', stepId)
+      .order('assigned_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const assigneeEmployeeId = assignment?.employee_id ?? stepRow.assigned_to ?? null;
+    const resolvedAssigner = await resolveAssignerEmployeeId({
+      organizationId,
+      assignedByFromAssignment: assignment?.assigned_by,
+      stepCreatedBy: stepRow.created_by,
+    });
+    let assignerEmployeeId = resolvedAssigner.employeeId;
+    if (!assignerEmployeeId) {
+      const { data: planPic } = await supabase
+        .from('social_media_plans')
+        .select('pic_id')
+        .eq('id', socialMediaPlanId)
+        .maybeSingle();
+      if (planPic?.pic_id) {
+        assignerEmployeeId = planPic.pic_id;
+      }
+    }
+
+    // 4. Create completion_approval only if we have assignee+assigner and no existing pending
+    if (assigneeEmployeeId && assignerEmployeeId) {
+      const { data: existingPendingRows, error: pendingErr } = await supabase
         .from('completion_approvals')
         .select('id')
         .eq('entity_type', 'step')
         .eq('task_step_id', stepId)
         .eq('status', 'pending')
-        .maybeSingle();
-      if (!existingPending) {
+        .limit(1);
+      if (pendingErr) return { error: new Error(pendingErr.message) };
+
+      if (!existingPendingRows || existingPendingRows.length === 0) {
         const { error: insertErr } = await supabase.from('completion_approvals').insert({
           organization_id: organizationId,
           entity_type: 'step',
           daily_task_id: taskId,
           task_step_id: stepId,
-          assignee_employee_id: assignment.employee_id,
-          assigner_employee_id: assignment.assigned_by,
+          assignee_employee_id: assigneeEmployeeId,
+          assigner_employee_id: assignerEmployeeId,
           status: 'pending',
           completed_at: completedAt,
         });
-        if (insertErr) return { error: new Error(insertErr.message) };
+        if (insertErr) {
+          return { error: new Error(insertErr.message) };
+        }
       }
     }
 
@@ -320,7 +399,10 @@ export async function completeStepAndCreateApprovalFromDriveLink(params: {
         const currentStatus = (currentTask as { status?: string })?.status ?? 'pending';
         const progress = calculateProgress(allSteps as { is_completed: boolean }[], currentStatus);
         const finalStatus = determineStatusFromProgress(progress, currentStatus);
-        await supabase.from('daily_tasks').update({ status: finalStatus }).eq('id', taskId);
+        await supabase
+          .from('daily_tasks')
+          .update({ status: finalStatus, updated_at: new Date().toISOString() })
+          .eq('id', taskId);
       }
     }
 
@@ -342,7 +424,7 @@ export async function revertStepCompletionFromDriveLinkRemoval(params: {
 }): Promise<{ error: Error | null }> {
   const { organizationId, socialMediaPlanId, rejectedByEmployeeId } = params;
   const rejectedAt = new Date().toISOString();
-  const rejectReason = 'Link removed from Preview';
+  const rejectReason = LINK_REMOVED_FROM_PREVIEW_REJECT_REASON;
 
   try {
     // 1. Find step linked to this plan (same priority: Content then Concept)
@@ -417,7 +499,10 @@ export async function revertStepCompletionFromDriveLinkRemoval(params: {
         const currentStatus = (currentTask as { status?: string })?.status ?? 'pending';
         const progress = calculateProgress(allSteps as { is_completed: boolean }[], currentStatus);
         const finalStatus = determineStatusFromProgress(progress, currentStatus);
-        await supabase.from('daily_tasks').update({ status: finalStatus }).eq('id', taskId);
+        await supabase
+          .from('daily_tasks')
+          .update({ status: finalStatus, updated_at: new Date().toISOString() })
+          .eq('id', taskId);
       }
     }
 
@@ -455,6 +540,181 @@ export async function revertStepCompletionFromDriveLinkRemovalWithRpc(params: {
       return revertStepCompletionFromDriveLinkRemoval(params);
     }
     return { error: new Error(error.message) };
+  } catch (e) {
+    return { error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
+
+/**
+ * Apply production_approved decision from Social Media Plan to linked step.
+ * - approved = true  => step completed, pending approvals resolved as approved
+ * - approved = false => step reopened, pending approvals resolved as rejected
+ */
+export async function syncStepCompletionFromProductionApproval(params: {
+  organizationId: string;
+  socialMediaPlanId: string;
+  approved: boolean;
+  actorEmployeeId?: string | null;
+}): Promise<{ error: Error | null }> {
+  const { socialMediaPlanId, approved, actorEmployeeId } = params;
+  const nowIso = new Date().toISOString();
+  try {
+    // Find linked step (prefer Content step over Concept)
+    const { data: contentSteps, error: contentErr } = await supabase
+      .from('task_steps')
+      .select('id, task_id')
+      .eq('social_media_plan_id', socialMediaPlanId)
+      .eq('is_concept_step', false)
+      .limit(1);
+    if (contentErr) return { error: new Error(contentErr.message) };
+
+    let stepRow: { id: string; task_id: string } | null = contentSteps?.[0] ?? null;
+    if (!stepRow) {
+      const { data: conceptSteps, error: conceptErr } = await supabase
+        .from('task_steps')
+        .select('id, task_id')
+        .eq('social_media_plan_id', socialMediaPlanId)
+        .eq('is_concept_step', true)
+        .limit(1);
+      if (conceptErr) return { error: new Error(conceptErr.message) };
+      stepRow = conceptSteps?.[0] ?? null;
+    }
+    if (!stepRow) return { error: null };
+
+    const stepId = stepRow.id;
+    const taskId = stepRow.task_id;
+
+    const { error: stepErr } = await supabase
+      .from('task_steps')
+      .update({
+        is_completed: approved,
+        completed_at: approved ? nowIso : null,
+      })
+      .eq('id', stepId);
+    if (stepErr) return { error: new Error(stepErr.message) };
+
+    // Keep completion_approvals in sync:
+    // - approved=true: resolve pending rows to approved
+    // - approved=false: reopen the latest step approval as pending (or create one if missing)
+    const { data: latestApproval } = await supabase
+      .from('completion_approvals')
+      .select('id, assignee_employee_id, assigner_employee_id, status')
+      .eq('entity_type', 'step')
+      .eq('task_step_id', stepId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (approved) {
+      const { data: pendingApprovals } = await supabase
+        .from('completion_approvals')
+        .select('id')
+        .eq('entity_type', 'step')
+        .eq('task_step_id', stepId)
+        .eq('status', 'pending');
+      if (pendingApprovals && pendingApprovals.length > 0) {
+        for (const row of pendingApprovals) {
+          const { error: approvalErr } = await supabase
+            .from('completion_approvals')
+            .update({
+              status: 'approved',
+              approved_at: nowIso,
+              approved_by: actorEmployeeId ?? null,
+              updated_at: nowIso,
+            })
+            .eq('id', row.id);
+          if (approvalErr) return { error: new Error(approvalErr.message) };
+        }
+      }
+      // If the latest row is still rejected (no pending row), align with Prod Approved on the plan.
+      const { data: latestAfterPending } = await supabase
+        .from('completion_approvals')
+        .select('id, status')
+        .eq('entity_type', 'step')
+        .eq('task_step_id', stepId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestAfterPending?.id && latestAfterPending.status !== 'approved') {
+        const { error: resolveErr } = await supabase
+          .from('completion_approvals')
+          .update({
+            status: 'approved',
+            approved_at: nowIso,
+            approved_by: actorEmployeeId ?? null,
+            rejected_at: null,
+            rejected_by: null,
+            reject_reason: null,
+            updated_at: nowIso,
+          })
+          .eq('id', latestAfterPending.id);
+        if (resolveErr) return { error: new Error(resolveErr.message) };
+      }
+    } else {
+      if (latestApproval?.id) {
+        const { error: reopenApprovalErr } = await supabase
+          .from('completion_approvals')
+          .update({
+            status: 'pending',
+            approved_at: null,
+            approved_by: null,
+            rejected_at: null,
+            rejected_by: null,
+            reject_reason: null,
+            updated_at: nowIso,
+          })
+          .eq('id', latestApproval.id);
+        if (reopenApprovalErr) return { error: new Error(reopenApprovalErr.message) };
+      } else {
+        // Fallback: create pending approval from latest assignment if no approval row exists yet.
+        const { data: assignment, error: assignErr } = await supabase
+          .from('task_steps_assigned')
+          .select('employee_id, assigned_by')
+          .eq('task_step_id', stepId)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (assignErr) return { error: new Error(assignErr.message) };
+        if (assignment?.employee_id && assignment?.assigned_by) {
+          const { error: insertErr } = await supabase.from('completion_approvals').insert({
+            organization_id: params.organizationId,
+            entity_type: 'step',
+            daily_task_id: taskId,
+            task_step_id: stepId,
+            assignee_employee_id: assignment.employee_id,
+            assigner_employee_id: assignment.assigned_by,
+            status: 'pending',
+            completed_at: nowIso,
+          });
+          if (insertErr) return { error: new Error(insertErr.message) };
+        }
+      }
+    }
+
+    // Keep task status derived from steps.
+    const { data: allSteps, error: allStepsErr } = await supabase
+      .from('task_steps')
+      .select('is_completed')
+      .eq('task_id', taskId);
+    if (allStepsErr) return { error: new Error(allStepsErr.message) };
+    if (allSteps && allSteps.length > 0) {
+      const { data: currentTask, error: taskErr } = await supabase
+        .from('daily_tasks')
+        .select('status')
+        .eq('id', taskId)
+        .single();
+      if (!taskErr && currentTask) {
+        const currentStatus = (currentTask as { status?: string })?.status ?? 'pending';
+        const progress = calculateProgress(allSteps as { is_completed: boolean }[], currentStatus);
+        const finalStatus = determineStatusFromProgress(progress, currentStatus);
+        await supabase
+          .from('daily_tasks')
+          .update({ status: finalStatus, updated_at: new Date().toISOString() })
+          .eq('id', taskId);
+      }
+    }
+
+    return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e : new Error(String(e)) };
   }

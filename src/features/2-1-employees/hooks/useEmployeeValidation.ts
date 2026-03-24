@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { EmployeeFormData } from '@/types/forms';
+import { EmployeeFormData } from '../types/forms';
 
 export const useEmployeeValidation = (formData: EmployeeFormData) => {
   const validatePersonalData = () => {
@@ -13,6 +13,7 @@ export const useEmployeeValidation = (formData: EmployeeFormData) => {
 
   const validateEmploymentData = () => {
     return !!(
+      formData.manager_id &&
       formData.department_id &&
       formData.job_position_id &&
       formData.job_level_id &&

@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Square, Target, User, Calendar, Bell, AlertTriangle, Clock3, Edit, Trash2, Building2 } from 'lucide-react';
+import { CheckSquare, Square, Target, User, UserPlus, Calendar, Bell, AlertTriangle, Clock3, Edit, Trash2, Building2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/types';
 import { formatDate, isOverdue } from '../utils/taskUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { getTaskCheckboxRule } from '@/features/8-2-DailyTask/utils/taskCheckboxRules';
 
 const ACTION_STRIP_WIDTH = 140;
 const SWIPE_THRESHOLD = 28;
@@ -59,9 +61,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onReveal,
   onClose,
 }) => {
+  const { t } = useAppTranslation();
   const isOverdueTask = isOverdue(task.due_date, task.status);
-  const isCompleted = (task.has_substeps === false && task.status === 'completed') ||
-                     (task.has_substeps !== false && progress === 100);
+  const checkboxRule = getTaskCheckboxRule({
+    task,
+    progress,
+    visibleStepCount: visibleSteps.length,
+  });
+  // Keep visual parity with desktop: title is crossed out whenever displayed progress is 100%.
+  const isCompleted = checkboxRule.isChecked || progress >= 100;
 
   const [translateX, setTranslateX] = useState(0);
   const touchStartRef = useRef<{
@@ -219,38 +227,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             e.stopPropagation();
             onToggleStatus(task);
           }}
-          disabled={task.has_substeps !== false && task.status === 'completed'}
+          disabled={checkboxRule.isDisabled}
           className={`mt-1 flex-shrink-0 transition-colors ${
-            task.has_substeps !== false && task.status === 'completed'
+            checkboxRule.isDisabled
               ? 'text-gray-300 cursor-not-allowed opacity-50'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           title={
-            task.has_substeps === false
-              ? task.status === 'completed'
+            checkboxRule.taskHasSteps
+              ? checkboxRule.reasonKey === 'completeAllStepsFirst'
+                ? t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first')
+                : t('dailyTask.cannotUncheckTaskDesc', 'Cannot uncheck task with steps. Please manage steps individually.')
+              : task.status === 'completed'
                 ? 'Mark incomplete'
                 : 'Mark complete'
-              : task.status === 'completed'
-              ? 'Cannot uncheck task with steps. Please manage steps individually.'
-              : progress === 100
-              ? 'Mark complete'
-              : 'Complete all assigned steps to mark task complete'
           }
         >
-          {(() => {
-            if (task.has_substeps === false) {
-              return task.status === 'completed' ? (
-                <CheckSquare className="h-4 w-4 text-green-600" />
-              ) : (
-                <Square className="h-4 w-4" />
-              );
-            }
-            return progress === 100 ? (
-              <CheckSquare className="h-4 w-4 text-green-600" />
-            ) : (
-              <Square className="h-4 w-4" />
-            );
-          })()}
+          {isCompleted ? (
+            <CheckSquare className="h-4 w-4 text-green-600" />
+          ) : (
+            <Square className="h-4 w-4" />
+          )}
         </button>
 
         <div
@@ -350,20 +347,50 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1 text-foreground">
-                <User className="h-3.5 w-3.5 text-blue-500" />
+              <span className="inline-flex items-center gap-1 text-foreground min-w-0 max-w-full">
+                <User className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                 {task.assigned_to_name ? (
-                  <span className="max-w-[140px] truncate text-[11px] text-muted-foreground">
-                    {task.assigned_to_name}
+                  <span className="inline-flex items-center gap-1 min-w-0 max-w-[min(100%,280px)] flex-wrap">
+                    <span
+                      className="max-w-[120px] truncate text-[11px] text-muted-foreground"
+                      title={task.assigned_to_name}
+                    >
+                      {task.assigned_to_name}
+                    </span>
+                    {task.assigned_by_name ? (
+                      <>
+                        <UserPlus
+                          className="h-3 w-3 shrink-0 text-slate-400"
+                          aria-hidden
+                        />
+                        <span
+                          className="max-w-[120px] truncate text-[11px] text-muted-foreground"
+                          title={t('dailyTask.picAssignedByTooltip', 'Assigned by {{name}}', {
+                            name: task.assigned_by_name,
+                          })}
+                        >
+                          {task.assigned_by_name}
+                        </span>
+                      </>
+                    ) : null}
                   </span>
                 ) : (
-                  <span className="italic text-muted-foreground">Unassigned</span>
+                  <span className="italic text-muted-foreground text-[11px]">
+                    {t('dailyTask.picUnassigned', 'Unassigned')}
+                  </span>
                 )}
               </span>
             </TooltipTrigger>
-            {task.assigned_to_name && (
-              <TooltipContent>
-                <span>{task.assigned_to_name}</span>
+            {(task.assigned_to_name || task.assigned_by_name) && (
+              <TooltipContent className="max-w-xs">
+                {task.assigned_to_name && <div>{task.assigned_to_name}</div>}
+                {task.assigned_by_name && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t('dailyTask.picAssignedByTooltip', 'Assigned by {{name}}', {
+                      name: task.assigned_by_name,
+                    })}
+                  </div>
+                )}
               </TooltipContent>
             )}
           </Tooltip>

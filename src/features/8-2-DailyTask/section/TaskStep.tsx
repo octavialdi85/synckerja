@@ -38,6 +38,8 @@ import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import { useToast } from '@/features/ui/use-toast';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import type { TaskStep as TaskStepData } from '../types/taskTypes';
+import { getStepCheckboxRule } from '../utils/stepCheckboxRules';
+import { LINK_REMOVED_FROM_PREVIEW_REJECT_REASON } from '../services/completionApprovalService';
 
 /** Smooth transition when step settles after reorder drop */
 const SORT_DROP_TRANSITION = 'transform 0.38s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.2s ease-out';
@@ -188,7 +190,6 @@ const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function Ta
   const nodeStyle = sortableHandleProps ? undefined : sortableNodeStyle;
 
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep, rejectedReasonsByStepId, highlightFromPendingApproval, pendingApprovalFocus, setPendingApprovalFocus } = useDailyTask();
-  const stepRejectReason = rejectedReasonsByStepId[step.id];
   const isHighlightedFromPendingApproval = Boolean(highlightFromPendingApproval && pendingApprovalFocus?.stepId === step.id);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showFiles, setShowFiles] = useState(false); // Default collapsed
@@ -272,6 +273,17 @@ const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function Ta
 
   // Use optimistic state if available, otherwise use step prop (for immediate UI feedback)
   const isCompleted = optimisticCompleted !== null ? optimisticCompleted : step.is_completed;
+  const stepCheckboxRule = getStepCheckboxRule({
+    isCompleted,
+    subStepCount,
+    subStepCompletedCount,
+  });
+  const rawRejectReason = rejectedReasonsByStepId[step.id];
+  const stepRejectReason =
+    rawRejectReason &&
+    !(rawRejectReason === LINK_REMOVED_FROM_PREVIEW_REJECT_REASON && stepCheckboxRule.isChecked)
+      ? rawRejectReason
+      : undefined;
   const updatedAt = optimisticUpdatedAt !== null ? optimisticUpdatedAt : step.updated_at;
   
   // Use completed_at for finished date (from task_steps table)
@@ -781,30 +793,28 @@ const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function Ta
       }
     }
 
-    // Jika step memiliki sub-step, cek validasi terlebih dahulu
-    if (subStepCount > 0) {
-      // Jika step belum completed, cek apakah semua sub-step sudah selesai
-      if (!step.is_completed) {
-        const allSubStepsCompleted = subStepCompletedCount === subStepCount && subStepCount > 0;
-        if (!allSubStepsCompleted) {
-          // Tampilkan pesan bahwa semua sub-step harus diselesaikan terlebih dahulu
-          toast({
-            title: 'Lengkapi Semua Sub-Step',
-            description: `Harap lengkapi semua ${subStepCount} sub-step terlebih dahulu. Saat ini ${subStepCompletedCount}/${subStepCount} sudah selesai.`,
-            variant: 'destructive',
-          });
-          return;
-        }
-      } else {
-        // Jika step sudah completed dan memiliki sub-step, tidak bisa di-uncheck
-        // Tampilkan dialog konfirmasi untuk menjelaskan mengapa tidak bisa di-uncheck
+    // Steps with sub-steps are fully sub-step-driven and cannot be toggled manually.
+    if (stepCheckboxRule.hasSubSteps) {
+      if (stepCheckboxRule.reasonKey === 'completeAllSubStepsFirst') {
         toast({
-          title: 'Tidak Dapat Membuka Kembali',
-          description: 'Step dengan sub-steps tidak dapat dibuka kembali. Silakan kelola sub-steps secara individual.',
+          title: t('dailyTask.cannotCompleteStep', 'Cannot Complete Step'),
+          description: t(
+            'dailyTask.completeAllSubStepsFirst',
+            'Please complete all sub-steps first'
+          ),
           variant: 'destructive',
         });
-        return;
+      } else {
+        toast({
+          title: t('dailyTask.cannotUncheckStepWithSubSteps', 'Cannot Reopen Step'),
+          description: t(
+            'dailyTask.cannotUncheckStepWithSubStepsDesc',
+            'Cannot reopen step with sub-steps. Please manage sub-steps individually.'
+          ),
+          variant: 'destructive',
+        });
       }
+      return;
     }
 
     // Tampilkan dialog konfirmasi sebelum toggle (untuk check dan uncheck)
@@ -1094,27 +1104,26 @@ const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function Ta
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={handleToggleComplete}
-          disabled={
-            (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
-            (subStepCount > 0 && isCompleted)
-          }
+          disabled={stepCheckboxRule.isDisabled}
           className={`transition-colors flex-shrink-0 ${
-            (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
-            (subStepCount > 0 && isCompleted)
+            stepCheckboxRule.isDisabled
               ? 'text-gray-300 cursor-not-allowed opacity-50'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           title={
-            subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted
-              ? `Harap lengkapi semua ${subStepCount} sub-step terlebih dahulu. Saat ini ${subStepCompletedCount}/${subStepCount} sudah selesai.`
-              : subStepCount > 0 && isCompleted
-              ? 'Step dengan sub-steps tidak dapat dibuka kembali. Silakan kelola sub-steps secara individual.'
+            stepCheckboxRule.reasonKey === 'completeAllSubStepsFirst'
+              ? t('dailyTask.completeAllSubStepsFirst', 'Please complete all sub-steps first')
+              : stepCheckboxRule.reasonKey === 'cannotUncheckStepWithSubSteps'
+              ? t(
+                  'dailyTask.cannotUncheckStepWithSubStepsDesc',
+                  'Cannot reopen step with sub-steps. Please manage sub-steps individually.'
+                )
               : isCompleted
               ? 'Buka kembali step'
               : 'Tandai step sebagai selesai'
           }
         >
-          {isCompleted ? (
+          {stepCheckboxRule.isChecked ? (
             <CheckSquare className="w-4 h-4 text-green-600" />
           ) : (
             <Square className="w-4 h-4" />
@@ -1154,7 +1163,7 @@ const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function Ta
                       ? 'break-words'
                       : 'truncate'
                     : 'line-clamp-2 md:truncate'
-                } ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}
+                } ${stepCheckboxRule.isChecked ? 'line-through text-gray-500' : 'text-gray-900'}`}
               >
                 {step.title}
               </span>

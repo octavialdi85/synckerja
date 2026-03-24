@@ -208,8 +208,12 @@ Deno.serve(async (req: Request) => {
         });
       }
       targetUserId = (emp as { user_id: string }).user_id;
+      const entityType = typeof record.entity_type === "string" ? record.entity_type : "";
       title = "Pending approval";
-      body = "Item baru menunggu persetujuan Anda";
+      body =
+        entityType === "step"
+          ? "Konten produksi menunggu review Anda (Daily Task / Need Review)."
+          : "Item baru menunggu persetujuan Anda";
       dataPayload = { url: "/", openNotifications: "true", notificationType: "tasks" };
     } else if (table === "plan_status_change_notifications") {
       targetUserId = typeof record.user_id === "string" ? record.user_id : null;
@@ -260,6 +264,17 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", targetUserId)
       .eq("context", "general");
     const fcmTokensList = (fcmRows ?? []) as { id: string; token: string }[];
+
+    if (table === "completion_approvals") {
+      console.log("app-notifications-send-push: completion_approvals push target", {
+        assignerEmployeeId: record.assigner_employee_id,
+        targetUserId,
+        entityType: record.entity_type,
+        taskStepId: record.task_step_id,
+        dailyTaskId: record.daily_task_id,
+        tokenCount: fcmTokensList.length,
+      });
+    }
 
     if (fcmTokensList.length === 0) {
       console.log("app-notifications-send-push: no tokens", { targetUserId });

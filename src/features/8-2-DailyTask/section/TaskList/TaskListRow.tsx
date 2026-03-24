@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   User,
+  UserPlus,
   History,
   Clock3,
   Paperclip,
@@ -47,13 +48,13 @@ import {
   formatDate,
   isOverdue,
   isTaskCreator,
-  isTaskFullyCompleteBySteps,
   calculateAssignedStepsProgress,
 } from './taskListHelpers';
 import type { Task } from '../../types';
 import { useDailyTask } from '../../DailyTaskContext';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Badge } from '@/features/ui/badge';
+import { getTaskCheckboxRule } from '../../utils/taskCheckboxRules';
 
 export interface TaskListRowProps {
   task: Task;
@@ -123,6 +124,11 @@ export function TaskListRow({
   const taskRejectReason = rejectedReasonsByTaskId[task.id];
   const visibleSteps = getVisibleSteps(task);
   const progress = calculateAssignedStepsProgress(task, visibleSteps);
+  const checkboxRule = getTaskCheckboxRule({
+    task,
+    progress,
+    visibleStepCount: visibleSteps.length,
+  });
   const creatorCanEdit = isTaskCreator(task, userId);
   const isOverdueTask = isOverdue(task.due_date, task.status);
   const displayStatus =
@@ -164,18 +170,23 @@ export function TaskListRow({
               e.stopPropagation();
               onStatusToggle(task);
             }}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={checkboxRule.isDisabled}
+            className={`flex-shrink-0 transition-colors ${
+              checkboxRule.isDisabled
+                ? 'text-gray-300 cursor-not-allowed opacity-50'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
             title={
-              task.has_substeps === false
-                ? task.status === 'completed'
+              checkboxRule.taskHasSteps
+                ? checkboxRule.reasonKey === 'completeAllStepsFirst'
+                  ? t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first')
+                  : t('dailyTask.cannotUncheckTaskDesc', 'Cannot uncheck task with steps. Please manage steps individually.')
+                : task.status === 'completed'
                   ? 'Mark incomplete'
                   : 'Mark complete'
-                : isTaskFullyCompleteBySteps(task)
-                  ? 'Mark complete / reopen'
-                  : 'Complete all steps to mark task complete'
             }
           >
-            {isTaskFullyCompleteBySteps(task) ? (
+            {checkboxRule.isChecked ? (
               <CheckSquare className="w-5 h-5 text-green-600" />
             ) : (
               <Square className="w-5 h-5" />
@@ -188,7 +199,7 @@ export function TaskListRow({
             <TooltipTrigger asChild>
               <div
                 className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex flex-wrap items-center gap-2 ${
-                  isTaskFullyCompleteBySteps(task) ? 'line-through text-gray-500' : 'text-gray-900'
+                  checkboxRule.isChecked ? 'line-through text-gray-500' : 'text-gray-900'
                 }`}
                 onClick={() => onToggleExpansion(task.id)}
               >
@@ -261,16 +272,39 @@ export function TaskListRow({
         </TableCell>
 
         <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}>
-          <div className="flex items-center min-w-0">
+          <div className="flex items-start min-w-0">
             {task.assigned_to_name ? (
-              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <User className="w-4 h-4 flex-shrink-0 text-blue-600" />
-                <span className="text-sm text-gray-900 font-medium truncate" title={task.assigned_to_name}>
-                  {task.assigned_to_name}
-                </span>
+              <div className="flex gap-2 min-w-0 overflow-hidden">
+                <User className="w-4 h-4 flex-shrink-0 text-blue-600 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span
+                    className="text-sm text-gray-900 font-medium truncate block"
+                    title={task.assigned_to_name}
+                  >
+                    {task.assigned_to_name}
+                  </span>
+                  {task.assigned_by_name ? (
+                    <div
+                      className="flex items-center gap-1 min-w-0 mt-0.5"
+                      title={t('dailyTask.picAssignedByTooltip', 'Assigned by {{name}}', {
+                        name: task.assigned_by_name,
+                      })}
+                    >
+                      <UserPlus
+                        className="w-3 h-3 flex-shrink-0 text-slate-400"
+                        aria-hidden
+                      />
+                      <span className="text-xs text-gray-500 truncate">
+                        {task.assigned_by_name}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : (
-              <span className="text-sm text-gray-400 italic">Unassigned</span>
+              <span className="text-sm text-gray-400 italic">
+                {t('dailyTask.picUnassigned', 'Unassigned')}
+              </span>
             )}
           </div>
         </TableCell>

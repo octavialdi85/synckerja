@@ -581,15 +581,28 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       if (shouldIncrement) {
         updateData.production_revision_count = newProductionRevisionCount;
       }
-      const { error } = await supabase
+      const { error, data: updatedRow } = await supabase
         .from('social_media_plans')
         .update(updateData)
         .eq('id', planId)
         .select('production_status')
-        .single();
+        .maybeSingle();
       if (error) {
         devLog.error('Error updating production status for revision:', error);
         toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
+        return;
+      }
+      if (!updatedRow || updatedRow.production_status !== 'Request Revision') {
+        devLog.error('Request Revision not persisted after update', {
+          planId,
+          actual: updatedRow?.production_status,
+        });
+        toast.error(
+          t(
+            'publicReview.toast.revisionNotSaved',
+            'Request Revision was not saved. Refresh the page and try again, or contact an admin.'
+          )
+        );
         return;
       }
       // Uncomplete production step via RPC (without clearing link)
@@ -599,20 +612,17 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         .eq('id', planId)
         .single();
       if (planRow?.organization_id) {
-        revertStepCompletionFromDriveLinkRemovalWithRpc({
+        const { error: rpcErr } = await revertStepCompletionFromDriveLinkRemovalWithRpc({
           organizationId: planRow.organization_id,
           socialMediaPlanId: planId,
           rejectedByEmployeeId: undefined,
-        }).then(({ error: rpcErr }) => {
-          if (rpcErr) {
-            devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
-              planId,
-              message: rpcErr.message,
-            });
-          }
-        }).catch((err) => {
-          devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
         });
+        if (rpcErr) {
+          devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+            planId,
+            message: rpcErr.message,
+          });
+        }
       }
       toast.success(t('publicReview.toast.revisionSuccess', 'Production status updated to Request Revision'));
       if (showBackToHome) {

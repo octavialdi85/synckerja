@@ -95,8 +95,8 @@ export const EmployeePage = () => {
               {/* Grid Layout: 12 columns (9-3) */}
               <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                 {/* Main Content - 9 columns */}
-                <div className="col-span-9 h-full">
-                  <div className="h-full flex flex-col">
+                <div className="col-span-9 h-full min-w-0">
+                  <div className="h-full flex flex-col min-w-0">
                     {/* Filter Section */}
                     <div className="flex-shrink-0 mb-2">
                       <div className="bg-white border rounded-md p-2">
@@ -116,10 +116,11 @@ export const EmployeePage = () => {
                     </div>
                     
                     {/* Table Section - Main Content */}
-                    <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+                    <div className="flex-1 min-h-0 min-w-0">
+                      <div className="h-full min-w-0 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
                         <EmployeeTable 
                           employees={filteredEmployees}
+                          allEmployees={employees}
                           currentUserEmail={user?.email}
                           userRole={userRole ?? undefined}
                           onRefresh={handleRefresh}

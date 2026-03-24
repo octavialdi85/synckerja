@@ -10,6 +10,7 @@ import {
 } from '@/features/ui/dropdown-menu';
 import { Employee } from '../hooks/useEmployees';
 import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployeePermissions } from '../hooks/useEmployeePermissions';
 import { ConfirmationDialog } from '../modal/ConfirmationDialog';
@@ -35,6 +36,19 @@ export const EmployeeActionsDropdown = ({
   const [isLoading, setIsLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const { toast } = useToast();
+  const { t } = useAppTranslation();
+
+  const countDirectReports = useCallback(async (): Promise<number> => {
+    const { count, error } = await supabase
+      .from('employees')
+      .select('id', { count: 'exact', head: true })
+      .eq('manager_id', employee.id);
+    if (error) {
+      logger.error('countDirectReports', error);
+      return 0;
+    }
+    return count ?? 0;
+  }, [employee.id]);
 
   // Get centralized permissions
   const permissions = useEmployeePermissions({
@@ -62,6 +76,17 @@ export const EmployeeActionsDropdown = ({
   const handleResignConfirm = useCallback(async () => {
     setIsLoading(true);
     try {
+      const reports = await countDirectReports();
+      if (reports > 0) {
+        toast({
+          title: 'Cannot resign',
+          description: t('employees.resign.blockedHasDirectReports', 'Reassign direct reports first.', { count: reports }),
+          variant: 'destructive',
+        });
+        setConfirmAction(null);
+        return;
+      }
+
       logger.info('Starting resign process for employee:', employee.full_name);
       
       // Call the edge function to deactivate organization access and update employee status
@@ -116,11 +141,22 @@ export const EmployeeActionsDropdown = ({
     } finally {
       setIsLoading(false);
     }
-  }, [employee, onRefresh, toast]);
+  }, [employee, onRefresh, toast, countDirectReports, t]);
 
   const handleDeleteConfirm = useCallback(async () => {
     setIsLoading(true);
     try {
+      const reports = await countDirectReports();
+      if (reports > 0) {
+        toast({
+          title: 'Cannot delete',
+          description: t('employees.resign.blockedHasDirectReports', 'Reassign direct reports first.', { count: reports }),
+          variant: 'destructive',
+        });
+        setConfirmAction(null);
+        return;
+      }
+
       logger.info('Deleting employee:', employee.full_name);
 
       const { error } = await supabase
@@ -148,9 +184,9 @@ export const EmployeeActionsDropdown = ({
     } finally {
       setIsLoading(false);
     }
-  }, [employee, onRefresh, toast]);
+  }, [employee, onRefresh, toast, countDirectReports, t]);
 
-  const handleResign = useCallback(() => {
+  const handleResign = useCallback(async () => {
     if (!permissions.canResign) {
       toast({
         title: "Cannot Resign Employee",
@@ -159,10 +195,19 @@ export const EmployeeActionsDropdown = ({
       });
       return;
     }
+    const reports = await countDirectReports();
+    if (reports > 0) {
+      toast({
+        title: 'Cannot resign',
+        description: t('employees.resign.blockedHasDirectReports', 'Reassign direct reports first.', { count: reports }),
+        variant: 'destructive',
+      });
+      return;
+    }
     setConfirmAction('resign');
-  }, [permissions, toast]);
+  }, [permissions, toast, countDirectReports, t]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!permissions.canDelete) {
       toast({
         title: "Cannot Delete Employee",
@@ -171,8 +216,17 @@ export const EmployeeActionsDropdown = ({
       });
       return;
     }
+    const reports = await countDirectReports();
+    if (reports > 0) {
+      toast({
+        title: 'Cannot delete',
+        description: t('employees.resign.blockedHasDirectReports', 'Reassign direct reports first.', { count: reports }),
+        variant: 'destructive',
+      });
+      return;
+    }
     setConfirmAction('delete');
-  }, [permissions, toast]);
+  }, [permissions, toast, countDirectReports, t]);
 
   const handleConfirmAction = useCallback(() => {
     if (confirmAction === 'resign') {

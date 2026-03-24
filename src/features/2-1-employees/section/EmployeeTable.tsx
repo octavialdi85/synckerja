@@ -8,11 +8,15 @@ import { EmployeeActionsDropdown } from './EmployeeActionsDropdown';
 import type { Employee } from '../hooks/useEmployees';
 import { useOptimizedPerformanceMonitor } from '../hooks/useOptimizedPerformanceMonitor';
 import { EmployeeTableFooter } from './EmployeeTableFooter';
+import { EmployeeManagerCell } from './EmployeeManagerCell';
 import { getEmployeeStatus, countActiveEmployees } from '../utils/employeeUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import './EmployeeTable.css';
 
 interface EmployeeTableProps {
   employees: Employee[];
+  /** Full org list (unfiltered) for manager dropdown options */
+  allEmployees: Employee[];
   currentUserEmail?: string;
   userRole?: string;
   onRefresh: () => void;
@@ -24,12 +28,14 @@ interface EmployeeTableProps {
 // Memoized row component for performance
 const EmployeeRow = memo(({ 
   employee, 
+  allEmployees,
   currentUserEmail, 
   userRole,
   onRefresh, 
   onViewEmployee 
 }: {
   employee: Employee;
+  allEmployees: Employee[];
   currentUserEmail?: string;
   userRole?: string;
   onRefresh: () => void;
@@ -105,6 +111,15 @@ const EmployeeRow = memo(({
           </div>
         </div>
       </TableCell>
+      <TableCell className="w-52 px-3 align-middle">
+        <EmployeeManagerCell
+          employee={employee}
+          allEmployees={allEmployees}
+          userRole={userRole}
+          currentUserEmail={currentUserEmail}
+          onRefresh={onRefresh}
+        />
+      </TableCell>
       <TableCell className="w-48 px-3">
         <span className="font-mono text-xs bg-gray-50 px-2 py-1 rounded whitespace-nowrap">{employee.employee_id}</span>
       </TableCell>
@@ -151,6 +166,7 @@ EmployeeRow.displayName = 'EmployeeRow';
 
 export const EmployeeTable = memo(({ 
   employees = [], 
+  allEmployees = [],
   currentUserEmail, 
   userRole,
   onRefresh, 
@@ -158,10 +174,12 @@ export const EmployeeTable = memo(({
   isLoading = false
 }: EmployeeTableProps) => {
   useOptimizedPerformanceMonitor('EmployeeTable');
+  const { t } = useAppTranslation();
 
   // Memoize the table headers to prevent re-renders
   const tableHeaders = useMemo(() => [
     { key: 'name', label: 'Employee Name', width: 'w-64' },
+    { key: 'manager', label: t('employees.manager.column', 'Direct manager'), width: 'w-52' },
     { key: 'id', label: 'Employee ID', width: 'w-48' },
     { key: 'department', label: 'Department', width: 'w-40' },
     { key: 'position', label: 'Job Position', width: 'w-36' },
@@ -170,7 +188,7 @@ export const EmployeeTable = memo(({
     { key: 'join_date', label: 'Join Date', width: 'w-36' },
     { key: 'phone', label: 'Phone', width: 'w-36' },
     { key: 'actions', label: 'Actions', width: 'w-20' },
-  ], []);
+  ], [t]);
 
 
   const renderEmployeeRows = useMemo(() => (
@@ -178,17 +196,18 @@ export const EmployeeTable = memo(({
       <EmployeeRow
         key={employee.id}
         employee={employee}
+        allEmployees={allEmployees}
         currentUserEmail={currentUserEmail}
         userRole={userRole}
         onRefresh={onRefresh}
         onViewEmployee={onViewEmployee}
       />
     ))
-  ), [employees, currentUserEmail, userRole, onRefresh, onViewEmployee]);
+  ), [employees, allEmployees, currentUserEmail, userRole, onRefresh, onViewEmployee]);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+    <div className="h-full min-w-0 flex flex-col">
+      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
         <table className="w-full caption-bottom text-sm employee-table">
           <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <TableRow className="hover:bg-transparent">
@@ -202,7 +221,7 @@ export const EmployeeTable = memo(({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12">
+                <TableCell colSpan={10} className="text-center py-12">
                   <div className="flex items-center justify-center">
                     <LoadingDots size="lg" />
                   </div>
@@ -210,7 +229,7 @@ export const EmployeeTable = memo(({
               </TableRow>
             ) : employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">
+                <TableCell colSpan={10} className="text-center py-8 text-gray-500 text-sm">
                   <div className="flex flex-col items-center space-y-2">
                     <div className="text-lg">👥</div>
                     <div>No employees found</div>

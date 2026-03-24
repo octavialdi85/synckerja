@@ -5,6 +5,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import {
   completeStepAndCreateApprovalFromDriveLink,
   revertStepCompletionFromDriveLinkRemovalWithRpc,
+  syncStepCompletionFromProductionApproval,
 } from '@/features/8-2-DailyTask/services/completionApprovalService';
 import { ContentPlan } from '../types/social-media';
 import { toast } from 'sonner';
@@ -93,14 +94,35 @@ export const useOptimizedSocialMediaMutations = () => {
           // Get old data from cache to compare
           const oldData = queryClient.getQueryData(['social-media-plans', organizationId]) as any[];
           const oldPlan = oldData?.find((plan: any) => plan.id === updatedData.id);
-          
-          // Optimistic update - update cache directly with new data
+
+          const linkInUpdates = updates.google_drive_link;
+          const addedNonEmptyLink =
+            typeof linkInUpdates === 'string' && linkInUpdates.trim().length > 0;
+          const statusMissing =
+            updatedData.production_status == null ||
+            String(updatedData.production_status).trim() === '';
+          let planForCache = updatedData;
+          if (
+            addedNonEmptyLink &&
+            !updatedData.production_approved &&
+            statusMissing
+          ) {
+            planForCache = {
+              ...updatedData,
+              production_status: 'Need Review',
+              production_completion_date:
+                updatedData.production_completion_date ?? new Date().toISOString(),
+            };
+          }
+
+          // Merge server row into existing cache entry so nested selects (content_type, service, …)
+          // stay intact; replacing the whole object caused stale/wrong STATUS after Brief modal flows.
           queryClient.setQueryData(
             ['social-media-plans', organizationId],
             (oldData: any) => {
               if (!oldData) return oldData;
-              return oldData.map((plan: any) => 
-                plan.id === updatedData.id ? updatedData : plan
+              return oldData.map((plan: any) =>
+                plan.id === planForCache.id ? { ...plan, ...planForCache } : plan
               );
             }
           );
@@ -166,6 +188,25 @@ export const useOptimizedSocialMediaMutations = () => {
             }).catch((err) => {
               devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
               toast.error('Action failed.');
+            });
+          }
+
+          // When production approval is toggled from dashboard/review, sync linked Daily Task step.
+          if (organizationId && updates.production_approved !== undefined) {
+            syncStepCompletionFromProductionApproval({
+              organizationId,
+              socialMediaPlanId: variables.id,
+              approved: updates.production_approved === true,
+              actorEmployeeId: currentEmployee?.id ?? undefined,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('syncStepCompletionFromProductionApproval failed', {
+                  planId: variables.id,
+                  message: error.message,
+                });
+              }
+            }).catch((err) => {
+              devLog.error('syncStepCompletionFromProductionApproval rejected', err);
             });
           }
 

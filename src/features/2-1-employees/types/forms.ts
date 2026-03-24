@@ -22,6 +22,8 @@ export interface EmployeeFormData {
   cv_file?: string;
   
   // Employment Data
+  /** Required for new non-owner employees; must satisfy manager rules */
+  manager_id: string;
   department_id: string;
   job_position_id: string;
   job_level_id: string;

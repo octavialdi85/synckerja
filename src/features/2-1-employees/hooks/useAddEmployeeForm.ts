@@ -27,6 +27,7 @@ export const useAddEmployeeForm = () => {
     cv_file: '',
     
     // Employment Data
+    manager_id: '',
     department_id: '',
     job_position_id: '',
     job_level_id: '',
@@ -85,6 +86,7 @@ export const useAddEmployeeForm = () => {
       cv_file: '',
       
       // Employment Data
+      manager_id: '',
       department_id: '',
       job_position_id: '',
       job_level_id: '',

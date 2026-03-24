@@ -17,6 +17,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { validateRequiredFields } from '../container/table/cells/ValidationHelper';
+import type { ContentPlan } from '../types/social-media';
 
 interface BriefDialogProps {
   isOpen: boolean;
@@ -28,6 +30,10 @@ interface BriefDialogProps {
   targetAudience?: string | null;
   caption?: string | null;
   linkReference?: string | null;
+  /** Plans list for approval validation + daily-task picker (same flow as table Approve / status Approved) */
+  contentPlans?: ContentPlan[];
+  /** Opens Select Daily Task when conditions match; registers pending approval in parent. Returns true if modal opened. */
+  tryStartApprovalFromBrief?: (planId: string) => boolean;
 }
 
 const BriefDialog: React.FC<BriefDialogProps> = ({
@@ -39,7 +45,9 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   onStatusUpdate,
   targetAudience: targetAudienceProp,
   caption: captionProp,
-  linkReference: linkReferenceProp
+  linkReference: linkReferenceProp,
+  contentPlans,
+  tryStartApprovalFromBrief,
 }) => {
   const { t } = useAppTranslation();
   const [briefText, setBriefText] = useState('');
@@ -53,6 +61,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
   const skipNextAutoSaveRef = useRef(false);
+  /** When true, next onOpenChange(false) must not run performSave (Save / Request Revision / Approved already persisted). */
+  const skipFlushOnNextCloseRef = useRef(false);
   const prevOpenedRef = useRef<{ isOpen: boolean; socialMediaPlanId?: string }>({ isOpen: false });
 
   const {
@@ -115,6 +125,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     if (!isOpen || extendedLoading || linkReferenceProp !== undefined) return;
     setLinkReferenceText(linkReferenceFetched ?? '');
   }, [isOpen, extendedLoading, linkReferenceFetched, linkReferenceProp]);
+
+  useEffect(() => {
+    if (isOpen) skipFlushOnNextCloseRef.current = false;
+  }, [isOpen]);
 
   // Check approval access on dialog open
   useEffect(() => {
@@ -209,14 +223,25 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
     try {
       const now = new Date().toISOString();
+      const trimmedBrief = briefText.trim();
+      const briefIsEmpty = trimmedBrief === '';
+
+      const planRowUpdate: Record<string, unknown> = briefIsEmpty
+        ? {
+            brief: trimmedBrief,
+            status: '',
+            completion_date: null,
+            approved: false,
+          }
+        : {
+            brief: trimmedBrief,
+            completion_date: now,
+            status: 'Need Review',
+          };
 
       const { error: planError } = await supabase
         .from('social_media_plans')
-        .update({
-          brief: briefText.trim(),
-          completion_date: now,
-          status: 'Need Review'
-        })
+        .update(planRowUpdate)
         .eq('id', socialMediaPlanId);
 
       if (planError) {
@@ -277,22 +302,40 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
       }
 
       invalidateExtended();
+      if (onStatusUpdate) {
+        onStatusUpdate(socialMediaPlanId, planRowUpdate);
+      }
       if (closeAfter) {
         toast.success('Brief saved successfully');
-        if (onStatusUpdate) {
-          onStatusUpdate(socialMediaPlanId, {
-            brief: briefText.trim(),
-            completion_date: now,
-            status: 'Need Review'
-          });
-        }
-        onSave(briefText.trim());
+        skipFlushOnNextCloseRef.current = true;
+        onSave(trimmedBrief);
         onClose();
       }
     } catch (error) {
       devLog.error('Error in handleSave:', error);
       toast.error('Failed to save changes');
     }
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (open) return;
+    if (skipFlushOnNextCloseRef.current) {
+      skipFlushOnNextCloseRef.current = false;
+      return;
+    }
+    void (async () => {
+      try {
+        if (!socialMediaPlanId) {
+          onSave(briefText.trim());
+        } else {
+          await performSave({ closeAfter: false });
+        }
+      } catch (e) {
+        devLog.error('BriefDialog: save on close failed', e);
+      } finally {
+        onClose();
+      }
+    })();
   };
 
   const handleSave = () => performSave({ closeAfter: true });
@@ -355,7 +398,9 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
             completion_date: null // Also clear in parent update
           });
         }
-        
+
+        // Prevent handleDialogOpenChange from running performSave (which would reset status to Need Review)
+        skipFlushOnNextCloseRef.current = true;
         onClose(); // Close popup after successful action
       }
     } catch (error) {
@@ -368,40 +413,66 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
   const handleApproved = async () => {
     if (!socialMediaPlanId) return;
-    
+
+    const plan = contentPlans?.find((p) => p.id === socialMediaPlanId);
+    if (!plan) {
+      toast.error(t('briefDialog.approvePlanNotFound', 'Content plan not found'));
+      return;
+    }
+
+    const planForValidation = {
+      ...plan,
+      brief: briefText.trim() || plan.brief || '',
+    };
+    const missingFields = validateRequiredFields(planForValidation);
+    if (missingFields.length > 0) {
+      toast.error(
+        t('briefDialog.approveMissingFields', 'Cannot approve content. Please fill: {{fields}}', {
+          fields: missingFields.join(', '),
+        }),
+      );
+      return;
+    }
+
+    if (tryStartApprovalFromBrief?.(socialMediaPlanId)) {
+      skipFlushOnNextCloseRef.current = true;
+      onClose();
+      return;
+    }
+
     setIsUpdatingStatus(true);
     try {
       const completionDate = new Date().toISOString();
-      
+
       const { error } = await supabase
         .from('social_media_plans')
         .update({
           status: 'Approved',
           approved: true,
-          completion_date: completionDate
+          completion_date: completionDate,
         })
         .eq('id', socialMediaPlanId);
 
       if (error) {
         devLog.error('Error updating status:', error);
-        toast.error('Failed to approve');
+        toast.error(t('briefDialog.approveFailed', 'Failed to approve'));
       } else {
-        toast.success('Status updated to Approved');
-        
-        // Update parent component data
+        toast.success(t('briefDialog.approveSuccess', 'Status updated to Approved'));
+
         if (onStatusUpdate) {
           onStatusUpdate(socialMediaPlanId, {
             status: 'Approved',
             approved: true,
-            completion_date: completionDate
+            completion_date: completionDate,
           });
         }
-        
-        onClose(); // Close popup after successful action
+
+        skipFlushOnNextCloseRef.current = true;
+        onClose();
       }
     } catch (error) {
       devLog.error('Error in handleApproved:', error);
-      toast.error('Failed to approve');
+      toast.error(t('briefDialog.approveFailed', 'Failed to approve'));
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -486,7 +557,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   })();
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent hideCloseButton className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden flex flex-col">
         <DialogTitle className="sr-only absolute">Content Brief</DialogTitle>
         <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
@@ -847,7 +918,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
             {/* Right side - Cancel and Save buttons */}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={onClose} className="px-6">
+              <Button variant="outline" onClick={() => handleDialogOpenChange(false)} className="px-6">
                 {t('briefDialog.cancel', 'Cancel')}
               </Button>
               <Button onClick={handleSave} className="px-6">

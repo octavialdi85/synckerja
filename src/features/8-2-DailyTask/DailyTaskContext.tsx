@@ -1,3 +1,4 @@
+/* @refresh reset */
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { retryableQuery } from '@/integrations/supabase/retry';
@@ -27,7 +28,11 @@ export type { Task, TaskStep } from './types';
 import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps, getEffectiveProgressAndCount } from './utils/taskUtils';
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
-import { createCompletionApprovalIfAssignee, fetchRejectedForAssignee } from './services/completionApprovalService';
+import {
+  createCompletionApprovalIfAssignee,
+  fetchRejectedForAssignee,
+  isStaleLinkRemovalRejection,
+} from './services/completionApprovalService';
 
 // Helper function to batch process large ID arrays (Supabase has limits on .in() queries)
 // Optimized batch size to balance between speed and stability
@@ -188,6 +193,13 @@ export interface DailyTaskContextType {
   uncheckCompletionLocally: (params: {
     entityType: 'task' | 'step' | 'substep';
     dailyTaskId: string;
+    taskStepId?: string | null;
+    taskStepsToStepsId?: string | null;
+  }) => void;
+  applyApprovalDecisionLocally: (params: {
+    entityType: 'task' | 'step' | 'substep';
+    dailyTaskId: string;
+    decision: 'approve' | 'reject' | 'unapprove';
     taskStepId?: string | null;
     taskStepsToStepsId?: string | null;
   }) => void;
@@ -698,7 +710,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   employee_id,
                   assigned_by,
                   assigned_at,
-                  employee:employees!employee_id(id, full_name)
+                  employee:employees!employee_id(id, full_name),
+                  assigned_by_employee:employees!assigned_by(id, full_name)
                 `)
                 .in('daily_task_id', batch);
               return { data: data || [], error };
@@ -1008,6 +1021,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const assignment = assignmentsByTaskId[task.id];
         const assignedEmployeeName = assignment?.employee?.full_name || null;
         const assignedEmployeeId = assignment?.employee_id || null;
+        const assignerName =
+          assignment?.assigned_by &&
+          assignment?.employee_id &&
+          assignment.assigned_by !== assignment.employee_id
+            ? assignment?.assigned_by_employee?.full_name?.trim() || null
+            : null;
         
         // Auto-fix: If task is completed but has_reminder is true, set it to false
         let hasReminder = task.has_reminder;
@@ -1044,6 +1063,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           status: synchronizedStatus,
           assigned_to: assignedEmployeeId,
           assigned_to_name: assignedEmployeeName,
+          assigned_by_name: assignerName,
           has_reminder: hasReminder, // Use corrected value
           has_steps: taskSteps.length > 0, // Set based on actual steps count
           files: []
@@ -2117,11 +2137,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     setTasks(prevTasks =>
       prevTasks.map(task => {
         const filteredSteps = task.steps.filter(step => step.id !== stepId);
+        const isUpdatedTask = stepData?.task_id === task.id;
+        const progress = isUpdatedTask
+          ? calculateProgress(filteredSteps as any, task.status)
+          : task.progress_percentage;
+        const nextStatus = isUpdatedTask
+          ? determineStatusFromProgress(progress, task.status)
+          : task.status;
         return {
           ...task,
           steps: filteredSteps,
+          progress_percentage: progress,
+          status: nextStatus as Task['status'],
           // Update has_steps if this task had the step removed
-          has_steps: stepData?.task_id === task.id ? filteredSteps.length > 0 : task.has_steps
+          has_steps: isUpdatedTask ? filteredSteps.length > 0 : task.has_steps,
+          has_substeps: isUpdatedTask ? filteredSteps.length > 0 : task.has_substeps,
         };
       })
     );
@@ -2652,6 +2682,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     const bySub: Record<string, string> = {};
     (data ?? []).forEach((row) => {
       if (!row.reject_reason) return;
+      if (isStaleLinkRemovalRejection(row)) return;
       if (row.entity_type === 'task' && !(row.daily_task_id in byTask)) byTask[row.daily_task_id] = row.reject_reason;
       if (row.entity_type === 'step' && row.task_step_id && !(row.task_step_id in byStep)) byStep[row.task_step_id] = row.reject_reason;
       if (row.entity_type === 'substep' && row.task_steps_to_steps_id && !(row.task_steps_to_steps_id in bySub)) bySub[row.task_steps_to_steps_id] = row.reject_reason;
@@ -2844,6 +2875,66 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     []
   );
 
+  const applyApprovalDecisionLocally = useCallback(
+    (params: {
+      entityType: 'task' | 'step' | 'substep';
+      dailyTaskId: string;
+      decision: 'approve' | 'reject' | 'unapprove';
+      taskStepId?: string | null;
+      taskStepsToStepsId?: string | null;
+    }) => {
+      const { entityType, dailyTaskId, decision, taskStepId, taskStepsToStepsId } = params;
+      const shouldComplete = decision === 'approve';
+      setTasks((prev) =>
+        prev.map((task) => {
+          if (task.id !== dailyTaskId) return task;
+          if (entityType === 'task') {
+            return { ...task, status: shouldComplete ? 'completed' : 'pending' };
+          }
+          if (entityType === 'step' && taskStepId) {
+            const nextSteps = task.steps.map((s) =>
+              s.id !== taskStepId
+                ? s
+                : {
+                    ...s,
+                    is_completed: shouldComplete,
+                    completed_at: shouldComplete ? new Date().toISOString() : null,
+                  }
+            );
+            const nextProgress = calculateProgress(nextSteps, task.status);
+            return {
+              ...task,
+              steps: nextSteps,
+              progress_percentage: nextProgress,
+              status: determineStatusFromProgress(nextProgress, task.status) as Task['status'],
+            };
+          }
+          if (entityType === 'substep' && taskStepId && taskStepsToStepsId) {
+            const nextSteps = task.steps.map((s) =>
+              s.id !== taskStepId
+                ? s
+                : {
+                    ...s,
+                    sub_steps: (s.sub_steps ?? []).map((sub) =>
+                      sub.id !== taskStepsToStepsId ? sub : { ...sub, is_completed: shouldComplete }
+                    ),
+                  }
+            );
+            const nextProgress = calculateProgress(nextSteps, task.status);
+            return {
+              ...task,
+              steps: nextSteps,
+              progress_percentage: nextProgress,
+              status: determineStatusFromProgress(nextProgress, task.status) as Task['status'],
+            };
+          }
+          return task;
+        })
+      );
+    },
+    []
+  );
+
   // Lazy load task_files for one task when user expands it (reduces API calls on page load)
   const fetchTaskFilesForTask = useCallback(async (taskId: string) => {
     if (taskIdsWithFilesLoadedRef.current.has(taskId)) return;
@@ -2937,6 +3028,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       await fetchRejectedReasons();
     },
     uncheckCompletionLocally,
+    applyApprovalDecisionLocally,
     rejectedReasonsByTaskId,
     rejectedReasonsByStepId,
     rejectedReasonsBySubStepId,

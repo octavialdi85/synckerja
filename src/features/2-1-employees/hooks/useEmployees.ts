@@ -32,6 +32,9 @@ export type Employee = {
   pending_removal?: boolean;
   pending_removal_reason?: string | null;
   pending_removal_date?: string | null;
+  manager_id?: string | null;
+  /** Resolved from current org employee list (same fetch). */
+  manager_name?: string | null;
 };
 
 export const useEmployees = () => {
@@ -103,8 +106,14 @@ export const useEmployees = () => {
         })
       );
 
-      console.log('Optimized employees fetched:', enrichedEmployees.length);
-      return enrichedEmployees;
+      const byId = new Map(enrichedEmployees.map((e) => [e.id, e]));
+      const withManagers = enrichedEmployees.map((emp) => ({
+        ...emp,
+        manager_name: emp.manager_id ? byId.get(emp.manager_id)?.full_name ?? null : null,
+      }));
+
+      console.log('Optimized employees fetched:', withManagers.length);
+      return withManagers;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes for employee data
     gcTime: 20 * 60 * 1000, // 20 minutes cache

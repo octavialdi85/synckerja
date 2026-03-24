@@ -5,9 +5,9 @@ Edge function that sends FCM push notifications when app-relevant rows are inser
 ## Purpose
 
 - **review_comment_notifications** (INSERT): notify the `user_id` of the new comment (title/body for "Komentar baru pada review").
-- **completion_approvals** (INSERT, `status = 'pending'`): resolve `assigner_employee_id` → `employees.user_id`, then notify that user ("Pending approval" / "Item baru menunggu persetujuan Anda").
-- **plan_status_change_notifications** (INSERT): when **social_media_plans** column `status`, `production_status`, or `done` changes, a DB trigger inserts one row per org member into this table; this webhook then sends FCM (banner + sound on Android). Notify the `user_id` of each record; title/body from the record (fallback "Update status" / "Plan status updated"); FCM data includes `notificationType: plan_status_change` and `social_media_plan_id` for tap-to-review.
-- **daily_task_notifications** (INSERT): notify the `user_id` of the record (only the assignee). Covers: **(1) Step assigned** (step langsung di bawah task) — trigger on `task_steps_assigned`; **(2) Sub-step assigned** — trigger on `task_steps_to_steps_assigned`; plus task status change, task assigned, step/substep reopened, completion approved/rejected. Title/body from the record; FCM data includes `notificationType: daily_task`, `daily_task_id`, `task_step_id`, `task_steps_to_steps_id`, and `view` for tap-to-daily-task.
+- **completion_approvals** (INSERT, `status = 'pending'`): resolve `assigner_employee_id` → `employees.user_id`, then notify that user ("Pending approval" / "Item baru menunggu persetujuan Anda"). **Duplicate push risk:** see [Avoid duplicate FCM for pending completion](#avoid-duplicate-fcm-for-pending-completion) below.
+- **plan_status_change_notifications** (INSERT): when **social_media_plans** columns `status`, `production_status`, and/or `done` change, a DB trigger inserts **one row per recipient** (not org-wide): the **assigner** (from `task_steps_assigned.assigned_by` on steps linked via `task_steps.social_media_plan_id`) when the **assignee** changed the field (PIC for `status`, PIC production for `production_status`, post owner for `done` — see migration `20260327120000_notifications_assigner_assignee_only.sql`), and the assignee when an assigner changed it; requires `auth.uid()` to resolve the actor. Title/body are set by the trigger (localized via `application_language` for the plan’s org; body is two lines: `old → new` plus plan title). FCM data includes `notificationType: plan_status_change` and `social_media_plan_id` for tap-to-review. On Android, collapsed notification text may truncate multi-line bodies unless the native layer uses BigTextStyle.
+- **daily_task_notifications** (INSERT): notify the `user_id` on each row. Covers: **(1)** task **assignment** — assignee only (skipped for self-assign); **(2)** task **status** change — **opposite party** only (assigners if assignee changed status, assignees if assigner changed); **(3)** step/sub-step assigned — assignee only; **(4)** reopen — assigner only; **(5)** completion approved/rejected — assignee; **(6)** pending completion submitted — assigner (via `trigger_completion_approval_notify_assigner_on_insert`; same duplicate caveat as above). Title/body from the record; FCM data includes `notificationType: daily_task`, `daily_task_id`, `task_step_id`, `task_steps_to_steps_id`, and `view` for tap-to-daily-task.
 
 Notifications are sent only to FCM tokens with **context = 'general'** (same `fcm_tokens` table as Live Chat; Live Chat uses `context = 'livechat'`).
 
@@ -40,6 +40,16 @@ Create these in **Database → Webhooks**:
    **Headers:** same
 
 Timeout: 30 seconds recommended.
+
+## Avoid duplicate FCM for pending completion
+
+When an assignee submits completion, **`trigger_completion_approval_notify_assigner_on_insert`** inserts a row into **`daily_task_notifications`**. If you also have a Database Webhook on **`completion_approvals`** (Insert) pointing at this Edge Function, the assigner can receive **two** FCM messages for the same event (one from each webhook).
+
+**Recommended:** Keep the webhook on **`daily_task_notifications`** (Insert) and **remove or disable** the webhook on **`completion_approvals`** (Insert) for push, so a single INSERT drives both in-app (`daily_task_notifications`) and FCM. If you must keep only the `completion_approvals` webhook, disable the `daily_task_notifications` webhook instead — but then confirm the app still loads in-app notifications from the path you keep.
+
+## Mentions and other notification types
+
+Comment / mention / attachment / deadline / reminder flows may use **different** recipient rules. For **@mentions** in product copy or parsing, use a single convention (e.g. **`@DisplayName`** or **`@employeeId`**) and document it in the feature that implements mentions; this Edge Function does not parse mention syntax today.
 
 ## Troubleshooting: Status change (No Status → Need review) not showing push on Android
 
@@ -116,6 +126,17 @@ supabase functions deploy app-notifications-send-push --no-verify-jwt
 After both steps, only the assignee receives "Step assigned" / "Sub-step assigned"; the unassigned user receives nothing.
 
 **Verification:** Reassign a step from user A to user B (e.g. Milda → Octa). Only B should get a notification (push and in-app). User A must not see any new notification.
+
+## Debug: `completion_approvals` push (assignee saved Drive link / Need Review)
+
+Edge function logs a line **`completion_approvals push target`** with `assignerEmployeeId`, resolved `targetUserId`, `entityType`, `task_step_id`, `daily_task_id`, and **`tokenCount`**. Use this when the assigner sees pending approval in the app but no FCM banner: `tokenCount: 0` means no `fcm_tokens` row with `context = 'general'` for that user (app not opened, permission denied, or wrong account).
+
+**Daily Task step checkbox sync (other user / other tab):** migration `20260326120000_task_steps_touch_daily_tasks_realtime.sql` bumps `daily_tasks.updated_at` when a social-linked `task_steps` completion changes so the existing `daily_tasks` Realtime subscription refetches steps without a manual refresh.
+
+## Manual QA (two accounts)
+
+1. **Uncheck on link removal:** User A clears Google Drive link in Social Media Preview; User B keeps Daily Task open — linked step should uncheck within the Realtime throttle window (up to ~5s).  
+2. **Push on link save:** User A saves a Drive link (Need Review); User B (assigner) on Android emulator should receive push if webhooks, `--no-verify-jwt`, and FCM secrets are configured (see sections above).
 
 ## Adding new notification sources
 

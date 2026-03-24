@@ -48,7 +48,7 @@ export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprov
   const isMobile = useIsMobile();
   const { getOrCreate } = usePublicReviewToken();
   const { pending, rejected, loading, fetchError, approve, reject, refresh } = useCompletionApprovals([]);
-  const { refetchTasks, uncheckCompletionLocally, setPendingApprovalFocus, navigateToTask } = useDailyTask();
+  const { refetchTasks, uncheckCompletionLocally, applyApprovalDecisionLocally, setPendingApprovalFocus, navigateToTask } = useDailyTask();
   const { toast } = useToast();
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; row: CompletionApprovalRow | null; reason: string }>({
     open: false,
@@ -70,8 +70,23 @@ export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprov
       toast({ title: t('dailyTask.approval.error', 'Error'), description: error.message, variant: 'destructive' });
       return;
     }
+    // Optimistic local sync so step/task state reacts immediately on both desktop and mobile views.
+    applyApprovalDecisionLocally({
+      entityType: row.entity_type,
+      dailyTaskId: row.daily_task_id,
+      decision: 'approve',
+      taskStepId: row.task_step_id ?? undefined,
+      taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
+    });
     toast({ title: t('dailyTask.approval.approved', 'Approved'), description: t('dailyTask.approval.approvedDesc', 'Completion approved.') });
     refresh();
+    try {
+      setRefetchError(null);
+      await refetchTasks();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t('dailyTask.approval.refetchFailed', 'Failed to refresh tasks');
+      setRefetchError(msg);
+    }
   };
 
   const handleApproveClick = (row: CompletionApprovalRow) => {
@@ -112,6 +127,13 @@ export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprov
     uncheckCompletionLocally({
       entityType: row.entity_type,
       dailyTaskId: row.daily_task_id,
+      taskStepId: row.task_step_id ?? undefined,
+      taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
+    });
+    applyApprovalDecisionLocally({
+      entityType: row.entity_type,
+      dailyTaskId: row.daily_task_id,
+      decision: 'reject',
       taskStepId: row.task_step_id ?? undefined,
       taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
     });

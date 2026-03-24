@@ -9,7 +9,8 @@ interface BriefPreviewProps {
 }
 
 export const BriefPreview: React.FC<BriefPreviewProps> = ({ brief, onClick, isSelected = false }) => {
-  if (!brief) {
+  const briefTrimmed = brief?.trim() ?? '';
+  if (!briefTrimmed) {
     return (
       <button
         type="button"
@@ -22,10 +23,10 @@ export const BriefPreview: React.FC<BriefPreviewProps> = ({ brief, onClick, isSe
   }
   
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const hasLink = urlRegex.test(brief);
+  const hasLink = urlRegex.test(briefTrimmed);
   
   if (hasLink) {
-    const links = brief.match(urlRegex) || [];
+    const links = briefTrimmed.match(urlRegex) || [];
     const firstLink = links[0];
     let linkType = '';
     if (firstLink.includes('docs.google.com')) {
@@ -56,7 +57,7 @@ export const BriefPreview: React.FC<BriefPreviewProps> = ({ brief, onClick, isSe
       className={`text-xs cursor-pointer h-8 w-full text-left px-2 border border-gray-200 ${isSelected ? 'text-white hover:text-white hover:bg-blue-600' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'}`}
     >
       <span className="truncate block">
-        {brief.length > 30 ? `${brief.substring(0, 30)}...` : brief}
+        {briefTrimmed.length > 30 ? `${briefTrimmed.substring(0, 30)}...` : briefTrimmed}
       </span>
     </button>
   );
