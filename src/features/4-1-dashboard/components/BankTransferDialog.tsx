@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEventHandler } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,8 +23,12 @@ import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { formatInputNumber, parseInputNumber } from '@/features/8_2_pricing-tools/utils/pricingUtils';
+import { toast } from 'sonner';
+import { CameraModal } from '@/mobile/components/CameraModal';
+import { pickReceiptImageFiles } from '@/mobile/utils/pickReceiptFromGallery';
 import type { BankAccount } from '@/hooks/organized/useBankAccounts';
 import { useCreateBankTransfer } from '@/hooks/organized/useCreateBankTransfer';
+import { AlertCircle, Camera, FileText, Upload, X } from 'lucide-react';
 
 export interface BankTransferDialogProps {
   open: boolean;
@@ -35,6 +39,35 @@ export interface BankTransferDialogProps {
 }
 
 type Step = 1 | 2 | 3;
+
+const MAX_RECEIPT_SIZE = 10 * 1024 * 1024;
+const RECEIPT_ALLOWED = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+const RECEIPT_ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+
+function hasAllowedReceiptType(file: File): boolean {
+  const type = (file.type ?? '').toLowerCase();
+  if (type && RECEIPT_ALLOWED.includes(type)) return true;
+  const fileName = file.name.toLowerCase();
+  return RECEIPT_ALLOWED_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+}
+
+function getReceiptValidationError(file: File): 'size' | 'type' | null {
+  if (file.size > MAX_RECEIPT_SIZE) return 'size';
+  if (!hasAllowedReceiptType(file)) return 'type';
+  return null;
+}
+
+function dataUrlToImageFile(dataUrl: string, fileName: string): File {
+  const [meta, base64] = dataUrl.split(',');
+  const mimeMatch = /data:(.*?);base64/.exec(meta ?? '');
+  const mime = mimeMatch?.[1] || 'image/jpeg';
+  const binary = atob(base64 ?? '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new File([bytes], fileName, { type: mime });
+}
 
 export function BankTransferDialog({
   open,
@@ -53,6 +86,8 @@ export function BankTransferDialog({
   const [amountStr, setAmountStr] = useState('');
   const [feeStr, setFeeStr] = useState('');
   const [note, setNote] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -62,6 +97,8 @@ export function BankTransferDialog({
       setAmountStr('');
       setFeeStr('');
       setNote('');
+      setReceiptFile(null);
+      setReceiptCameraOpen(false);
     }
   }, [open]);
 
@@ -70,6 +107,16 @@ export function BankTransferDialog({
   const totalOut = amountNum + feeNum;
 
   const dest = destinationAccounts.find((a) => a.id === toId);
+  const receiptPreviewUrl = useMemo(
+    () => (receiptFile && receiptFile.type.startsWith('image/') ? URL.createObjectURL(receiptFile) : null),
+    [receiptFile]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (receiptPreviewUrl) URL.revokeObjectURL(receiptPreviewUrl);
+    };
+  }, [receiptPreviewUrl]);
 
   const validationError = useMemo(() => {
     if (step === 1 && !toId) {
@@ -114,6 +161,7 @@ export function BankTransferDialog({
         amount: amountNum,
         fee: feeNum,
         note: note.trim() || null,
+        receiptFile,
       });
       onOpenChange(false);
     } catch {
@@ -130,6 +178,57 @@ export function BankTransferDialog({
         ? t('incomes.bankTransfer.stepAmount', 'Amount & fee')
         : t('incomes.bankTransfer.stepConfirm', 'Confirm');
 
+  const applyReceiptFile = (file: File) => {
+    const validationError = getReceiptValidationError(file);
+    if (validationError === 'size') {
+      toast.error(t('incomes.bankTransfer.receiptTooLarge', 'File must be less than 10MB'));
+      return;
+    }
+    if (validationError === 'type') {
+      toast.error(t('incomes.bankTransfer.receiptInvalidType', 'Only JPG, PNG, WEBP, or PDF are allowed'));
+      return;
+    }
+    setReceiptFile(file);
+  };
+
+  const handlePickReceiptFromGallery = async () => {
+    try {
+      const files = isMobile
+        ? await pickReceiptImageFiles({ maxItems: 1, mediaType: 'imageOnly' })
+        : [];
+      if (!files.length) return;
+      applyReceiptFile(files[0]);
+    } catch {
+      toast.error(t('incomes.bankTransfer.receiptPickFailed', 'Failed to pick receipt file'));
+    }
+  };
+
+  const handleDesktopFileChange: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    applyReceiptFile(file);
+    e.currentTarget.value = '';
+  };
+
+  const handleTakeReceiptPhoto = () => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      setReceiptCameraOpen(true);
+      return;
+    }
+    toast.error(t('incomes.bankTransfer.photoCaptureFailed', 'Photo capture failed'));
+  };
+
+  const handleReceiptCameraCapture = (imageData: string) => {
+    try {
+      const file = dataUrlToImageFile(imageData, `transfer_receipt_${Date.now()}.jpg`);
+      applyReceiptFile(file);
+      toast.success(t('incomes.bankTransfer.receiptPhotoTaken', 'Receipt photo taken'));
+    } catch {
+      toast.error(t('incomes.bankTransfer.photoCaptureFailed', 'Photo capture failed'));
+    }
+    setReceiptCameraOpen(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -137,7 +236,7 @@ export function BankTransferDialog({
           'p-0 flex flex-col gap-0',
           isMobile
             ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area z-30'
-            : 'max-w-md max-h-[90vh]'
+            : 'max-w-[640px] w-[640px] h-[640px] max-h-[90vh] rounded-sm'
         )}
         overlayClassName={isMobile ? 'z-30' : undefined}
         hideCloseButton={isMobile}
@@ -239,6 +338,74 @@ export function BankTransferDialog({
                   className="resize-none"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>{t('incomes.bankTransfer.receipt', 'Receipt (optional)')}</Label>
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-3">
+                  {receiptFile ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {receiptFile.type.startsWith('image/') && receiptPreviewUrl ? (
+                          <img src={receiptPreviewUrl} alt="" className="h-10 w-10 rounded object-cover border" />
+                        ) : (
+                          <div className="h-10 w-10 rounded border bg-background flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <span className="text-xs text-muted-foreground truncate">{receiptFile.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={() => setReceiptFile(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                      <p className="text-xs text-amber-700">
+                        {t('incomes.bankTransfer.receiptHint', 'Attach transfer proof (optional).')}
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {t('incomes.bankTransfer.receiptFormats', 'JPG / PNG / WEBP / PDF, max 10MB')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {isMobile ? (
+                      <>
+                        <Button type="button" variant="outline" size="sm" onClick={handleTakeReceiptPhoto}>
+                          <Camera className="h-4 w-4 mr-1.5" />
+                          {t('incomes.bankTransfer.takePhoto', 'Take photo')}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={handlePickReceiptFromGallery}>
+                          <Upload className="h-4 w-4 mr-1.5" />
+                          {t('incomes.bankTransfer.chooseFile', 'Choose file')}
+                        </Button>
+                      </>
+                    ) : (
+                      <label>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                          onChange={handleDesktopFileChange}
+                        />
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-1.5" />
+                            {t('incomes.bankTransfer.chooseFile', 'Choose file')}
+                          </span>
+                        </Button>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -316,6 +483,13 @@ export function BankTransferDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+      <CameraModal
+        isOpen={receiptCameraOpen}
+        onClose={() => setReceiptCameraOpen(false)}
+        onCapture={handleReceiptCameraCapture}
+        title={t('incomes.bankTransfer.receiptCameraTitle', 'Transfer receipt photo')}
+        facingMode="environment"
+      />
     </Dialog>
   );
 }

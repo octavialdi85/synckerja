@@ -162,7 +162,8 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
               // For sub-sidebar items, only check direct access (no sub-path fallback)
               // This ensures padlock appears correctly for locked items
               const hasAccess = isItemAccessible(item.url, false);
-              const isActive = location.pathname === item.url;
+              const isActive =
+                location.pathname === item.url || location.pathname.startsWith(`${item.url}/`);
               
               return (
                 <button
@@ -257,6 +258,8 @@ export function AppSidebar() {
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
   const currentPath = location.pathname;
   const { t } = useAppTranslation();
+  const sidebarGroupRef = useRef<HTMLDivElement | null>(null);
+  const [subSidebarLeft, setSubSidebarLeft] = useState(0);
 
   // Check if a sidebar item (without sub-sidebar) is locked
   const isItemLocked = (item: MenuItem): boolean => {
@@ -347,11 +350,40 @@ export function AppSidebar() {
   const isSubContentVisible =
     subSidebarMeasuredOpen || Boolean(panelContentMenu && !subSidebarOpen);
 
+  useEffect(() => {
+    const updateSubSidebarAnchor = () => {
+      if (!sidebarGroupRef.current) return;
+      const rect = sidebarGroupRef.current.getBoundingClientRect();
+      setSubSidebarLeft(rect.right);
+    };
+
+    updateSubSidebarAnchor();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSubSidebarAnchor();
+    });
+
+    if (sidebarGroupRef.current) {
+      resizeObserver.observe(sidebarGroupRef.current);
+    }
+
+    window.addEventListener('resize', updateSubSidebarAnchor);
+    // Use capture to react to scroll from nested containers too.
+    window.addEventListener('scroll', updateSubSidebarAnchor, true);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateSubSidebarAnchor);
+      window.removeEventListener('scroll', updateSubSidebarAnchor, true);
+    };
+  }, []);
+
   return (
     <div className="relative flex h-full">
       <LiveChatAppBadgeSync />
       {/* Parent: main sidebar + sub-sidebar (child) share one positioned group */}
       <div
+        ref={sidebarGroupRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className="group relative z-40 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
@@ -370,6 +402,18 @@ export function AppSidebar() {
                 {menuItems.map((item) => {
                   const localizedTitle = t(item.titleKey, item.title);
                   const showWhatsAppBadge = false;
+                  const hasActiveSubRoute = Boolean(
+                    item.subSidebarItems?.some((subItem) =>
+                      currentPath === subItem.url || currentPath.startsWith(`${subItem.url}/`)
+                    )
+                  );
+                  const isMainRouteActive =
+                    item.url && item.url !== '#'
+                      ? item.url === '/'
+                        ? currentPath === '/'
+                        : currentPath.startsWith(item.url)
+                      : false;
+                  const isParentActive = isMainRouteActive || hasActiveSubRoute;
                   return (
                     <div key={item.title}>
                       <div
@@ -382,16 +426,10 @@ export function AppSidebar() {
                             onClick={() => smartNavigate(item.url!)}
                             className={cn(
                               'group relative flex w-full items-center justify-between text-left font-medium transition-colors duration-200 ease-in-out motion-reduce:transition-none',
-                              'rounded-lg py-2.5 px-3',
-                              'hover:bg-blue-50 hover:text-blue-600',
+                              'rounded-lg py-2.5 px-2 border-l-4 border-transparent',
+                              'text-gray-700 hover:scale-105 hover:bg-blue-50 hover:text-blue-600',
                               'group-data-[collapsible=icon]:justify-center',
-                              item.url === '/'
-                                ? currentPath === '/'
-                                  ? 'rounded-lg bg-blue-50 text-blue-600'
-                                  : 'text-gray-700'
-                                : currentPath.startsWith(item.url)
-                                  ? 'rounded-lg bg-blue-50 text-blue-600'
-                                  : 'text-gray-700'
+                              isParentActive ? 'border-l-blue-600 bg-blue-50 text-blue-600' : 'text-gray-700'
                             )}
                           >
                             <div className="flex min-w-0 items-center">
@@ -415,6 +453,7 @@ export function AppSidebar() {
                               <ChevronRight
                                 className={cn(
                                   'ml-auto h-3 w-3 flex-shrink-0 opacity-60 transition-all duration-200 ease-in-out motion-reduce:transition-none',
+                                  isParentActive && 'translate-x-1 opacity-100 text-blue-600',
                                   'group-hover:translate-x-1 group-hover:opacity-100',
                                   'group-data-[collapsible=icon]:hidden'
                                 )}
@@ -433,9 +472,9 @@ export function AppSidebar() {
                           <div
                             className={cn(
                               'group relative flex cursor-pointer items-center justify-between rounded-lg py-2.5 px-2 font-medium transition-colors duration-200 ease-in-out motion-reduce:transition-none',
-                              'hover:scale-105 hover:bg-gray-100',
+                              'text-gray-700 hover:scale-105 hover:bg-blue-50 hover:text-blue-600',
                               'group-data-[collapsible=icon]:justify-center',
-                              activeSubSidebar === item.title
+                              activeSubSidebar === item.title || isParentActive
                                 ? 'border-l-4 border-blue-600 bg-blue-50 text-blue-600'
                                 : ''
                             )}
@@ -466,6 +505,7 @@ export function AppSidebar() {
                               <ChevronRight
                                 className={cn(
                                   'ml-auto h-3 w-3 flex-shrink-0 opacity-60 transition-all duration-200 ease-in-out motion-reduce:transition-none',
+                                  isParentActive && 'translate-x-1 opacity-100 text-blue-600',
                                   'group-hover:translate-x-1 group-hover:opacity-100',
                                   'group-data-[collapsible=icon]:hidden'
                                 )}
@@ -490,13 +530,14 @@ export function AppSidebar() {
           onMouseLeave={handleSubSidebarMouseLeave}
           onTransitionEnd={handleSubSidebarPanelTransitionEnd}
           className={cn(
-            'pointer-events-none absolute left-full top-0 z-50 overflow-hidden',
+            'pointer-events-none fixed top-16 z-50 overflow-hidden',
             'h-[calc(100vh-4rem)]',
             'transition-[width,opacity,transform] duration-300 ease-in-out motion-reduce:transition-none',
             subSidebarMeasuredOpen
               ? 'pointer-events-auto w-64 translate-x-0 opacity-100'
               : 'w-0 -translate-x-1 opacity-0'
           )}
+          style={{ left: `${subSidebarLeft}px` }}
         >
           {panelContentMenu?.subSidebarItems && (
             <SubSidebarInternal

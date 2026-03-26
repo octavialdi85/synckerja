@@ -61,6 +61,9 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
   const skipNextAutoSaveRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isClosingRef = useRef(false);
+  const isPersistingRef = useRef(false);
   /** When true, next onOpenChange(false) must not run performSave (Save / Request Revision / Approved already persisted). */
   const skipFlushOnNextCloseRef = useRef(false);
   const prevOpenedRef = useRef<{ isOpen: boolean; socialMediaPlanId?: string }>({ isOpen: false });
@@ -127,7 +130,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   }, [isOpen, extendedLoading, linkReferenceFetched, linkReferenceProp]);
 
   useEffect(() => {
-    if (isOpen) skipFlushOnNextCloseRef.current = false;
+    if (isOpen) {
+      skipFlushOnNextCloseRef.current = false;
+      isClosingRef.current = false;
+    }
   }, [isOpen]);
 
   // Check approval access on dialog open
@@ -213,11 +219,17 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     checkApprovalAccess();
   }, [isOpen]);
 
-  const performSave = async (options: { closeAfter?: boolean } = {}) => {
-    const { closeAfter = false } = options;
+  const performSave = async (options: { closeAfter?: boolean; source?: string } = {}) => {
+    const { closeAfter = false, source = 'unknown' } = options;
+    if (isPersistingRef.current) {
+      return;
+    }
+
+    isPersistingRef.current = true;
     if (!socialMediaPlanId) {
       onSave(briefText.trim());
       if (closeAfter) onClose();
+      isPersistingRef.current = false;
       return;
     }
 
@@ -314,6 +326,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     } catch (error) {
       devLog.error('Error in handleSave:', error);
       toast.error('Failed to save changes');
+    } finally {
+      isPersistingRef.current = false;
     }
   };
 
@@ -321,36 +335,64 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     if (open) return;
     if (skipFlushOnNextCloseRef.current) {
       skipFlushOnNextCloseRef.current = false;
+      isClosingRef.current = true;
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      onClose();
       return;
     }
-    void (async () => {
-      try {
-        if (!socialMediaPlanId) {
-          onSave(briefText.trim());
-        } else {
-          await performSave({ closeAfter: false });
-        }
-      } catch (e) {
-        devLog.error('BriefDialog: save on close failed', e);
-      } finally {
-        onClose();
-      }
-    })();
+    isClosingRef.current = true;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    onClose();
   };
 
-  const handleSave = () => performSave({ closeAfter: true });
+  const handleSave = () => {
+    isClosingRef.current = true;
+    skipFlushOnNextCloseRef.current = true;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    onSave(briefText.trim());
+    onClose();
+    if (isPersistingRef.current) {
+      return;
+    }
+    void performSave({ closeAfter: false, source: 'save-button-post-close' });
+  };
+
+  const handleCancel = () => {
+    skipFlushOnNextCloseRef.current = true;
+    isClosingRef.current = true;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    onClose();
+  };
 
   // Auto-save when accordion fields change (debounced); skip first run after dialog open
   useEffect(() => {
     if (!isOpen || !socialMediaPlanId) return;
+    if (isClosingRef.current) return;
     if (skipNextAutoSaveRef.current) {
       skipNextAutoSaveRef.current = false;
       return;
     }
-    const timer = setTimeout(() => {
-      performSave({ closeAfter: false });
+    autoSaveTimerRef.current = setTimeout(() => {
+      void performSave({ closeAfter: false, source: 'autosave' });
     }, 1200);
-    return () => clearTimeout(timer);
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
   }, [isOpen, socialMediaPlanId, briefText, targetAudienceText, captionText, linkReferenceText]);
 
   const handleRequestRevision = async () => {
@@ -918,7 +960,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
             {/* Right side - Cancel and Save buttons */}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => handleDialogOpenChange(false)} className="px-6">
+              <Button variant="outline" onClick={handleCancel} className="px-6">
                 {t('briefDialog.cancel', 'Cancel')}
               </Button>
               <Button onClick={handleSave} className="px-6">

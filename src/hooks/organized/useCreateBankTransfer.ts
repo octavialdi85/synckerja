@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { EXPENSES_QUERY_KEY } from '@/features/4_2_dashboard/hooks/useExpenses';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -13,10 +14,53 @@ export interface CreateBankTransferParams {
   fee?: number;
   note?: string | null;
   transactionDate?: string;
+  receiptFile?: File | null;
 }
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+
+function normalizeReceiptMetadata(file: File): { extension: string; mimeType: string } {
+  const rawType = (file.type || '').toLowerCase().trim();
+  const byType = MIME_TO_EXT[rawType];
+  if (byType) {
+    return {
+      extension: byType,
+      mimeType: rawType === 'image/jpg' ? 'image/jpeg' : rawType,
+    };
+  }
+
+  const name = (file.name || '').toLowerCase();
+  const byName = name.endsWith('.jpeg') || name.endsWith('.jpg')
+    ? 'jpg'
+    : name.endsWith('.png')
+      ? 'png'
+      : name.endsWith('.webp')
+        ? 'webp'
+        : name.endsWith('.pdf')
+          ? 'pdf'
+          : 'bin';
+
+  const mimeByExt = byName === 'jpg'
+    ? 'image/jpeg'
+    : byName === 'png'
+      ? 'image/png'
+      : byName === 'webp'
+        ? 'image/webp'
+        : byName === 'pdf'
+          ? 'application/pdf'
+          : (rawType || 'application/octet-stream');
+
+  return { extension: byName, mimeType: mimeByExt };
+}
 
 function aggregatePostgrestError(error: PostgrestError | { message?: string; details?: string | null; hint?: string | null }): string {
   const parts = [error.message, error.details, error.hint].filter(
@@ -48,6 +92,7 @@ function mapRpcErrorMessage(raw: string): string {
 
 export function useCreateBankTransfer() {
   const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const { t } = useAppTranslation();
 
@@ -71,12 +116,13 @@ export function useCreateBankTransfer() {
         params.transactionDate?.trim() ||
         new Date().toISOString().slice(0, 10);
 
+      const { receiptFile, ...transferParams } = params;
       const { data, error } = await supabase.rpc('create_bank_transfer', {
         p_from_bank_account_id: fromId,
         p_to_bank_account_id: toId,
         p_amount: amount,
         p_fee: fee,
-        p_note: params.note?.trim() || null,
+        p_note: transferParams.note?.trim() || null,
         p_transaction_date: dateStr,
       });
 
@@ -86,13 +132,57 @@ export function useCreateBankTransfer() {
         throw Object.assign(new Error(code), { code, displayMessage: aggregated });
       }
 
-      return data as {
+      const transferResult = (data as {
         journal_id?: string;
         expense_id?: string | null;
         income_transaction_id?: string | null;
-      } | null;
+      } | null) ?? null;
+
+      if (!receiptFile || !transferResult?.income_transaction_id || !user?.id) {
+        return transferResult;
+      }
+
+      try {
+        const { extension, mimeType } = normalizeReceiptMetadata(receiptFile);
+        const fileName = `${Date.now()}-${transferResult.income_transaction_id}.${extension}`;
+        const filePath = `${user.id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('income-receipts')
+          .upload(filePath, receiptFile, {
+            contentType: mimeType,
+            upsert: false,
+          });
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        let updateQuery = supabase
+          .from('income_transactions')
+          .update({
+            receipt_file_path: filePath,
+            receipt_file_name: receiptFile.name,
+            receipt_file_size: receiptFile.size,
+            receipt_mime_type: mimeType,
+          })
+          .eq('id', transferResult.income_transaction_id);
+        if (organizationId) {
+          updateQuery = updateQuery.eq('organization_id', organizationId);
+        }
+        const { error: updateError } = await updateQuery;
+        if (updateError) {
+          throw updateError;
+        }
+      } catch {
+        return {
+          ...transferResult,
+          receipt_attach_warning: true,
+        };
+      }
+
+      return transferResult;
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       // App-wide defaults use refetchOnMount: false + staleTime; invalidate alone is not always enough
       // for mounted queries to refetch immediately. Force refetch so balances & lists update without manual refresh.
       if (organizationId) {
@@ -111,6 +201,14 @@ export function useCreateBankTransfer() {
         ]);
       }
       toast.success(t('incomes.bankTransfer.success', 'Transfer completed'));
+      if ((result as { receipt_attach_warning?: boolean } | null)?.receipt_attach_warning) {
+        toast.error(
+          t(
+            'incomes.bankTransfer.receiptAttachWarning',
+            'Transfer succeeded, but receipt upload could not be attached.'
+          )
+        );
+      }
     },
     onError: (err: Error & { code?: string; displayMessage?: string }) => {
       const code = err.code || mapRpcErrorMessage(err.message || '');
