@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Badge } from '@/features/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
-import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX, DollarSign, CheckCircle } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Pencil, Trash2, Upload, FilterX, DollarSign, CheckCircle } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -20,7 +20,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories, Expense, useDebtsForExpense } from './hooks';
+import { useExpenses, CreateExpenseData, UpdateExpenseData, useExpenseTypes, useExpenseCategories, Expense, useDebtsForExpense } from './hooks';
 import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { addExpenseSchema, AddExpenseFormData, RECURRING_FREQUENCIES } from './AddExpenseForm';
@@ -70,6 +70,65 @@ const handleViewInvoice = async (filePath: string | null | undefined) => {
   }
 };
 
+function matchesWithdrawalFilter(expense: Expense, withdrawalFilter: string): boolean {
+  if (!withdrawalFilter || withdrawalFilter === 'all-withdrawal') return true;
+
+  const debtIdFromExpense =
+    expense.withdrawal_from_balance || expense.withdrawal_from_balance_debt?.id || '';
+  const bankIdFromExpense =
+    expense.bank_account_id || expense.withdrawal_from_balance_bank_account?.id || '';
+
+  if (withdrawalFilter === 'none') {
+    return !debtIdFromExpense && !bankIdFromExpense;
+  }
+
+  if (withdrawalFilter.startsWith('debt_')) {
+    const debtId = withdrawalFilter.replace('debt_', '');
+    return debtIdFromExpense === debtId;
+  }
+
+  if (withdrawalFilter.startsWith('bank_')) {
+    const bankId = withdrawalFilter.replace('bank_', '');
+    // Legacy safety: older rows may have stored bank source in withdrawal_from_balance.
+    const legacyBankId =
+      expense.withdrawal_from_balance_bank_account?.id ? '' : expense.withdrawal_from_balance || '';
+    return bankIdFromExpense === bankId || legacyBankId === bankId;
+  }
+
+  return true;
+}
+
+/** Paid purchase requests merged into the expense table must carry the same withdrawal fields as real expenses or debt/bank filters hide every PR row. */
+function withdrawalJoinsFromPurchaseRequest(
+  pr: PurchaseRequest,
+  debts: { id: string; debt_name: string }[],
+  banks: { id: string; name: string }[],
+): Pick<
+  Expense,
+  'withdrawal_from_balance' | 'bank_account_id' | 'withdrawal_from_balance_debt' | 'withdrawal_from_balance_bank_account'
+> {
+  const debtId = pr.withdrawal_from_balance?.trim() || '';
+  const bankId = pr.bank_account_id?.trim() || '';
+  const debtMeta = debtId ? debts.find((d) => d.id === debtId) : undefined;
+  const bankMeta = bankId ? banks.find((b) => b.id === bankId) : undefined;
+  return {
+    withdrawal_from_balance: debtId || undefined,
+    bank_account_id: bankId || undefined,
+    withdrawal_from_balance_debt:
+      debtId && debtMeta
+        ? { id: debtMeta.id, debt_name: debtMeta.debt_name }
+        : debtId
+          ? { id: debtId, debt_name: '—' }
+          : undefined,
+    withdrawal_from_balance_bank_account:
+      bankId && bankMeta
+        ? { id: bankMeta.id, name: bankMeta.name }
+        : bankId
+          ? { id: bankId, name: '—' }
+          : undefined,
+  };
+}
+
 export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [breakdownTab, setBreakdownTab] = useState<'overview' | 'category'>('overview');
@@ -101,14 +160,14 @@ export function ExpenseDashboard() {
   };
 
   const { organizationId } = useCurrentOrg();
-  const { expenses, isLoading, isCreating, createExpense, deleteExpense } = useExpenses();
+  const { expenses, isLoading, isCreating, isUpdating, createExpense, updateExpense, deleteExpense } = useExpenses();
   const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
   const { expenseTypes, isLoading: expenseTypesLoading, refetch: refetchExpenseTypes } = useExpenseTypes();
   const { data: purchaseRequests = [], isLoading: isLoadingPurchaseRequests } = usePurchaseRequests();
   // Fetch all expense categories (without filter) for fallback lookup
   const { expenseCategories: allExpenseCategories } = useExpenseCategories();
   // Fetch debts for withdrawal from balance dropdown
-  const { debts: debtsForExpense, isLoading: debtsLoading, refetch: refetchDebts } = useDebtsForExpense();
+  const { debts: debtsForExpense, isLoading: debtsLoading } = useDebtsForExpense();
   // Fetch bank accounts for withdrawal from balance dropdown
   const { bankAccounts, loading: bankAccountsLoading, refetch: refetchBankAccounts } = useBankAccounts();
   const { balances: bankAccountBalances, loading: balancesLoading, refetch: refetchBalances } = useBankAccountBalances();
@@ -310,6 +369,7 @@ export function ExpenseDashboard() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -343,10 +403,77 @@ export function ExpenseDashboard() {
   });
 
   const isRecurring = form.watch('is_recurring');
+  const isEditMode = !!editingExpense;
+  const isSubmittingExpense = isCreating || isUpdating;
+
+  const emptyExpenseFormValues: AddExpenseFormData = {
+    expense_name: '',
+    amount: undefined as any,
+    expense_type: '',
+    category: '',
+    department: '',
+    withdrawal_from_balance: undefined,
+    bank_account_id: undefined,
+    create_date: format(new Date(), 'yyyy-MM-dd'),
+    is_recurring: false,
+    recurring_frequency: '',
+    first_payment_date: '',
+    linked_recurring_expense_id: '',
+    description: '',
+  };
+
+  const resetExpenseForm = () => {
+    form.reset(emptyExpenseFormValues);
+    setEditingExpense(null);
+    setAmountDisplay('');
+    setReceiptFile(null);
+    setSelectedDate(undefined);
+    setFirstPaymentDate(undefined);
+    setSelectedExpenseTypeId('');
+    setIsCreateDatePickerOpen(false);
+    setIsFirstPaymentDatePickerOpen(false);
+    setIncomeAllocIncomeId('');
+    setIncomeAllocAmountStr('');
+    form.setValue('withdrawal_from_balance', undefined);
+    form.setValue('bank_account_id', undefined);
+  };
+
+  const handleOpenAddExpense = () => {
+    resetExpenseForm();
+    setIsAddModalOpen(true);
+  };
+
+  const handleOpenEditExpense = (expense: Expense) => {
+    const selectedTypeId = expenseTypes.find((type) => type.name === expense.expense_type)?.id || '';
+    setEditingExpense(expense);
+    setSelectedExpenseTypeId(selectedTypeId);
+    setAmountDisplay(formatAmount(String(Math.round(expense.amount || 0))));
+    setSelectedDate(expense.create_date ? new Date(expense.create_date) : undefined);
+    setFirstPaymentDate(expense.first_payment_date ? new Date(expense.first_payment_date) : undefined);
+    setReceiptFile(null);
+    setIncomeAllocIncomeId('');
+    setIncomeAllocAmountStr('');
+    form.reset({
+      expense_name: expense.expense_name || '',
+      amount: expense.amount || (undefined as any),
+      expense_type: expense.expense_type || '',
+      category: expense.category || '',
+      department: expense.department || '',
+      withdrawal_from_balance: expense.withdrawal_from_balance || undefined,
+      bank_account_id: expense.bank_account_id || undefined,
+      create_date: expense.create_date || format(new Date(), 'yyyy-MM-dd'),
+      is_recurring: !!expense.is_recurring,
+      recurring_frequency: expense.recurring_frequency || '',
+      first_payment_date: expense.first_payment_date || '',
+      linked_recurring_expense_id: '',
+      description: expense.description || '',
+    });
+    setIsAddModalOpen(true);
+  };
 
   const handleSubmit = async (data: AddExpenseFormData) => {
-    // Validate available_limit if withdrawal_from_balance is selected
-    if (data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none') {
+    // Validate available_limit for create flow only; edit is validated by DB trigger on delta.
+    if (!isEditMode && data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none') {
       const selectedDebt = debtsForExpense.find(d => d.id === data.withdrawal_from_balance);
       if (selectedDebt) {
         // Hook sudah menghitung available_limit dengan benar (termasuk fallback untuk Pinjaman Online)
@@ -358,12 +485,16 @@ export function ExpenseDashboard() {
       }
     }
     
-    // Validate bank account balance if bank_account_id is selected
+    // Validate bank account balance with delta awareness for edit flow.
     if (data.bank_account_id) {
       const balance = bankAccountBalances.find(b => b.bank_account_id === data.bank_account_id);
       const availableBalance = balance?.balance ?? 0;
-      if (availableBalance < data.amount) {
-        toast.error(`Insufficient balance. Available: Rp ${availableBalance.toLocaleString('id-ID')}, Required: Rp ${data.amount.toLocaleString('id-ID')}`);
+      let requiredAmount = data.amount;
+      if (isEditMode && editingExpense?.bank_account_id === data.bank_account_id) {
+        requiredAmount = Math.max(0, data.amount - (editingExpense.amount ?? 0));
+      }
+      if (availableBalance < requiredAmount) {
+        toast.error(`Insufficient balance. Available: Rp ${availableBalance.toLocaleString('id-ID')}, Required: Rp ${requiredAmount.toLocaleString('id-ID')}`);
         return;
       }
     }
@@ -388,7 +519,7 @@ export function ExpenseDashboard() {
       }
     }
 
-    const expenseData: CreateExpenseData = {
+    const expenseData: UpdateExpenseData = {
       expense_name: data.expense_name || '',
       amount: data.amount || 0,
       expense_type: data.expense_type || '',
@@ -409,39 +540,14 @@ export function ExpenseDashboard() {
       income_allocation,
     };
 
-    const success = await createExpense(expenseData);
+    const success = isEditMode && editingExpense
+      ? await updateExpense(editingExpense.id, expenseData)
+      : await createExpense(expenseData as CreateExpenseData);
     if (success) {
       // Refresh bank account balances after expense creation
       refetchBalances();
       setIsAddModalOpen(false);
-      form.reset({
-        expense_name: '',
-        amount: undefined as any,
-        expense_type: '',
-        category: '',
-        department: '',
-        withdrawal_from_balance: undefined,
-        bank_account_id: undefined,
-        create_date: format(new Date(), 'yyyy-MM-dd'),
-        is_recurring: false,
-        recurring_frequency: '',
-        first_payment_date: '',
-        linked_recurring_expense_id: '',
-        description: '',
-      });
-      setAmountDisplay('');
-      setReceiptFile(null);
-      setSelectedDate(undefined);
-      setFirstPaymentDate(undefined);
-      setIsCreateDatePickerOpen(false);
-      setIsFirstPaymentDatePickerOpen(false);
-      form.setValue('withdrawal_from_balance', undefined);
-      setIncomeAllocIncomeId('');
-      setIncomeAllocAmountStr('');
-      // Refresh debts to update available_limit
-      if (expenseData.withdrawal_from_balance) {
-        refetchDebts();
-      }
+      resetExpenseForm();
     }
   };
 
@@ -476,18 +582,10 @@ export function ExpenseDashboard() {
 
   const handleConfirmDelete = async () => {
     if (expenseToDelete) {
-      // Check if expense has withdrawal_from_balance before deleting
-      const expenseToDeleteObj = allExpenses.find(e => e.id === expenseToDelete);
-      const hasWithdrawalFromBalance = expenseToDeleteObj?.withdrawal_from_balance;
-      
       const success = await deleteExpense(expenseToDelete);
       if (success) {
         setIsDeleteDialogOpen(false);
         setExpenseToDelete(null);
-        // Refresh debts to update available_limit
-        if (hasWithdrawalFromBalance) {
-          refetchDebts();
-        }
       }
     }
   };
@@ -597,6 +695,7 @@ export function ExpenseDashboard() {
         // Add purchase request specific fields
         request_title: pr.request_title,
         requester_name: pr.requester_name,
+        ...withdrawalJoinsFromPurchaseRequest(pr, debtsForExpense, bankAccounts),
       } as Expense & { request_title?: string; requester_name?: string });
     });
     
@@ -640,21 +739,21 @@ export function ExpenseDashboard() {
       });
     }
 
-    // Apply withdrawal from balance filter if selected
-    if (withdrawalFilter && withdrawalFilter !== 'all-withdrawal') {
-      if (withdrawalFilter === 'none') {
-        filtered = filtered.filter(expense => !expense.withdrawal_from_balance && !expense.bank_account_id);
-      } else if (withdrawalFilter.startsWith('debt_')) {
-        const debtId = withdrawalFilter.replace('debt_', '');
-        filtered = filtered.filter(expense => expense.withdrawal_from_balance === debtId);
-      } else if (withdrawalFilter.startsWith('bank_')) {
-        const bankId = withdrawalFilter.replace('bank_', '');
-        filtered = filtered.filter(expense => expense.bank_account_id === bankId);
-      }
-    }
+    // Apply withdrawal filter (debt/bank/none), including legacy fallback mapping.
+    filtered = filtered.filter(expense => matchesWithdrawalFilter(expense, withdrawalFilter));
 
     return filtered;
-  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, categoryFilter, withdrawalFilter]);
+  }, [
+    expenses,
+    paidPurchaseRequests,
+    getDateRange,
+    expenseTypeFilter,
+    departmentFilter,
+    categoryFilter,
+    withdrawalFilter,
+    debtsForExpense,
+    bankAccounts,
+  ]);
 
   // YTD = Year-To-Date: from January 1 of current year through today (independent of user date filter)
   const { totalExpensesYTD, ytdTransactionCount } = useMemo(() => {
@@ -744,6 +843,7 @@ export function ExpenseDashboard() {
         updated_at: pr.updated_at,
         request_title: pr.request_title,
         requester_name: pr.requester_name,
+        ...withdrawalJoinsFromPurchaseRequest(pr, debtsForExpense, bankAccounts),
       } as Expense & { request_title?: string; requester_name?: string });
     });
     const sorted = combined.sort((a, b) => {
@@ -767,21 +867,20 @@ export function ExpenseDashboard() {
     if (departmentFilter && departmentFilter !== 'all-depts') {
       filtered = filtered.filter(expense => expense.department === departmentFilter);
     }
-    // Apply withdrawal from balance filter so all sections respond
-    if (withdrawalFilter && withdrawalFilter !== 'all-withdrawal') {
-      if (withdrawalFilter === 'none') {
-        filtered = filtered.filter(expense => !expense.withdrawal_from_balance && !expense.bank_account_id);
-      } else if (withdrawalFilter.startsWith('debt_')) {
-        const debtId = withdrawalFilter.replace('debt_', '');
-        filtered = filtered.filter(expense => expense.withdrawal_from_balance === debtId);
-      } else if (withdrawalFilter.startsWith('bank_')) {
-        const bankId = withdrawalFilter.replace('bank_', '');
-        filtered = filtered.filter(expense => expense.bank_account_id === bankId);
-      }
-    }
+    // Apply withdrawal filter so all sections respond consistently.
+    filtered = filtered.filter(expense => matchesWithdrawalFilter(expense, withdrawalFilter));
     // Sengaja TIDAK menerapkan categoryFilter agar tab Expense Category selalu menampilkan breakdown semua kategori
     return filtered;
-  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, withdrawalFilter]);
+  }, [
+    expenses,
+    paidPurchaseRequests,
+    getDateRange,
+    expenseTypeFilter,
+    departmentFilter,
+    withdrawalFilter,
+    debtsForExpense,
+    bankAccounts,
+  ]);
 
   const totalExpenses = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const currentMonthTotal = allExpenses
@@ -1314,7 +1413,7 @@ export function ExpenseDashboard() {
               </Button>
             </div>
 
-            <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto flex-shrink-0">
+            <Button onClick={handleOpenAddExpense} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto flex-shrink-0">
               <Plus className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Add Expense</span>
               <span className="sm:hidden">Add</span>
@@ -1484,6 +1583,12 @@ export function ExpenseDashboard() {
                                 Details
                               </DropdownMenuItem>
                               {!isPaidPurchaseRequest && (
+                                <DropdownMenuItem onClick={() => handleOpenEditExpense(expense)}>
+                                  <Pencil className="h-4 w-4 mr-2 text-gray-600" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {!isPaidPurchaseRequest && (
                                 <DropdownMenuItem 
                                   className="text-red-600"
                                   onClick={() => handleDeleteClick(expense.id)}
@@ -1517,18 +1622,15 @@ export function ExpenseDashboard() {
       <Dialog open={isAddModalOpen} onOpenChange={(open) => {
         setIsAddModalOpen(open);
         if (!open) {
-          // Reset amount display and date pickers when modal closes
-          setAmountDisplay('');
-          setIsCreateDatePickerOpen(false);
-          setIsFirstPaymentDatePickerOpen(false);
-          setIncomeAllocIncomeId('');
-          setIncomeAllocAmountStr('');
+          resetExpenseForm();
         }
       }}>
         <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
           <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
-            <DialogTitle className="text-lg font-semibold">Add New Expense</DialogTitle>
-            <p className="text-sm text-gray-600">Enter the details for your new expense entry.</p>
+            <DialogTitle className="text-lg font-semibold">{isEditMode ? 'Edit Expense' : 'Add New Expense'}</DialogTitle>
+            <p className="text-sm text-gray-600">
+              {isEditMode ? 'Update the expense details and save your changes.' : 'Enter the details for your new expense entry.'}
+            </p>
           </DialogHeader>
 
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
@@ -1589,6 +1691,7 @@ export function ExpenseDashboard() {
                 <Select 
                   onValueChange={handleExpenseTypeChange}
                   disabled={expenseTypesLoading}
+                  value={form.watch('expense_type') || undefined}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={expenseTypesLoading ? "Loading expense types..." : "Select expense type"} />
@@ -1627,6 +1730,7 @@ export function ExpenseDashboard() {
                 <Select 
                   onValueChange={(value) => form.setValue('category', value)}
                   disabled={!selectedExpenseTypeId || expenseCategories.length === 0}
+                  value={form.watch('category') || undefined}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={
@@ -1671,6 +1775,7 @@ export function ExpenseDashboard() {
                 <Select 
                   onValueChange={(value) => form.setValue('department', value)}
                   disabled={departmentsLoading}
+                  value={form.watch('department') || undefined}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={departmentsLoading ? "Loading departments..." : "Select department (optional)"} />
@@ -1974,7 +2079,7 @@ export function ExpenseDashboard() {
                 type="button"
                 variant="outline" 
                 onClick={() => setIsAddModalOpen(false)}
-                disabled={isCreating}
+                disabled={isSubmittingExpense}
               >
                 Cancel
               </Button>
@@ -1982,11 +2087,13 @@ export function ExpenseDashboard() {
                 type="submit"
                 className="bg-gray-900 hover:bg-gray-800 text-white"
                 disabled={
-                  isCreating ||
+                  isSubmittingExpense ||
                   (!form.watch('withdrawal_from_balance') && !form.watch('bank_account_id'))
                 }
               >
-                {isCreating ? 'Creating...' : 'Add Expense'}
+                {isSubmittingExpense
+                  ? (isEditMode ? 'Saving...' : 'Creating...')
+                  : (isEditMode ? 'Save Changes' : 'Add Expense')}
               </Button>
             </div>
           </form>

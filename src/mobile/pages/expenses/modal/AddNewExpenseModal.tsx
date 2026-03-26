@@ -181,8 +181,7 @@ export function AddNewExpenseModal({
     useExpenseCategories(selectedExpenseTypeId);
   const { data: departments = [], isLoading: departmentsLoading } =
     useDepartmentsCrud(organizationId);
-  const { debts: debtsForExpense, isLoading: debtsLoading, refetch: refetchDebts } =
-    useDebtsForExpense();
+  const { debts: debtsForExpense, isLoading: debtsLoading } = useDebtsForExpense();
   const { bankAccounts, loading: bankAccountsLoading } = useBankAccounts();
   const { balances: bankAccountBalances, loading: balancesLoading, refetch: refetchBalances } =
     useBankAccountBalances();
@@ -529,7 +528,6 @@ export function AddNewExpenseModal({
       setTransactionRefDisplay("");
       setIncomeAllocIncomeId("");
       setIncomeAllocAmountStr("");
-      if (expenseData.withdrawal_from_balance) refetchDebts();
     }
   };
 

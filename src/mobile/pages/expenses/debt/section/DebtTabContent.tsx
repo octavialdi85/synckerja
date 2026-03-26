@@ -15,6 +15,7 @@ import {
 import { useCurrentOrg } from "@/features/share/hooks/useCurrentOrg";
 import { useCurrentUser } from "@/features/share/hooks/useCurrentUser";
 import { ExpenseDashboardRefreshContext } from "@/mobile/pages/expenses/ExpenseDashboardRefreshContext";
+import { debtDisplayBalance } from "@/features/4_2_debt/utils/resolveDebtDisplay";
 
 export function DebtTabContent() {
   const { t } = useAppTranslation();
@@ -32,10 +33,7 @@ export function DebtTabContent() {
   const queryClient = useQueryClient();
 
   const totalDebt = useMemo(() => {
-    return debts.reduce((sum, debt) => {
-      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
-      return sum + remaining;
-    }, 0);
+    return debts.reduce((sum, debt) => sum + debtDisplayBalance(debt), 0);
   }, [debts]);
 
   const totalLimit = useMemo(() => {
@@ -47,10 +45,7 @@ export function DebtTabContent() {
   }, [debts]);
 
   const activeDebtTotal = useMemo(() => {
-    return activeDebts.reduce((sum, debt) => {
-      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
-      return sum + remaining;
-    }, 0);
+    return activeDebts.reduce((sum, debt) => sum + debtDisplayBalance(debt), 0);
   }, [activeDebts]);
 
   const handleAddClick = () => {

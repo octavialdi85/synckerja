@@ -1,5 +1,5 @@
 export { useExpenses } from './useExpenses';
-export type { Expense, CreateExpenseData } from './useExpenses';
+export type { Expense, CreateExpenseData, UpdateExpenseData } from './useExpenses';
 export { useExpenseMetrics } from './useExpenseMetrics';
 export { useExpenseTypes } from './useExpenseTypes';
 export { useExpenseCategories } from './useExpenseCategories';

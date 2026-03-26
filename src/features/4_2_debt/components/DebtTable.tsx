@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Search, MoreHorizontal, Eye, Edit, Trash2, CreditCard, Building, Calendar, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { debtDisplayBalance, resolveDebtDisplay } from '../utils/resolveDebtDisplay';
 
 interface DebtTableProps {
   debts: Debt[];
@@ -78,11 +79,6 @@ export const DebtTable = ({
           </Badge>
         );
     }
-  };
-
-  const calculateUtilization = (limit: number, used: number) => {
-    if (limit === 0) return 0;
-    return Math.round((used / limit) * 100);
   };
 
   const getUtilizationColor = (percentage: number) => {
@@ -158,9 +154,7 @@ export const DebtTable = ({
                   // Show payment modal for first active debt that has remaining balance
                   const activeDebt = debts.find(d => {
                     if (d.status !== 'active') return false;
-                    // Ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
-                    const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
-                    return remaining > 0;
+                    return debtDisplayBalance(d) > 0;
                   });
                   if (activeDebt) {
                     onPayDebt(activeDebt);
@@ -169,8 +163,7 @@ export const DebtTable = ({
                 className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                 disabled={!debts.some(d => {
                   if (d.status !== 'active') return false;
-                  const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
-                  return remaining > 0;
+                  return debtDisplayBalance(d) > 0;
                 })}
               >
                 <span className="hidden sm:inline">{t('debt.payment.button', 'Pay Debt')}</span>
@@ -222,55 +215,15 @@ export const DebtTable = ({
               </tr>
             ) : (
               filteredDebts.map((debt) => {
-                const isOnlineLoan = debt.debt_type === 'Pinjaman Online';
-                
-                let displayLimitAmount: number;
-                let displayAvailableLimit: number;
-                let displayDebtAmount: number;
-                let displayPaidAmount: number | null = null;
-                let displayInterest: number | null = null;
-                let utilization: number;
-                
-                if (isOnlineLoan) {
-                  // Pinjaman Online: Total Limit = limit_amount.
-                  // remaining = sisa hutang = debt_amount - paid_amount. Berkurang saat bayar.
-                  // Debt (kolom) = remaining. Available = limit - remaining. Saat lunas → Debt = 0, Available = limit.
-                  // Paid = paid_amount. Interest = SUM(interest_amount).
-                  const remaining = debt.remaining_debt ?? Math.max(0, (debt.debt_amount ?? 0) - (debt.paid_amount ?? 0));
-                  displayLimitAmount = debt.limit_amount;
-                  displayAvailableLimit = Math.max(0, (debt.limit_amount ?? 0) - remaining);
-                  displayDebtAmount = remaining;
-                  displayPaidAmount = (debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0)
-                    ? debt.paid_amount
-                    : null;
-                  displayInterest = (debt.total_interest != null && debt.total_interest > 0) ? debt.total_interest : null;
-                  utilization = (debt.limit_amount ?? 0) > 0
-                    ? Math.min(100, Math.round((remaining / (debt.limit_amount ?? 1)) * 100))
-                    : 0;
-                } else {
-                  // Kartu kredit / non–Pinjaman Online: jangan campur `available_limit` (DB) dengan `remaining_debt`
-                  // untuk dua kolom berbeda — bisa drift (mis. selisih biaya/bunga). Satu sumber: sisa hutang.
-                  // Jika `remaining_debt` ada → Available = limit − remaining (sama logika dengan Pinjaman Online).
-                  displayLimitAmount = debt.limit_amount;
-                  displayPaidAmount = debt.paid_amount ?? null;
-                  const lim = debt.limit_amount ?? 0;
+                const {
+                  displayLimitAmount,
+                  displayAvailableLimit,
+                  displayDebtAmount,
+                  displayPaidAmount,
+                  displayInterest,
+                  utilization,
+                } = resolveDebtDisplay(debt);
 
-                  if (debt.remaining_debt !== undefined && debt.remaining_debt !== null) {
-                    const rem = Math.max(0, Number(debt.remaining_debt));
-                    displayDebtAmount = rem;
-                    displayAvailableLimit = Math.max(0, lim - rem);
-                  } else {
-                    const hasAvailableLimit = debt.available_limit != null && debt.available_limit > 0;
-                    displayAvailableLimit = hasAvailableLimit ? debt.available_limit : debt.limit_amount;
-                    const hasPayment = debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0;
-                    displayDebtAmount = !hasPayment ? debt.debt_amount : Math.max(0, debt.debt_amount - (displayPaidAmount ?? 0));
-                  }
-
-                  displayInterest = null;
-                  const terpakai = lim - displayAvailableLimit;
-                  utilization = calculateUtilization(debt.limit_amount, terpakai);
-                }
-                
                 return (
                   <tr key={debt.id} className="border-b hover:bg-gray-50">
                     <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] min-w-0">
@@ -413,11 +366,9 @@ export const DebtTable = ({
           <div className="flex items-center gap-4">
             <span>
               {t('debt.totalDebt', 'Total Debt')}: <span className="font-bold text-red-600">
-                {formatToRupiah(filteredDebts.reduce((sum, d) => {
-                  // Ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
-                  const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
-                  return sum + remaining;
-                }, 0))}
+                {formatToRupiah(
+                  filteredDebts.reduce((sum, d) => sum + debtDisplayBalance(d), 0)
+                )}
               </span>
             </span>
           </div>

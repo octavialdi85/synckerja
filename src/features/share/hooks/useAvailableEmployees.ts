@@ -20,8 +20,9 @@ export interface AvailableEmployee {
 export const useAvailableEmployees = () => {
   const { organizationId } = useCurrentOrg();
 
+  // Bump segment when assignable-employee rules change so stale cached lists (e.g. old strict "active" name filter) refetch.
   return useQuery({
-    queryKey: ['available-employees', organizationId],
+    queryKey: ['available-employees', 'v2-inclusive-status', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
 

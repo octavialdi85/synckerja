@@ -5,6 +5,7 @@ import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { toast } from 'sonner';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+import { ORGANIZATION_DEBTS_QUERY_KEY } from '@/features/4_2_debt/hooks/organizationDebtsQuery';
 
 export const EXPENSES_QUERY_KEY = ['expenses'] as const;
 
@@ -64,6 +65,10 @@ export interface CreateExpenseData {
   transaction_reference?: string | null;
   /** Optional link to an income row on the same bank account (`income_allocations`). */
   income_allocation?: { income_transaction_id: string; amount: number } | null;
+}
+
+export interface UpdateExpenseData extends CreateExpenseData {
+  replace_receipt?: boolean;
 }
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -218,6 +223,7 @@ export const useExpenses = () => {
   const { t } = useAppTranslation();
   const { updateBalance } = useBankAccountBalances();
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
 
@@ -453,6 +459,7 @@ export const useExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['income-transactions', organizationId] });
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ORGANIZATION_DEBTS_QUERY_KEY(organizationId) });
       return data;
     } catch (error: any) {
       console.error('Error creating expense:', error);
@@ -510,6 +517,186 @@ export const useExpenses = () => {
     }
   };
 
+  const updateExpense = async (id: string, expenseData: UpdateExpenseData) => {
+    if (!organizationId) {
+      toast.error('Organization not found');
+      return false;
+    }
+
+    try {
+      setIsUpdating(true);
+
+      const { data: existingExpense, error: existingExpenseError } = await supabase
+        .from('expenses')
+        .select('id, organization_id, amount, bank_account_id, expense_name, receipt_url, receipt_urls')
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .single();
+
+      if (existingExpenseError || !existingExpense) {
+        throw existingExpenseError || new Error('Expense not found');
+      }
+
+      const { data: expenseTypes, error: typeError } = await supabase
+        .from('expense_types')
+        .select('id')
+        .eq('name', expenseData.expense_type)
+        .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+        .maybeSingle();
+
+      if (typeError) {
+        console.error('Error finding expense type:', typeError);
+      }
+
+      const { data: expenseCategories, error: categoryError } = await supabase
+        .from('expense_categories')
+        .select('id')
+        .eq('name', expenseData.category)
+        .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+        .maybeSingle();
+
+      if (categoryError) {
+        console.error('Error finding expense category:', categoryError);
+      }
+
+      let nextPaymentDate: string | null = null;
+      const isSettlementRow = !!expenseData.recurring_settlement_for_expense_id;
+      if (
+        !isSettlementRow &&
+        expenseData.is_recurring &&
+        expenseData.first_payment_date &&
+        expenseData.recurring_frequency
+      ) {
+        const firstPayment = new Date(expenseData.first_payment_date);
+        const nextPayment = addRecurringInterval(firstPayment, expenseData.recurring_frequency);
+        nextPaymentDate = nextPayment.toISOString().split('T')[0];
+      }
+
+      let receiptUrlToSave: string | null = existingExpense.receipt_url ?? null;
+      let receiptUrlsToSave: string[] | null = Array.isArray(existingExpense.receipt_urls)
+        ? (existingExpense.receipt_urls as string[])
+        : null;
+      const newReceiptUrls: string[] = [];
+
+      if (expenseData.receipt_files?.length) {
+        for (const f of expenseData.receipt_files) {
+          const u = await uploadReceiptFile(f);
+          if (!u) return false;
+          newReceiptUrls.push(u);
+        }
+      } else if (expenseData.receipt_file) {
+        const u = await uploadReceiptFile(expenseData.receipt_file);
+        if (!u) return false;
+        newReceiptUrls.push(u);
+      }
+
+      if (newReceiptUrls.length > 0) {
+        receiptUrlToSave = newReceiptUrls[0];
+        receiptUrlsToSave = newReceiptUrls.length > 1 ? newReceiptUrls : null;
+      } else if (expenseData.replace_receipt) {
+        receiptUrlToSave = null;
+        receiptUrlsToSave = null;
+      }
+
+      const refTrimmed = expenseData.transaction_reference?.trim() ?? null;
+      const refForDb = refTrimmed && refTrimmed.length > 0 ? refTrimmed : null;
+
+      const { error: updateError } = await supabase
+        .from('expenses')
+        .update({
+          expense_name: expenseData.expense_name,
+          amount: expenseData.amount,
+          expense_type: expenseData.expense_type,
+          expense_type_id: expenseTypes?.id || null,
+          category: expenseData.category,
+          expense_category_id: expenseCategories?.id || null,
+          department: expenseData.department || null,
+          withdrawal_from_balance: expenseData.withdrawal_from_balance || null,
+          bank_account_id: expenseData.bank_account_id || null,
+          create_date: expenseData.create_date,
+          is_recurring: expenseData.is_recurring,
+          recurring_frequency: expenseData.recurring_frequency || null,
+          first_payment_date: expenseData.first_payment_date || null,
+          next_payment_date: isSettlementRow ? null : nextPaymentDate,
+          description: expenseData.description || null,
+          receipt_url: receiptUrlToSave,
+          receipt_urls: receiptUrlsToSave,
+          transaction_reference: refForDb,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('organization_id', organizationId);
+
+      if (updateError) throw updateError;
+
+      const previousBankId = existingExpense.bank_account_id ?? null;
+      const nextBankId = expenseData.bank_account_id ?? null;
+      const previousAmount = Number(existingExpense.amount ?? 0);
+      const nextAmount = Number(expenseData.amount ?? 0);
+
+      if (previousBankId && nextBankId && previousBankId === nextBankId) {
+        const delta = previousAmount - nextAmount;
+        if (delta !== 0) {
+          await updateBalance(
+            previousBankId,
+            delta,
+            delta > 0 ? 'income' : 'expense',
+            id,
+            `Expense edit adjustment: ${expenseData.expense_name}`
+          );
+        }
+      } else {
+        if (previousBankId) {
+          await updateBalance(
+            previousBankId,
+            previousAmount,
+            'income',
+            id,
+            `Expense source changed (revert): ${existingExpense.expense_name}`
+          );
+        }
+        if (nextBankId) {
+          await updateBalance(
+            nextBankId,
+            -nextAmount,
+            'expense',
+            id,
+            `Expense source changed (apply): ${expenseData.expense_name}`
+          );
+        }
+      }
+
+      toast.success('Expense updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['bank-account-balances', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
+      queryClient.invalidateQueries({ queryKey: queryKey });
+      queryClient.invalidateQueries({ queryKey: ORGANIZATION_DEBTS_QUERY_KEY(organizationId) });
+      return true;
+    } catch (error: any) {
+      console.error('Error updating expense:', error);
+      const code = error?.code as string | undefined;
+      const msg = String(error?.message ?? '');
+      if (
+        code === '23505' ||
+        /duplicate key/i.test(msg) ||
+        /unique constraint/i.test(msg) ||
+        /idx_expenses_org_transaction_ref/i.test(msg)
+      ) {
+        toast.error(
+          t(
+            'expenses.duplicateTransactionReference',
+            'An expense with this Transaction ID already exists in your organization.'
+          )
+        );
+        return false;
+      }
+      toast.error(error?.message || 'Failed to update expense');
+      return false;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const deleteExpense = async (id: string) => {
     if (!organizationId) {
       toast.error('Organization not found');
@@ -528,6 +715,7 @@ export const useExpenses = () => {
       toast.success('Expense deleted successfully!');
       queryClient.invalidateQueries({ queryKey: ['expense-metrics'] });
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ORGANIZATION_DEBTS_QUERY_KEY(organizationId) });
       return true;
     } catch (error: any) {
       console.error('Error deleting expense:', error);
@@ -587,7 +775,9 @@ export const useExpenses = () => {
     expenses,
     isLoading,
     isCreating,
+    isUpdating,
     createExpense,
+    updateExpense,
     deleteExpense,
     updateRecurringBillAfterPayNow,
     refetch,

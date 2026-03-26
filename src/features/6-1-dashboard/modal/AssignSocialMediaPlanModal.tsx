@@ -19,6 +19,7 @@ import {
 } from '@/features/ui/alert-dialog';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import { devLog } from '@/config/logger';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 interface AssignSocialMediaPlanModalProps {
   open: boolean;
@@ -46,19 +47,16 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   
-  // Filter employees by status = 'active' and search term
+  // useAvailableEmployees already applies isEmployeeActive (employee_status_name, pending_removal, legacy status).
+  // Do not filter on employees.status here — that field is no longer selected and would be undefined for everyone.
   const filteredEmployees = React.useMemo(() => {
-    let filtered = employees.filter(emp => emp.status === 'active' || emp.status === null);
-    
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(emp =>
+    if (!searchTerm.trim()) return employees;
+    const searchLower = searchTerm.toLowerCase();
+    return employees.filter(
+      (emp) =>
         emp.full_name?.toLowerCase().includes(searchLower) ||
         emp.email?.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    return filtered;
+    );
   }, [employees, searchTerm]);
   
   // Initialize state when modal opens
@@ -119,9 +117,8 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
       return;
     }
     
-    // Validate employee status
-    const employee = employees.find(emp => emp.id === selectedEmployeeId);
-    if (employee && employee.status !== 'active' && employee.status !== null) {
+    const employee = employees.find((emp) => emp.id === selectedEmployeeId);
+    if (employee && !isEmployeeActive(employee)) {
       toast.error('Selected employee is not active');
       return;
     }
@@ -262,7 +259,11 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
                 ) : filteredEmployees.length === 0 ? (
                   <div className="text-center p-4">
                     <User className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">No active employees found</p>
+                    <p className="text-sm text-gray-500">
+                      {employees.length === 0
+                        ? 'No active employees found'
+                        : 'No employees match your search'}
+                    </p>
                   </div>
                 ) : (
                   <div className="divide-y">
@@ -299,7 +300,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
                               )}
                             </div>
                           </div>
-                          {employee.status === 'active' && (
+                          {isEmployeeActive(employee) && (
                             <span className="text-xs text-green-600 font-medium">Active</span>
                           )}
                         </div>

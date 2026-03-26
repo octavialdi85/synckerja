@@ -797,11 +797,11 @@ const Absensi = () => {
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <SidebarTrigger className="md:hidden shrink-0" />
               <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">
-                  {t("mobileHome.homeLabel", "Beranda")}
+                <p className="text-base font-bold text-foreground truncate leading-tight">
+                  {greeting}
                 </p>
-                <p className="text-base font-semibold text-foreground truncate leading-tight">
-                  {greeting}, {displayName}
+                <p className="text-base font-light text-foreground truncate leading-tight">
+                  {displayName}
                 </p>
               </div>
             </div>

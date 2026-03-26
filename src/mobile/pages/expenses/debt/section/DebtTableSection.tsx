@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/mobile/hooks/use-mobile";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import type { Debt, CreateDebtData } from "@/features/4_2_debt/types";
+import { debtDisplayBalance, resolveDebtDisplay } from "@/features/4_2_debt/utils/resolveDebtDisplay";
 import { formatToRupiah } from "@/utils/formatCurrency";
 import { Card, CardContent } from "@/mobile/components/ui/card";
 import { Button } from "@/mobile/components/ui/button";
@@ -111,11 +112,6 @@ export function DebtTableSection({
     );
   };
 
-  const calculateUtilization = (limit: number, used: number) => {
-    if (limit === 0) return 0;
-    return Math.round((used / limit) * 100);
-  };
-
   const getUtilizationColor = (percentage: number) => {
     if (percentage >= 80) return "bg-red-500";
     if (percentage >= 60) return "bg-orange-500";
@@ -152,8 +148,7 @@ export function DebtTableSection({
                   onClick={onPayDebt}
                   disabled={!debts.some((d) => {
                     if (d.status !== "active") return false;
-                    const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
-                    return remaining > 0;
+                    return debtDisplayBalance(d) > 0;
                   })}
                 >
                   <Activity className="h-4 w-4 shrink-0" />
@@ -307,45 +302,14 @@ export function DebtTableSection({
                   </tr>
                 ) : (
                   filteredDebts.map((debt) => {
-                    const isOnlineLoan = debt.debt_type === "Pinjaman Online";
-                    let displayLimitAmount: number;
-                    let displayAvailableLimit: number;
-                    let displayDebtAmount: number;
-                    let displayPaidAmount: number | null = null;
-                    let displayInterest: number | null = null;
-                    let utilization: number;
-
-                    if (isOnlineLoan) {
-                      const remaining = debt.remaining_debt ?? Math.max(0, (debt.debt_amount ?? 0) - (debt.paid_amount ?? 0));
-                      displayLimitAmount = debt.limit_amount;
-                      displayAvailableLimit = Math.max(0, (debt.limit_amount ?? 0) - remaining);
-                      displayDebtAmount = remaining;
-                      displayPaidAmount = debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0 ? debt.paid_amount : null;
-                      displayInterest = debt.total_interest != null && debt.total_interest > 0 ? debt.total_interest : null;
-                      utilization =
-                        (debt.limit_amount ?? 0) > 0
-                          ? Math.min(100, Math.round((remaining / (debt.limit_amount ?? 1)) * 100))
-                          : 0;
-                    } else {
-                      displayLimitAmount = debt.limit_amount;
-                      displayPaidAmount = debt.paid_amount ?? null;
-                      const lim = debt.limit_amount ?? 0;
-
-                      if (debt.remaining_debt !== undefined && debt.remaining_debt !== null) {
-                        const rem = Math.max(0, Number(debt.remaining_debt));
-                        displayDebtAmount = rem;
-                        displayAvailableLimit = Math.max(0, lim - rem);
-                      } else {
-                        const hasAvailableLimit = debt.available_limit != null && debt.available_limit > 0;
-                        displayAvailableLimit = hasAvailableLimit ? debt.available_limit : debt.limit_amount;
-                        const hasPayment = debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0;
-                        displayDebtAmount = !hasPayment ? debt.debt_amount : Math.max(0, debt.debt_amount - (displayPaidAmount ?? 0));
-                      }
-
-                      displayInterest = null;
-                      const terpakai = lim - displayAvailableLimit;
-                      utilization = calculateUtilization(debt.limit_amount, terpakai);
-                    }
+                    const {
+                      displayLimitAmount,
+                      displayAvailableLimit,
+                      displayDebtAmount,
+                      displayPaidAmount,
+                      displayInterest,
+                      utilization,
+                    } = resolveDebtDisplay(debt);
 
                     return (
                       <tr key={debt.id} className="border-b hover:bg-muted/30">
@@ -459,12 +423,7 @@ export function DebtTableSection({
               <span>
                 {t("debt.totalDebt", "Total Debt")}:{" "}
                 <span className="font-bold text-red-600">
-                  {formatToRupiah(
-                    filteredDebts.reduce((sum, d) => {
-                      const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
-                      return sum + remaining;
-                    }, 0)
-                  )}
+                  {formatToRupiah(filteredDebts.reduce((sum, d) => sum + debtDisplayBalance(d), 0))}
                 </span>
               </span>
             </div>
@@ -518,7 +477,7 @@ export function DebtTableSection({
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">{t("debt.table.debt", "Debt")}</label>
                         <p className="text-sm font-semibold mt-1 text-red-600">
-                          {formatToRupiah(selectedDebt.remaining_debt ?? Math.max(0, selectedDebt.debt_amount - (selectedDebt.paid_amount ?? 0)))}
+                          {formatToRupiah(resolveDebtDisplay(selectedDebt).displayDebtAmount)}
                         </p>
                       </div>
                     </div>

@@ -10,9 +10,13 @@ const NON_ACTIVE_STATUSES = new Set([
 ]);
 
 /**
- * Determine if an employee is active based on status fields.
- * Uses BOTH employees.status and employee_statuses.name: if either indicates non-active, employee is not active.
- * This ensures resigned employees (often only employees.status = 'inactive') are excluded.
+ * Active / assignable employee: not pending removal and not in a terminal non-active status.
+ * Uses legacy `employees.status` and/or `employee_statuses.name` when present; if either marks
+ * inactive/terminated/resigned, the employee is excluded.
+ *
+ * After `employees.status` is omitted from API selects, many rows only have `employee_status_name`
+ * values like "Probation" or "Contract". Those must still count as active — the old strict rule
+ * (name must equal "active") incorrectly dropped everyone except a few rows named exactly "Active".
  */
 export const isEmployeeActive = (employee: {
   employee_status_name?: string | null;
@@ -29,32 +33,18 @@ export const isEmployeeActive = (employee: {
   if (NON_ACTIVE_STATUSES.has(statusFromField) || NON_ACTIVE_STATUSES.has(statusFromName)) {
     return false;
   }
-  if (!statusFromField && !statusFromName) {
-    return true;
-  }
-  return statusFromField === 'active' || statusFromName === 'active';
+  return true;
 };
 
 /**
  * Determine if an employee should appear in organizational structure (e.g. /company/organization).
- * Excludes only resigned, terminated, inactive, pending removal.
- * Includes active, probation, contract, and any other non-resigned status.
+ * Same rule set as {@link isEmployeeActive}.
  */
 export const isEmployeeInOrganizationalStructure = (employee: {
   employee_status_name?: string | null;
   status?: string | null;
   pending_removal?: boolean | null;
-}): boolean => {
-  if (employee.pending_removal === true) {
-    return false;
-  }
-  const statusFromField = (employee.status ?? '').toString().trim().toLowerCase();
-  const statusFromName = (employee.employee_status_name ?? '').toString().trim().toLowerCase();
-  if (NON_ACTIVE_STATUSES.has(statusFromField) || NON_ACTIVE_STATUSES.has(statusFromName)) {
-    return false;
-  }
-  return true;
-};
+}): boolean => isEmployeeActive(employee);
 
 /**
  * Managers eligible for `employee`: same org implied by caller; not self;

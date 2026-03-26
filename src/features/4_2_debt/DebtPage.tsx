@@ -20,6 +20,7 @@ import {
 } from '@/features/4_2_debt/services/submitDebtPayment';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { debtDisplayBalance, resolveDebtDisplay } from './utils/resolveDebtDisplay';
 
 export const DebtPage = () => {
   const [activeTab, setActiveTab] = useState('debt');
@@ -142,12 +143,8 @@ export const DebtPage = () => {
     setEditingDebt(null);
   };
 
-  // Calculate totals: ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
   const totalDebt = useMemo(() => {
-    return debts.reduce((sum, debt) => {
-      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
-      return sum + remaining;
-    }, 0);
+    return debts.reduce((sum, debt) => sum + debtDisplayBalance(debt), 0);
   }, [debts]);
 
   const totalLimit = useMemo(() => {
@@ -159,10 +156,7 @@ export const DebtPage = () => {
   }, [debts]);
 
   const activeDebtTotal = useMemo(() => {
-    return activeDebts.reduce((sum, debt) => {
-      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
-      return sum + remaining;
-    }, 0);
+    return activeDebts.reduce((sum, debt) => sum + debtDisplayBalance(debt), 0);
   }, [activeDebts]);
 
   return (
@@ -354,17 +348,13 @@ export const DebtPage = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-500">{t('debt.table.debt', 'Debt')}</label>
                   <p className="text-sm font-bold mt-1 text-red-600">
-                    {formatToRupiah(
-                      selectedDebt.remaining_debt ?? Math.max(0, selectedDebt.debt_amount - (selectedDebt.paid_amount ?? 0))
-                    )}
+                    {formatToRupiah(resolveDebtDisplay(selectedDebt).displayDebtAmount)}
                   </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">{t('debt.table.utilization', 'Utilization')}</label>
                   <p className="text-sm mt-1">
-                    {selectedDebt.limit_amount > 0
-                      ? Math.round((selectedDebt.debt_amount / selectedDebt.limit_amount) * 100)
-                      : 0}%
+                    {resolveDebtDisplay(selectedDebt).utilization}%
                   </p>
                 </div>
                 {selectedDebt.interest_rate && (
