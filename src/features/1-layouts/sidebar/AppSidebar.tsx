@@ -354,11 +354,11 @@ export function AppSidebar() {
       <div
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="group relative z-20 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
+        className="group relative z-40 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
       >
         <Sidebar
           collapsible="icon"
-          className="top-16 fixed left-0 z-20 h-full border-r border-gray-200 bg-white shadow-none transition-[width] duration-300 ease-in-out motion-reduce:transition-none"
+          className="top-16 fixed left-0 z-40 h-full border-r border-gray-200 bg-white shadow-none transition-[width] duration-300 ease-in-out motion-reduce:transition-none"
           style={{
             fontFamily: 'system-ui, -apple-system, sans-serif',
             height: 'calc(100vh - 4rem)',
@@ -490,7 +490,7 @@ export function AppSidebar() {
           onMouseLeave={handleSubSidebarMouseLeave}
           onTransitionEnd={handleSubSidebarPanelTransitionEnd}
           className={cn(
-            'pointer-events-none absolute left-full top-0 z-10 overflow-hidden',
+            'pointer-events-none absolute left-full top-0 z-50 overflow-hidden',
             'h-[calc(100vh-4rem)]',
             'transition-[width,opacity,transform] duration-300 ease-in-out motion-reduce:transition-none',
             subSidebarMeasuredOpen
