@@ -1,5 +1,6 @@
 import type { QueryKey } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 import type { DigitalMarketingEmployee } from '../hook/useDigitalMarketingEmployees';
 
 const CONTENT_PLANS_SELECT = `
@@ -138,8 +139,9 @@ interface RawEmployeeRow {
   user_id?: string;
   job_position_id?: string;
   job_positions?: { name?: string } | null;
-  status?: string | null;
   employee_status_id?: string | null;
+  pending_removal?: boolean | null;
+  employee_statuses?: { name?: string } | null;
 }
 
 export function getDigitalMarketingEmployeesQueryOptions(organizationId: string | undefined) {
@@ -153,15 +155,18 @@ export function getDigitalMarketingEmployeesQueryOptions(organizationId: string 
       const result = await (supabase
         .from('employees')
         .select(
-          'id, full_name, email, user_id, job_position_id, job_positions(name), status, employee_status_id'
+          'id, full_name, email, user_id, job_position_id, job_positions(name), employee_status_id, pending_removal, employee_statuses(name)'
         )
         .eq('organization_id', organizationId)
         .order('full_name') as unknown as Promise<EmployeesResult>);
       const { data, error } = result;
       if (error) throw error;
       const rows = data ?? [];
-      const activeEmployees = rows.filter(
-        (emp) => !emp.status || emp.status === 'active' || emp.employee_status_id
+      const activeEmployees = rows.filter((emp) =>
+        isEmployeeActive({
+          employee_status_name: emp.employee_statuses?.name ?? null,
+          pending_removal: emp.pending_removal ?? null,
+        })
       );
       return activeEmployees.map((employee) => ({
         id: employee.id,

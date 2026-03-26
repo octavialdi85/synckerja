@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 export const useEmployeeAttendanceStats = () => {
   const { currentOrg } = useCurrentOrg();
@@ -20,6 +21,53 @@ export const useEmployeeAttendanceStats = () => {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
+      const { data: employees, error: employeeError } = await supabase
+        .from('employees')
+        .select('id, full_name, employee_status_id, pending_removal')
+        .eq('organization_id', currentOrg.id);
+
+      if (employeeError) {
+        console.error('❌ Error fetching employees:', employeeError);
+        throw employeeError;
+      }
+
+      const statusIds = Array.from(
+        new Set((employees || []).map((emp) => emp.employee_status_id).filter(Boolean))
+      ) as string[];
+      let statusNameById = new Map<string, string>();
+      if (statusIds.length > 0) {
+        const { data: statuses, error: statusesError } = await supabase
+          .from('employee_statuses')
+          .select('id, name')
+          .in('id', statusIds);
+
+        if (statusesError) {
+          console.error('❌ Error fetching employee statuses:', statusesError);
+          throw statusesError;
+        }
+
+        statusNameById = new Map((statuses || []).map((status) => [status.id, status.name]));
+      }
+
+      const activeEmployeeIds = (employees || [])
+        .map((emp) => ({
+          ...emp,
+          employee_status_name: emp.employee_status_id ? statusNameById.get(emp.employee_status_id) || null : null
+        }))
+        .filter((emp) => isEmployeeActive(emp))
+        .map((emp) => emp.id);
+
+      if (activeEmployeeIds.length === 0) {
+        return {
+          attendanceRate: 100,
+          presentDays: 0,
+          lateDays: 0,
+          leaveDays: 0,
+          totalActiveEmployees: 0,
+          workingDays: getWorkingDaysInMonth(startOfMonth, endOfMonth)
+        };
+      }
+
       // Get attendance records for current month
       const { data: attendanceRecords, error: attendanceError } = await supabase
         .from('attendance_records')
@@ -28,17 +76,12 @@ export const useEmployeeAttendanceStats = () => {
           employee_id,
           attendance_date,
           status,
-          is_late,
-          employees!inner (
-            id,
-            full_name,
-            status
-          )
+          is_late
         `)
         .eq('organization_id', currentOrg.id)
+        .in('employee_id', activeEmployeeIds)
         .gte('attendance_date', startOfMonth.toISOString().split('T')[0])
-        .lte('attendance_date', endOfMonth.toISOString().split('T')[0])
-        .eq('employees.status', 'active');
+        .lte('attendance_date', endOfMonth.toISOString().split('T')[0]);
 
       if (attendanceError) {
         console.error('❌ Error fetching attendance records:', attendanceError);
@@ -54,38 +97,21 @@ export const useEmployeeAttendanceStats = () => {
           start_date,
           end_date,
           total_days,
-          status,
-          employees!inner (
-            id,
-            full_name,
-            status
-          )
+          status
         `)
         .eq('organization_id', currentOrg.id)
+        .in('employee_id', activeEmployeeIds)
         .eq('status', 'approved')
         .gte('start_date', startOfMonth.toISOString().split('T')[0])
-        .lte('end_date', endOfMonth.toISOString().split('T')[0])
-        .eq('employees.status', 'active');
+        .lte('end_date', endOfMonth.toISOString().split('T')[0]);
 
       if (leaveError) {
         console.error('❌ Error fetching leave records:', leaveError);
         throw leaveError;
       }
 
-      // Get total active employees
-      const { data: activeEmployees, error: employeeError } = await supabase
-        .from('employees')
-        .select('id, full_name')
-        .eq('organization_id', currentOrg.id)
-        .eq('status', 'active');
-
-      if (employeeError) {
-        console.error('❌ Error fetching active employees:', employeeError);
-        throw employeeError;
-      }
-
       // Calculate statistics
-      const totalActiveEmployees = activeEmployees?.length || 0;
+      const totalActiveEmployees = activeEmployeeIds.length;
       const workingDays = getWorkingDaysInMonth(startOfMonth, endOfMonth);
       
       // Calculate present days (unique employee-date combinations)

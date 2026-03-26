@@ -1,7 +1,16 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
+
+function statusNameFromJoin(row: {
+  employee_statuses?: { name?: string } | { name?: string }[] | null;
+}) {
+  const es = row.employee_statuses;
+  if (!es) return null;
+  if (Array.isArray(es)) return es[0]?.name ?? null;
+  return es.name ?? null;
+}
 
 export interface CreativeEmployee {
   id: string;
@@ -27,17 +36,18 @@ export const useCreativeEmployees = () => {
 
       try {
         // Get all employees from the organization (removing department filtering)
-        const { data: employees, error } = await supabase
+        const { data: employeesRaw, error } = await supabase
           .from('employees')
           .select(`
             id, 
             full_name, 
             email, 
             user_id,
-            job_position_id
+            job_position_id,
+            pending_removal,
+            employee_statuses!left(name)
           `)
           .eq('organization_id', organizationId)
-          .eq('status', 'active')
           .order('full_name');
 
         if (error) {
@@ -45,7 +55,13 @@ export const useCreativeEmployees = () => {
           return [];
         }
 
-        const safeEmployees = Array.isArray(employees) ? employees : [];
+        const safeEmployees = (employeesRaw ?? []).filter((row) =>
+          isEmployeeActive({
+            employee_status_name: statusNameFromJoin(row),
+            status: null,
+            pending_removal: row.pending_removal,
+          })
+        );
         console.log('✅ All employees fetched for Creative role:', safeEmployees.length);
         console.log('📋 Raw employees data:', safeEmployees.map(emp => ({
           id: emp.id,

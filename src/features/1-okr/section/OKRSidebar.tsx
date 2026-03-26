@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 interface OKRSidebarProps {
   activeTab: string;
@@ -43,6 +44,15 @@ export const OKRSidebar = ({
   individualStats,
   cycleIds
 }: OKRSidebarProps) => {
+  const getStatusNameFromJoin = (row: {
+    employee_statuses?: { name?: string } | { name?: string }[] | null;
+  }) => {
+    const es = row.employee_statuses;
+    if (!es) return null;
+    if (Array.isArray(es)) return es[0]?.name ?? null;
+    return es.name ?? null;
+  };
+
   // Get current stats based on active tab
   const currentStats = useMemo(() => {
     if (activeTab === 'department-objectives') return departmentStats;
@@ -67,8 +77,9 @@ export const OKRSidebar = ({
           created_at,
           employees!weekly_checkins_employee_id_fkey (
             full_name,
-            status,
-            employee_status_id
+            employee_status_id,
+            pending_removal,
+            employee_statuses!left(name)
           ),
           key_results!weekly_checkins_key_result_id_fkey (
             title,
@@ -88,13 +99,15 @@ export const OKRSidebar = ({
         return [];
       }
 
-      // SECURITY: Filter out check-ins from terminated employees
+      // SECURITY: Keep check-ins only from active employees.
       const filteredCheckins = (data || []).filter((checkin: any) => {
         const employee = checkin.employees;
         if (!employee) return true; // Keep if no employee data
-        
-        const empStatus = employee.status || employee.employee_status_name;
-        return empStatus?.toLowerCase() !== 'terminated';
+        return isEmployeeActive({
+          employee_status_name: getStatusNameFromJoin(employee),
+          status: null,
+          pending_removal: employee.pending_removal,
+        });
       });
 
       return filteredCheckins;
@@ -154,7 +167,16 @@ export const OKRSidebar = ({
         // Get top individuals by average progress
         let query = supabase
           .from('individual_objectives')
-          .select('employee_id, progress_percentage, employees!individual_objectives_employee_id_fkey(full_name, status, employee_status_id)')
+          .select(`
+            employee_id,
+            progress_percentage,
+            employees!individual_objectives_employee_id_fkey(
+              full_name,
+              employee_status_id,
+              pending_removal,
+              employee_statuses!left(name)
+            )
+          `)
           .eq('organization_id', organizationId);
 
         // Filter by valid cycle IDs only
@@ -177,10 +199,14 @@ export const OKRSidebar = ({
           const employee = obj.employees as any;
           const empName = employee?.full_name || 'Unknown Employee';
           
-          // SECURITY: Skip terminated employees
-          const empStatus = employee?.status || employee?.employee_status_name;
-          if (empStatus?.toLowerCase() === 'terminated') {
-            return; // Skip terminated employees
+          if (
+            !isEmployeeActive({
+              employee_status_name: getStatusNameFromJoin(employee || {}),
+              status: null,
+              pending_removal: employee?.pending_removal,
+            })
+          ) {
+            return; // Skip non-active employees
           }
           
           if (!empProgress[empId]) {

@@ -793,12 +793,16 @@ const Absensi = () => {
 
         {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc: main fixed + useVisualViewport, header safe-area-top, scroll area seamless-scroll, NavigationFooter safe-area-bottom-lower */}
         <main className="flex flex-col bg-background fixed inset-x-0 z-0" style={mainFixedStyle}>
-          <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
+          <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top min-h-[3.25rem]">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <SidebarTrigger className="md:hidden shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate">{greeting},</p>
-                <p className="text-base font-semibold text-foreground truncate">{displayName}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">
+                  {t("mobileHome.homeLabel", "Beranda")}
+                </p>
+                <p className="text-base font-semibold text-foreground truncate leading-tight">
+                  {greeting}, {displayName}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">

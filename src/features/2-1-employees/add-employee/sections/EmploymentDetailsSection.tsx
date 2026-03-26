@@ -156,8 +156,8 @@ export const EmploymentDetailsSection = ({ formData, handleInputChange }: Employ
         {/* Employee Status */}
         <CustomDropdown
           label="Employee Status"
-          value={formData.status || ''}
-          onChange={(value) => handleInputChange('status', value)}
+          value={formData.employee_status_id || ''}
+          onChange={(value) => handleInputChange('employee_status_id', value)}
           options={employeeStatusesCrud.data || []}
           isLoading={employeeStatusesCrud.isLoading}
           onAdd={employeeStatusesCrud.openAddModal}

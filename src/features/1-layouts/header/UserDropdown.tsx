@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { UnifiedAvatar } from "@/features/share/UnifiedAvatar";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 const isDev = import.meta.env.DEV;
 const shouldLog = isDev && Math.random() < 0.05; // Only log 5% in dev
@@ -24,7 +25,8 @@ const UserDropdown = memo<UserDropdownProps>(({
   userRole
 }) => {
   const navigate = useNavigate();
-  
+  const { t } = useAppTranslation();
+
   const handleLogout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
@@ -116,7 +118,7 @@ const UserDropdown = memo<UserDropdownProps>(({
             <DropdownMenuSeparator className="my-1" />
             <DropdownMenuItem className="cursor-pointer rounded-md text-yellow-700 hover:text-yellow-800 hover:bg-yellow-50" onClick={handleTransferOwnership}>
               <Crown className="mr-3 h-4 w-4" />
-              <span>Transfer Ownership</span>
+              <span>{t("transferOwnership.menu.label", "Transfer ownership")}</span>
             </DropdownMenuItem>
           </>}
         

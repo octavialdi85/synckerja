@@ -3,6 +3,16 @@ import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
+
+function statusNameFromJoin(row: {
+  employee_statuses?: { name?: string } | { name?: string }[] | null;
+}) {
+  const es = row.employee_statuses;
+  if (!es) return null;
+  if (Array.isArray(es)) return es[0]?.name ?? null;
+  return es.name ?? null;
+}
 
 export interface EmployeeForRemoval {
   id: string;
@@ -11,7 +21,6 @@ export interface EmployeeForRemoval {
   pending_removal: boolean;
   pending_removal_reason?: string | null;
   pending_removal_date?: string | null;
-  status?: string | null;
 }
 
 /**
@@ -25,18 +34,42 @@ export const useActiveEmployeesForRemoval = () => {
     queryFn: async (): Promise<EmployeeForRemoval[]> => {
       if (!organizationId) return [];
 
-      const { data, error } = await supabase
+      const { data: raw, error } = await supabase
         .from('employees')
-        .select('id, full_name, email, status, pending_removal, pending_removal_reason, pending_removal_date')
+        .select(`
+          id,
+          full_name,
+          email,
+          pending_removal,
+          pending_removal_reason,
+          pending_removal_date,
+          employee_statuses!left(name)
+        `)
         .eq('organization_id', organizationId)
-        .or('status.eq.active,status.is.null')
         .order('full_name');
 
       if (error) {
         throw error;
       }
 
-      return (data as EmployeeForRemoval[]) || [];
+      const list = (raw ?? []).filter((row) =>
+        isEmployeeActive({
+          employee_status_name: statusNameFromJoin(row),
+          status: null,
+          pending_removal: row.pending_removal,
+        })
+      );
+
+      return list.map(
+        (row): EmployeeForRemoval => ({
+          id: row.id,
+          full_name: row.full_name,
+          email: row.email,
+          pending_removal: row.pending_removal ?? false,
+          pending_removal_reason: row.pending_removal_reason ?? null,
+          pending_removal_date: row.pending_removal_date ?? null,
+        })
+      );
     },
     enabled: !!organizationId,
     staleTime: 30 * 1000, // 30 seconds

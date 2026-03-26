@@ -720,7 +720,9 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 minHeight: '100dvh',
                 height: '100dvh',
                 maxHeight: '100dvh',
-                marginTop: safeArea.top > 0 ? -safeArea.top : 0,
+                // Avoid pulling content under the fixed header when Android reports large top insets (emulator/WebView).
+                // For small insets, keep legacy behavior to align the root without adding extra top space.
+                marginTop: safeArea.top > 24 ? 0 : safeArea.top > 0 ? -safeArea.top : 0,
               }
           : scrollContainerStyle
       }

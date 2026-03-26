@@ -161,33 +161,16 @@ export function PermissionConfigurationProvider({ children }: { children: ReactN
         }
         return;
       }
-
-      const timeoutTimer = setTimeout(() => {
-        setConfigurations([]);
-        setLoading(false);
-      }, 1000);
-
+      // Do not wipe permission data during transient auth/org resolution.
+      // This previously caused page-access data to briefly load, then reset to [].
       if (!organization?.id) {
-        if (user && !organization) {
-          clearTimeout(timeoutTimer);
-          setConfigurations([]);
-          setLoading(false);
+        if (identityStillResolving || hasOrganization) {
           return;
         }
-
-        const quickTimeout = setTimeout(() => {
-          clearTimeout(timeoutTimer);
-          setConfigurations([]);
-          setLoading(false);
-        }, 1000);
-
-        return () => {
-          clearTimeout(timeoutTimer);
-          clearTimeout(quickTimeout);
-        };
+        setConfigurations([]);
+        setLoading(false);
+        return;
       }
-
-      clearTimeout(timeoutTimer);
 
       try {
         // Only set loading true on true cold start (no module cache for this org). Stale/expired cache still refetches silently.
@@ -200,10 +183,10 @@ export function PermissionConfigurationProvider({ children }: { children: ReactN
           setLoading(true);
         }
 
-        const { data: customConfigs, error } = await (supabase as any)
+        const { data: fetchedConfigs, error } = await (supabase as any)
           .from('permission_configurations')
           .select('*')
-          .eq('organization_id', organization.id)
+          .or(`organization_id.eq.${organization.id},organization_id.is.null`)
           .eq('is_active', true)
           .order('created_at', { ascending: false });
 
@@ -217,10 +200,26 @@ export function PermissionConfigurationProvider({ children }: { children: ReactN
             organizationId: organization.id,
           });
         } else {
-          const configs = customConfigs || [];
-          setConfigurations(configs);
+          const configs = (fetchedConfigs || []) as PermissionConfiguration[];
+          // Merge system defaults + org-specific rows.
+          // If same page_path exists, org-specific config must override system default.
+          const mergedByPath = new Map<string, PermissionConfiguration>();
+          configs.forEach((cfg) => {
+            const existing = mergedByPath.get(cfg.page_path);
+            if (!existing) {
+              mergedByPath.set(cfg.page_path, cfg);
+              return;
+            }
+            const existingIsOrgSpecific = existing.organization_id !== null;
+            const currentIsOrgSpecific = cfg.organization_id !== null;
+            if (currentIsOrgSpecific && !existingIsOrgSpecific) {
+              mergedByPath.set(cfg.page_path, cfg);
+            }
+          });
+          const resolvedConfigs = Array.from(mergedByPath.values());
+          setConfigurations(resolvedConfigs);
           APP_CONFIG_CACHE.set(cacheKey, {
-            data: configs,
+            data: resolvedConfigs,
             timestamp: Date.now(),
             organizationId: organization.id,
           });

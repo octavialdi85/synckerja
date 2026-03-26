@@ -41,7 +41,7 @@ export const useAddEmployeeForm = () => {
     
     // Employee Info
     role: 'employee',
-    status: 'active',
+    employee_status_id: '',
     employee_id: '',
   });
 
@@ -100,7 +100,7 @@ export const useAddEmployeeForm = () => {
       
       // Employee Info
       role: 'employee',
-      status: 'active',
+      employee_status_id: '',
       employee_id: '',
     });
   };

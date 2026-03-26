@@ -17,10 +17,9 @@ export const useCurrentUserEmployee = () => {
       // Get the employee record for the current organization
       const { data: employee, error: employeeError } = await supabase
         .from('employees')
-        .select('*')
+        .select('*, employee_statuses(name)')
         .eq('user_id', user.id)
         .eq('organization_id', organizationId)
-        .or('status.is.null,status.eq.active') // Handle both null and active status
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -31,6 +30,12 @@ export const useCurrentUserEmployee = () => {
       }
 
       if (!employee) {
+        return null;
+      }
+
+      const statusName = String(employee.employee_statuses?.name || 'active').toLowerCase();
+      const isEligibleStatus = statusName === 'active' || statusName === 'probation';
+      if (!isEligibleStatus || employee.pending_removal === true) {
         return null;
       }
 

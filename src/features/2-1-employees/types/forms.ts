@@ -37,7 +37,9 @@ export interface EmployeeFormData {
   
   // Employee Info
   role: string;
-  status: string; // This refers to employee_status_id
+  employee_status_id: string;
+  /** @deprecated use employee_status_id */
+  status?: string;
   employee_id?: string;
 }
 

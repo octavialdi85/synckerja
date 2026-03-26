@@ -28,6 +28,7 @@ export type Employee = {
   job_level_name?: string;
   branch_name?: string;
   employee_status_name?: string;
+  employee_status_source?: 'employee_statuses' | 'employees.status' | 'unknown';
   is_organization_owner?: boolean;
   pending_removal?: boolean;
   pending_removal_reason?: string | null;
@@ -79,12 +80,18 @@ export const useEmployees = () => {
           // Enhanced logging for status debugging
           const statusName = employeeStatusData.data?.name;
           const rawStatus = emp.status;
+          const statusSource: Employee['employee_status_source'] = statusName
+            ? 'employee_statuses'
+            : rawStatus
+              ? 'employees.status'
+              : 'unknown';
           console.log(`Employee ${emp.full_name}:`, {
             raw_status: rawStatus,
             employee_status_id: emp.employee_status_id,
             employee_status_name: statusName,
+            employee_status_source: statusSource,
             pending_removal: emp.pending_removal,
-            final_status_name: statusName || rawStatus || null
+            final_status_name: statusName || null
           });
           
           return {
@@ -95,9 +102,9 @@ export const useEmployees = () => {
             job_position_name: jobPositionData.data?.name || null,
             job_level_name: jobLevelData.data?.name || null,
             branch_name: branchData.data?.name || null,
-            // IMPORTANT: Prioritize employee_status_name from employee_statuses table, fallback to status field
-            // This ensures we use the same data source as the detail page
-            employee_status_name: statusName || rawStatus || null,
+            // Canonical source is employee_statuses relation; keep null when relation is missing.
+            employee_status_name: statusName || null,
+            employee_status_source: statusSource,
             // Ensure pending_removal fields are included
             pending_removal: emp.pending_removal ?? false,
             pending_removal_reason: emp.pending_removal_reason || null,

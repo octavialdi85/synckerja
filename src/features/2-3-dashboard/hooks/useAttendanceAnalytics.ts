@@ -1,6 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
+
+function statusNameFromJoin(row: {
+  employee_statuses?: { name?: string } | { name?: string }[] | null;
+}) {
+  const es = row.employee_statuses;
+  if (!es) return null;
+  if (Array.isArray(es)) return es[0]?.name ?? null;
+  return es.name ?? null;
+}
 
 export interface AttendanceAnalytics {
   totalPresent: number;
@@ -70,20 +80,32 @@ export const useAttendanceAnalytics = () => {
         throw attendanceError;
       }
 
-      // Get all active employees for calculations
-      const { data: allEmployees, error: employeesError } = await supabase
+      // Active employees (no legacy employees.status column)
+      const { data: employeesRaw, error: employeesError } = await supabase
         .from('employees')
-        .select('id, full_name')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active');
+        .select(`
+          id,
+          full_name,
+          pending_removal,
+          employee_statuses!left(name)
+        `)
+        .eq('organization_id', organizationId);
 
       if (employeesError) {
         console.error('Error fetching employees:', employeesError);
         throw employeesError;
       }
 
+      const allEmployees = (employeesRaw ?? []).filter((row) =>
+        isEmployeeActive({
+          employee_status_name: statusNameFromJoin(row),
+          status: null,
+          pending_removal: row.pending_removal,
+        })
+      );
+
       // Calculate analytics
-      const totalEmployees = allEmployees?.length || 0;
+      const totalEmployees = allEmployees.length;
       const presentCount = attendanceRecords?.filter(r => r.status === 'present').length || 0;
       const lateCount = attendanceRecords?.filter(r => r.status === 'late').length || 0;
       const absentCount = totalEmployees - (attendanceRecords?.length || 0);

@@ -37,7 +37,6 @@ export const useEmployees = () => {
           employee_id,
           profile_photo_url,
           photo_url,
-          status,
           employee_status_id,
           pending_removal,
           join_date,

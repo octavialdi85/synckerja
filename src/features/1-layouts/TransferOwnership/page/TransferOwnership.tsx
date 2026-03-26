@@ -11,8 +11,10 @@ import PendingTransfersList from "@/features/1-layouts/TransferOwnership/compone
 import AccessDeniedView from "@/features/1-layouts/TransferOwnership/components/AccessDeniedView";
 import LoadingView from "@/features/1-layouts/TransferOwnership/components/LoadingView";
 import DebugInfo from "@/features/1-layouts/TransferOwnership/components/DebugInfo";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 const TransferOwnership = () => {
+  const { t } = useAppTranslation();
   const navigate = useNavigate();
   
   // Use the user data and multi-organization hooks
@@ -53,8 +55,11 @@ const TransferOwnership = () => {
     if (!loading && userRole !== 'owner') {
       console.log('Access denied - user role:', userRole);
       toast({
-        title: "Akses Ditolak",
-        description: "Hanya owner yang dapat mentransfer kepemilikan.",
+        title: t("transferOwnership.page.accessDeniedToastTitle", "Access denied"),
+        description: t(
+          "transferOwnership.page.accessDeniedToastDescription",
+          "Only the organization owner can transfer ownership.",
+        ),
         variant: "destructive",
       });
       navigate("/");
@@ -85,15 +90,20 @@ const TransferOwnership = () => {
           className="mb-6"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Kembali ke Dashboard
+          {t("transferOwnership.page.backToDashboard", "Back to dashboard")}
         </Button>
 
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h2 className="text-lg font-semibold text-blue-800">
-            Transfer Kepemilikan - {activeOrganization.company_name}
+            {t("transferOwnership.page.heroTitle", "Transfer ownership — {{company}}", {
+              company: activeOrganization.company_name,
+            })}
           </h2>
           <p className="text-sm text-blue-600">
-            Anda sedang mentransfer kepemilikan untuk organisasi ini
+            {t(
+              "transferOwnership.page.heroSubtitle",
+              "You are transferring ownership for this organization.",
+            )}
           </p>
         </div>
 

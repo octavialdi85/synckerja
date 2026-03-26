@@ -1,7 +1,16 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 import { Department } from './departmentTypes';
+
+function statusNameFromJoin(row: {
+  employee_statuses?: { name?: string } | { name?: string }[] | null;
+}) {
+  const es = row.employee_statuses;
+  if (!es) return null;
+  if (Array.isArray(es)) return es[0]?.name ?? null;
+  return es.name ?? null;
+}
 
 export const useDepartments = (organizationId?: string) => {
   const { data: departments = [], isLoading, error, refetch } = useQuery({
@@ -28,7 +37,7 @@ export const useDepartments = (organizationId?: string) => {
       // Second, get ALL employees for this organization to see what departments they use
       const { data: allEmployees, error: empError } = await supabase
         .from('employees')
-        .select('department_id, status, full_name')
+        .select('department_id, full_name')
         .eq('organization_id', organizationId);
 
       if (empError) {
@@ -38,12 +47,13 @@ export const useDepartments = (organizationId?: string) => {
       }
 
       // Third, get departments used by active employees (even if department.organization_id is NULL)
-      const { data: employeeDepartments, error: empDeptError } = await supabase
+      const { data: employeeDepartmentsRaw, error: empDeptError } = await supabase
         .from('employees')
         .select(`
           department_id,
           full_name,
-          status,
+          pending_removal,
+          employee_statuses!left(name),
           departments!inner(
             id,
             name,
@@ -56,17 +66,24 @@ export const useDepartments = (organizationId?: string) => {
           )
         `)
         .eq('organization_id', organizationId)
-        .eq('status', 'active')
         .not('department_id', 'is', null);
 
       if (empDeptError) {
         console.error('❌ useDepartments: Error fetching employee departments:', empDeptError);
       }
 
+      const employeeDepartments = (employeeDepartmentsRaw ?? []).filter((emp) =>
+        isEmployeeActive({
+          employee_status_name: statusNameFromJoin(emp),
+          status: null,
+          pending_removal: emp.pending_removal,
+        })
+      );
+
       // console.log('✅ useDepartments: Employee department relations:', employeeDepartments?.length || 0);
 
       // Extract department data from employee relations
-      const empDepts = employeeDepartments?.map(emp => emp.departments).filter(Boolean) || [];
+      const empDepts = employeeDepartments.map((emp) => emp.departments).filter(Boolean);
       // console.log('✅ useDepartments: Extracted employee departments:', empDepts.length);
 
       // Combine and deduplicate departments

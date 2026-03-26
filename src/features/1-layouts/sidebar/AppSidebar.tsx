@@ -1,5 +1,6 @@
-import { Link, useLocation } from "react-router-dom";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader } from "@/features/ui/sidebar";
+import { useEffect, useRef, useState, type TransitionEvent } from "react";
+import { useLocation } from "react-router-dom";
+import { Sidebar, SidebarContent } from "@/features/ui/sidebar";
 import { useDepartmentFilteredMenu, type MenuItem, type SubMenuItem } from "./useDepartmentFilteredMenu";
 import { useSidebarState } from "./useSidebarState";
 import { useSmartNavigation } from "./useSmartNavigation";
@@ -7,7 +8,7 @@ import { useDepartmentAccess } from "./useDepartmentAccess";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { useWhatsAppUnreadCount } from "@/features/5-3-whatsapp/hooks/useWhatsAppUnreadCount";
 import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
-import { Building2, ChevronRight, X, Loader2, Lock } from "lucide-react";
+import { ChevronRight, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 // Sub-sidebar component (merged from SubSidebar.tsx)
@@ -184,18 +185,15 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
   };
 
   return (
-    <div 
-      className={`fixed top-16 left-64 bg-white border-r border-gray-200 shadow-sm overflow-hidden transition-all duration-300 ease-out z-50 ${
-        isOpen 
-          ? 'w-64 opacity-100 translate-x-0' 
-          : 'w-0 opacity-0 -translate-x-2'
-      }`}
-      style={{ 
+    <div
+      className="h-full w-64 overflow-hidden bg-white font-sans antialiased transition-[opacity,transform] duration-300 ease-in-out motion-reduce:transition-none"
+      style={{
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        height: 'calc(100vh - 4rem)'
+        opacity: isOpen ? 1 : 0,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-0.5rem)',
       }}
     >
-      <div className="h-full flex flex-col w-64">
+      <div className="flex h-full w-64 flex-col border-r border-gray-200 shadow-sm">
         {/* Header with main navigation title */}
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
           <h3 className="text-sm font-semibold text-gray-900 truncate">
@@ -243,13 +241,11 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
                     }
                   `}
                   style={{
-                    transform: isOpen 
-                      ? 'translateX(0)' 
-                      : 'translateX(-10px)',
+                    transform: isOpen ? 'translateX(0)' : 'translateX(-8px)',
                     opacity: isOpen ? 1 : 0,
-                    transition: `all 0.2s ease-out ${index * 20}ms`,
+                    transition: `opacity 0.25s ease-in-out ${index * 25}ms, transform 0.25s ease-in-out ${index * 25}ms`,
                     fontFamily: 'system-ui, -apple-system, sans-serif',
-                    letterSpacing: '-0.01em'
+                    letterSpacing: '-0.01em',
                   }}
                 >
                   <div className={`
@@ -337,75 +333,235 @@ export function AppSidebar() {
 
     return false;
   };
-  return <div className="relative flex h-full">
-      <LiveChatAppBadgeSync />
-      <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className="transition-all duration-300 ease-out group">
-        <Sidebar collapsible="icon" className="border-r h-full bg-white shadow-none border-gray-200 transition-all duration-300 ease-out top-16 fixed left-0" style={{
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        height: 'calc(100vh - 4rem)'
-      }}>
-          {/* Company Header - Enhanced Branding */}
-          
+  const activeMenuItem = menuItems.find(
+    (item) => item.title === activeSubSidebar && item.hasSubSidebar && item.subSidebarItems
+  );
+  const subSidebarOpen = Boolean(activeSubSidebar && activeMenuItem);
 
+  /** Without a paint at w-0 before w-64, WebKit/Chromium often skip width transition when content mounts in the same commit (e.g. hover no-sub → sub). */
+  const [subSidebarPaintOpen, setSubSidebarPaintOpen] = useState(false);
+  const prevSubSidebarOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!subSidebarOpen) {
+      setSubSidebarPaintOpen(false);
+      prevSubSidebarOpenRef.current = false;
+      return;
+    }
+
+    const wasAlreadyOpen = prevSubSidebarOpenRef.current;
+    prevSubSidebarOpenRef.current = true;
+
+    if (!wasAlreadyOpen) {
+      setSubSidebarPaintOpen(false);
+      let raf1 = 0;
+      let raf2 = 0;
+      let cancelled = false;
+      raf1 = requestAnimationFrame(() => {
+        if (cancelled) return;
+        raf2 = requestAnimationFrame(() => {
+          if (!cancelled) setSubSidebarPaintOpen(true);
+        });
+      });
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+
+    setSubSidebarPaintOpen(true);
+  }, [subSidebarOpen]);
+
+  const subSidebarMeasuredOpen = subSidebarOpen && subSidebarPaintOpen;
+
+  /** Keep sub-menu content mounted while width collapses so the browser can animate w-64 → w-0 smoothly. */
+  const [subMenuSnapshot, setSubMenuSnapshot] = useState<MenuItem | null>(null);
+  useEffect(() => {
+    if (activeMenuItem) {
+      setSubMenuSnapshot(activeMenuItem);
+    }
+  }, [activeMenuItem]);
+
+  const panelContentMenu =
+    activeMenuItem ??
+    (subMenuSnapshot?.hasSubSidebar && subMenuSnapshot.subSidebarItems ? subMenuSnapshot : null);
+
+  const handleSubSidebarPanelTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.propertyName !== 'width') return;
+    if (!subSidebarOpen && !subSidebarPaintOpen) {
+      setSubMenuSnapshot(null);
+    }
+  };
+
+  /** During collapse, stay visible inside the clipping panel until width finishes (avoid opacity fade fighting width). */
+  const isSubContentVisible =
+    subSidebarMeasuredOpen || Boolean(panelContentMenu && !subSidebarOpen);
+
+  return (
+    <div className="relative flex h-full">
+      <LiveChatAppBadgeSync />
+      {/* Parent: main sidebar + sub-sidebar (child) share one positioned group */}
+      <div
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className="group relative transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
+      >
+        <Sidebar
+          collapsible="icon"
+          className="top-16 fixed left-0 h-full border-r border-gray-200 bg-white shadow-none transition-[width] duration-300 ease-in-out motion-reduce:transition-none"
+          style={{
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            height: 'calc(100vh - 4rem)',
+          }}
+        >
           <SidebarContent className="overflow-hidden">
-            <div className="flex-1 py-4 overflow-y-auto seamless-scroll">
+            <div className="flex-1 overflow-y-auto seamless-scroll py-4">
               <div className="space-y-1 px-1">
-                {menuItems.map((item, index) => {
+                {menuItems.map((item) => {
                   const localizedTitle = t(item.titleKey, item.title);
                   const showWhatsAppBadge = false;
-                  return <div key={item.title}>
-                    <div onMouseEnter={() => handleMenuItemHover(item.title, item.hasSubSidebar || false)} className="relative group/item">
-                      {item.url && item.url !== "#" ? <button
-                        onClick={() => smartNavigate(item.url!)}
-                        className={cn("flex items-center font-medium transition-all duration-150 relative group w-full text-left", "hover:bg-blue-50 hover:text-blue-600 rounded-lg", "py-2.5 px-3", "group-data-[collapsible=icon]:justify-center justify-between", item.url === "/" ? currentPath === "/" : currentPath.startsWith(item.url) ? "bg-blue-50 text-blue-600 rounded-lg" : "text-gray-700")}
+                  return (
+                    <div key={item.title}>
+                      <div
+                        onMouseEnter={() => handleMenuItemHover(item.title, item.hasSubSidebar || false)}
+                        className="group/item relative"
                       >
-                        <div className="flex items-center min-w-0">
-                          <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-transform duration-150", "group-data-[collapsible=icon]:mx-auto mr-3", "group-hover:scale-110")} />
-                          <span className={cn("transition-all duration-150 text-sm font-medium whitespace-nowrap", "group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:overflow-hidden w-auto opacity-100")}>
-                            {localizedTitle}
-                          </span>
-                        </div>
-                        {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
-                        {!item.hasSubSidebar && isItemLocked(item) && (
-                          <Lock className={cn("h-3 w-3 text-gray-400 flex-shrink-0 ml-auto", "group-data-[collapsible=icon]:hidden")} />
+                        {item.url && item.url !== '#' ? (
+                          <button
+                            type="button"
+                            onClick={() => smartNavigate(item.url!)}
+                            className={cn(
+                              'group relative flex w-full items-center justify-between text-left font-medium transition-colors duration-200 ease-in-out motion-reduce:transition-none',
+                              'rounded-lg py-2.5 px-3',
+                              'hover:bg-blue-50 hover:text-blue-600',
+                              'group-data-[collapsible=icon]:justify-center',
+                              item.url === '/'
+                                ? currentPath === '/'
+                                  ? 'rounded-lg bg-blue-50 text-blue-600'
+                                  : 'text-gray-700'
+                                : currentPath.startsWith(item.url)
+                                  ? 'rounded-lg bg-blue-50 text-blue-600'
+                                  : 'text-gray-700'
+                            )}
+                          >
+                            <div className="flex min-w-0 items-center">
+                              <item.icon
+                                className={cn(
+                                  'mr-3 h-4 w-4 flex-shrink-0 transition-transform duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-data-[collapsible=icon]:mx-auto',
+                                  'group-hover:scale-110'
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  'w-auto whitespace-nowrap text-sm font-medium opacity-100 transition-opacity duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:overflow-hidden group-data-[collapsible=icon]:opacity-0'
+                                )}
+                              >
+                                {localizedTitle}
+                              </span>
+                            </div>
+                            {item.hasSubSidebar && (
+                              <ChevronRight
+                                className={cn(
+                                  'ml-auto h-3 w-3 flex-shrink-0 opacity-60 transition-all duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-hover:translate-x-1 group-hover:opacity-100',
+                                  'group-data-[collapsible=icon]:hidden'
+                                )}
+                              />
+                            )}
+                            {!item.hasSubSidebar && isItemLocked(item) && (
+                              <Lock
+                                className={cn(
+                                  'ml-auto h-3 w-3 flex-shrink-0 text-gray-400',
+                                  'group-data-[collapsible=icon]:hidden'
+                                )}
+                              />
+                            )}
+                          </button>
+                        ) : (
+                          <div
+                            className={cn(
+                              'group relative flex cursor-pointer items-center justify-between rounded-lg py-2.5 px-2 font-medium transition-colors duration-200 ease-in-out motion-reduce:transition-none',
+                              'hover:scale-105 hover:bg-gray-100',
+                              'group-data-[collapsible=icon]:justify-center',
+                              activeSubSidebar === item.title
+                                ? 'border-l-4 border-blue-600 bg-blue-50 text-blue-600'
+                                : ''
+                            )}
+                          >
+                            <div className="flex min-w-0 items-center">
+                              <item.icon
+                                className={cn(
+                                  'mr-3 h-4 w-4 flex-shrink-0 transition-transform duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-data-[collapsible=icon]:mx-auto',
+                                  'group-hover:scale-110'
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  'w-auto whitespace-nowrap text-sm font-medium opacity-100 transition-opacity duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:overflow-hidden group-data-[collapsible=icon]:opacity-0'
+                                )}
+                              >
+                                {localizedTitle}
+                              </span>
+                            </div>
+                            {showWhatsAppBadge && (
+                              <span className="mr-2 flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-green-600 px-1.5 text-xs font-medium text-white group-data-[collapsible=icon]:hidden">
+                                {whatsAppUnreadCount > 99 ? '99+' : whatsAppUnreadCount}
+                              </span>
+                            )}
+                            {item.hasSubSidebar && (
+                              <ChevronRight
+                                className={cn(
+                                  'ml-auto h-3 w-3 flex-shrink-0 opacity-60 transition-all duration-200 ease-in-out motion-reduce:transition-none',
+                                  'group-hover:translate-x-1 group-hover:opacity-100',
+                                  'group-data-[collapsible=icon]:hidden'
+                                )}
+                              />
+                            )}
+                          </div>
                         )}
-                      </button> : <div className={cn("flex items-center font-medium transition-all duration-150 relative group cursor-pointer", "hover:bg-gray-100 hover:scale-105 rounded-lg", "py-2.5 px-2", "group-data-[collapsible=icon]:justify-center justify-between", activeSubSidebar === item.title ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "")}>
-                        <div className="flex items-center min-w-0">
-                          <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-transform duration-150", "group-data-[collapsible=icon]:mx-auto mr-3", "group-hover:scale-110")} />
-                          <span className={cn("transition-all duration-150 text-sm font-medium whitespace-nowrap", "group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:overflow-hidden w-auto opacity-100")}>
-                            {localizedTitle}
-                          </span>
-                        </div>
-                        {showWhatsAppBadge && (
-                          <span className="flex-shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-medium flex items-center justify-center mr-2 group-data-[collapsible=icon]:hidden">
-                            {whatsAppUnreadCount > 99 ? '99+' : whatsAppUnreadCount}
-                          </span>
-                        )}
-                        {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
-                      </div>}
+                      </div>
                     </div>
-                  </div>;
+                  );
                 })}
               </div>
             </div>
           </SidebarContent>
         </Sidebar>
-      </div>
 
-      {/* Sub-sidebar */}
-      {activeSubSidebar && <div onMouseEnter={handleSubSidebarMouseEnter} onMouseLeave={handleSubSidebarMouseLeave}>
-          {menuItems.map(item =>
-            item.title === activeSubSidebar && item.subSidebarItems && item.hasSubSidebar ? (
-              <SubSidebarInternal
-                key={item.title}
-                items={item.subSidebarItems}
-                isOpen={true}
-                title={item.title}
-                titleKey={item.titleKey}
-                whatsAppUnreadCount={item.title === 'Operations' ? whatsAppUnreadCount : 0}
-              />
-            ) : null,
+        {/* Sub-sidebar: child of main sidebar group (anchored to primary column) */}
+        <div
+          role="complementary"
+          aria-hidden={!subSidebarOpen}
+          onMouseEnter={handleSubSidebarMouseEnter}
+          onMouseLeave={handleSubSidebarMouseLeave}
+          onTransitionEnd={handleSubSidebarPanelTransitionEnd}
+          className={cn(
+            'pointer-events-none absolute left-full top-0 z-50 overflow-hidden',
+            'h-[calc(100vh-4rem)]',
+            'transition-[width,opacity,transform] duration-300 ease-in-out motion-reduce:transition-none',
+            subSidebarMeasuredOpen
+              ? 'pointer-events-auto w-64 translate-x-0 opacity-100'
+              : 'w-0 -translate-x-1 opacity-0'
           )}
-        </div>}
-    </div>;
+        >
+          {panelContentMenu?.subSidebarItems && (
+            <SubSidebarInternal
+              key={panelContentMenu.title}
+              items={panelContentMenu.subSidebarItems}
+              isOpen={isSubContentVisible}
+              title={panelContentMenu.title}
+              titleKey={panelContentMenu.titleKey}
+              whatsAppUnreadCount={panelContentMenu.title === 'Operations' ? whatsAppUnreadCount : 0}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

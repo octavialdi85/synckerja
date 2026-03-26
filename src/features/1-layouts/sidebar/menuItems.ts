@@ -46,6 +46,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.humanResources.attendance.description",
       },
       {
+        title: "Payroll",
+        titleKey: "sidebar.humanResources.payroll.title",
+        url: "/payroll/calculations",
+        description: "Manage payroll periods, runs, and calculations",
+        descriptionKey: "sidebar.humanResources.payroll.description",
+      },
+      {
         title: "Company",
         titleKey: "sidebar.humanResources.company.title",
         url: "/company/dashboard",

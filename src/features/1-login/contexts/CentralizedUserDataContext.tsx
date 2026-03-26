@@ -402,7 +402,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         
         const isOrgOwner = !!orgOwnerCheck;
         
-        // Build employee query - include status for filtering
+        // Build employee query using employee_status relation (legacy employees.status removed)
         // Note: is_organization_owner is calculated, not a database field
         let employeeQuery = supabase
           .from('employees')
@@ -413,8 +413,8 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             email,
             organization_id,
             department_id,
-            status,
             employee_status_id,
+            employee_statuses(name),
             user_id,
             departments:department_id(name)
           `)
@@ -424,9 +424,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         // SECURITY: Filter out terminated and inactive (resigned) employees UNLESS they are the organization owner
         // Owner can access their own organization even if terminated in other organizations
         if (!isOrgOwner) {
-          // For non-owners, exclude terminated and inactive (resigned) employees
-          // Allow null status (new employees) but exclude 'terminated' and 'inactive'
-          employeeQuery = employeeQuery.or('status.is.null,status.neq.terminated').neq('status', 'inactive');
+          // For non-owners, we enforce access check client-side using employee_statuses.name
         }
         // If isOrgOwner, allow access regardless of status (they own this org)
         
@@ -464,12 +462,13 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           const calculatedIsOwner = employeeData && orgData && employeeData.user_id === (orgData as any).user_id;
 
           // SECURITY CHECK: If employee is terminated or inactive (resigned) and not owner, block access
-          const isTerminatedOrInactive = employeeData?.status === 'terminated' || employeeData?.status === 'inactive';
+          const canonicalStatus = String((employeeData as any)?.employee_statuses?.name || 'active').toLowerCase();
+          const isTerminatedOrInactive = canonicalStatus === 'terminated' || canonicalStatus === 'inactive';
           if (employeeData && isTerminatedOrInactive && !isOrgOwner && !calculatedIsOwner) {
             if (import.meta.env.DEV) {
               console.warn('🚫 Access denied: Employee is terminated/inactive and not organization owner', {
                 employeeId: employeeData.id,
-                status: employeeData.status,
+                status: canonicalStatus,
                 isOrgOwner,
                 calculatedIsOwner
               });

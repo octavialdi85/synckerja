@@ -46,6 +46,11 @@ const ContentCalendarPage = lazy(() => import("./features/6-1-ContentCalendar/Co
 const ProductKnowledgePage = lazy(() => import("./features/6-1-ProductKnowledge/ProductKnowledgePage"));
 const ScriptGeneratorPage = lazy(() => import("./features/6-1-ScriptGenerator/ScriptGeneratorPage"));
 const SettingsPage = lazy(() => import("./features/6-1-Settings/SettingsPage"));
+const PayrollCalculationsPageWrapper = lazy(() =>
+  import("./features/2-7-payroll").then((module) => ({
+    default: module.PayrollCalculationsPageWrapper,
+  }))
+);
 import { ReviewRouteGate } from "./features/6-1-dashboard/ReviewRouteGate";
 const KOLDashboardPage = lazy(() =>
   import("./features/6_4_1_dashboard").then((module) => ({
@@ -1158,6 +1163,28 @@ const App = () => (
               <Route path="/attendance/settings" element={
                 <ProtectedRoute>
                   <AttendancePage />
+                </ProtectedRoute>
+              } />
+
+              {/* Payroll Routes - PROTECTED */}
+              <Route path="/payroll" element={
+                <ProtectedRoute>
+                  <Navigate to="/payroll/calculations" replace />
+                </ProtectedRoute>
+              } />
+              <Route path="/payroll/calculations" element={
+                <ProtectedRoute>
+                  <PayrollCalculationsPageWrapper />
+                </ProtectedRoute>
+              } />
+              <Route path="/payroll/periods" element={
+                <ProtectedRoute pagePath="/payroll/calculations">
+                  <Navigate to="/payroll/calculations" replace />
+                </ProtectedRoute>
+              } />
+              <Route path="/payroll/runs" element={
+                <ProtectedRoute pagePath="/payroll/calculations">
+                  <Navigate to="/payroll/calculations" replace />
                 </ProtectedRoute>
               } />
 

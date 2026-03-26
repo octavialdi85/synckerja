@@ -8,31 +8,14 @@ import { Checkbox } from '@/features/ui/checkbox';
 import { Separator } from '@/features/ui/separator';
 import { Calculator, Download, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Tax calculation constants based on Indonesian tax law
-const PTKP_RATES = {
-  'TK/0': 54000000,
-  'TK/1': 58500000,
-  'TK/2': 63000000,
-  'TK/3': 67500000,
-  'K/0': 58500000,
-  'K/1': 63000000,
-  'K/2': 67500000,
-  'K/3': 72000000,
-};
-
-const TAX_BRACKETS = [
-  { min: 0, max: 60000000, rate: 0.05 },
-  { min: 60000000, max: 250000000, rate: 0.15 },
-  { min: 250000000, max: 500000000, rate: 0.25 },
-  { min: 500000000, max: Infinity, rate: 0.30 },
-];
-
-const MAX_PROFESSIONAL_ALLOWANCE = 6000000;
-const BPJS_KESEHATAN_RATE = 0.02;
-const BPJS_PENSIUN_RATE = 0.01;
-const BPJS_KESEHATAN_MAX_SALARY = 12000000; // Max salary untuk perhitungan BPJS Kesehatan
-const BPJS_PENSIUN_MAX_SALARY = 8930600;   // Max salary untuk perhitungan BPJS Pensiun
+import {
+  BPJS_KESEHATAN_MAX_SALARY,
+  BPJS_PENSIUN_MAX_SALARY,
+  PTKP_RATES,
+  calculatePPh21,
+  formatCurrency,
+  parseCurrency,
+} from '../utils/pph21Calculator';
 
 interface CalculationResult {
   annualGross: number;
@@ -68,138 +51,31 @@ export const PPh21Calculator = () => {
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [increaseResult, setIncreaseResult] = useState<CalculationResult | null>(null);
 
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const parseCurrency = (value: string): number => {
-    return parseInt(value.replace(/[^\d]/g, '')) || 0;
-  };
-
   const calculateTax = useCallback((grossSalary: number): CalculationResult => {
-    const annualGross = grossSalary * 12;
-    
-    // Professional allowance (5% of gross, max 6M/year)
-    const professionalAllowance = Math.min(annualGross * 0.05, MAX_PROFESSIONAL_ALLOWANCE);
-    
-    // BPJS calculations - employee portion (Otomatis: pakai gaji atau batas max, mana yang lebih kecil)
-    let bpjsKesehatanAmount = 0;
-    let bpjsPensiunAmount = 0;
-    
-    if (bpjsKesehatan) {
-      // BPJS Kesehatan: 2% dari min(gaji, 12 juta) per bulan
-      const monthlyGross = grossSalary;
-      const maxMonthlyKesehatan = BPJS_KESEHATAN_MAX_SALARY;
-      const baseForKesehatan = Math.min(monthlyGross, maxMonthlyKesehatan);
-      bpjsKesehatanAmount = baseForKesehatan * BPJS_KESEHATAN_RATE * 12; // Annual amount
-    }
-    
-    if (bpjsPensiun) {
-      // BPJS Pensiun: 1% dari min(gaji, 8.930.600) per bulan
-      const monthlyGross = grossSalary;
-      const maxMonthlyPensiun = BPJS_PENSIUN_MAX_SALARY;
-      const baseForPensiun = Math.min(monthlyGross, maxMonthlyPensiun);
-      bpjsPensiunAmount = baseForPensiun * BPJS_PENSIUN_RATE * 12; // Annual amount
-    }
-    
-    // BPJS calculations - company portion (for total cost calculation)
-    let bpjsKesehatanCompany = 0;
-    let bpjsPensiunCompany = 0;
-    
-    if (bpjsKesehatan) {
-      // Company BPJS Kesehatan: 3% dari min(gaji, 12 juta) per bulan
-      const monthlyGross = grossSalary;
-      const maxMonthlyKesehatan = BPJS_KESEHATAN_MAX_SALARY;
-      const baseForKesehatan = Math.min(monthlyGross, maxMonthlyKesehatan);
-      bpjsKesehatanCompany = baseForKesehatan * 0.03 * 12; // 3% company portion, annual
-    }
-    
-    if (bpjsPensiun) {
-      // Company BPJS Pensiun: 2% dari min(gaji, 8.930.600) per bulan
-      const monthlyGross = grossSalary;
-      const maxMonthlyPensiun = BPJS_PENSIUN_MAX_SALARY;
-      const baseForPensiun = Math.min(monthlyGross, maxMonthlyPensiun);
-      bpjsPensiunCompany = baseForPensiun * 0.02 * 12; // 2% company portion, annual
-    }
-    
-    // Net income after professional allowance and BPJS
-    const netIncome = annualGross - professionalAllowance - bpjsKesehatanAmount - bpjsPensiunAmount;
-    
-    // PTKP
-    const ptkp = ptkpStatus === 'custom' 
-      ? parseCurrency(customPtkp) 
-      : (PTKP_RATES[ptkpStatus as keyof typeof PTKP_RATES] || 0);
-    
-    // PKP (Penghasilan Kena Pajak)
-    const nonTaxableAllowanceAmount = parseCurrency(nonTaxableAllowance);
-    const pkp = Math.max(0, netIncome - ptkp - nonTaxableAllowanceAmount);
-    
-    // Calculate tax using progressive rates
-    let remainingPkp = pkp;
-    let totalTax = 0;
-    const taxBreakdown: Array<{
-      bracket: string;
-      amount: number;
-      tax: number;
-      rate: number;
-    }> = [];
-    
-    // Loop through brackets to calculate progressive tax
-    for (const bracket of TAX_BRACKETS) {
-      if (remainingPkp <= 0) break;
-      
-      // Calculate how much of PKP falls in this bracket
-      const bracketSize = bracket.max === Infinity 
-        ? remainingPkp 
-        : (bracket.max - bracket.min);
-      const taxableInBracket = Math.min(remainingPkp, bracketSize);
-      
-      if (taxableInBracket > 0) {
-        const taxInBracket = taxableInBracket * bracket.rate;
-        
-        taxBreakdown.push({
-          bracket: `${formatCurrency(bracket.min)} - ${bracket.max === Infinity ? '∞' : formatCurrency(bracket.max)}`,
-          amount: taxableInBracket,
-          tax: taxInBracket,
-          rate: bracket.rate * 100,
-        });
-        
-        totalTax += taxInBracket;
-        remainingPkp -= taxableInBracket;
-      }
-    }
-    
-    const monthlyTax = totalTax / 12;
-    
-    // Calculate take-home pay: Gross salary - PPh 21 - BPJS deductions (only if enabled)
-    const monthlyBpjsKesehatan = bpjsKesehatan ? (bpjsKesehatanAmount / 12) : 0;
-    const monthlyBpjsPensiun = bpjsPensiun ? (bpjsPensiunAmount / 12) : 0;
-    const takeHomePay = grossSalary - monthlyTax - monthlyBpjsKesehatan - monthlyBpjsPensiun;
-    
-    // Total company cost per month (gross salary + company BPJS contributions, only if enabled)
-    const monthlyBpjsKesehatanCompany = bpjsKesehatan ? (bpjsKesehatanCompany / 12) : 0;
-    const monthlyBpjsPensiunCompany = bpjsPensiun ? (bpjsPensiunCompany / 12) : 0;
-    const totalCompanyCost = grossSalary + monthlyBpjsKesehatanCompany + monthlyBpjsPensiunCompany;
-    
+    const calc = calculatePPh21({
+      monthlyGross: grossSalary,
+      ptkpStatus: ptkpStatus === 'custom' ? undefined : ptkpStatus,
+      customPtkpAmount: ptkpStatus === 'custom' ? parseCurrency(customPtkp) : undefined,
+      includeBpjsKesehatan: bpjsKesehatan,
+      includeBpjsPensiun: bpjsPensiun,
+      nonTaxableAllowance: parseCurrency(nonTaxableAllowance),
+    });
+
     return {
-      annualGross,
-      professionalAllowance,
-      bpjsKesehatan: bpjsKesehatanAmount,
-      bpjsPensiun: bpjsPensiunAmount,
-      bpjsKesehatanCompany,
-      bpjsPensiunCompany,
-      netIncome,
-      ptkp,
-      pkp,
-      annualTax: totalTax,
-      monthlyTax,
-      takeHomePay,
-      totalCompanyCost,
-      taxBreakdown,
+      annualGross: calc.annualGross,
+      professionalAllowance: calc.professionalAllowance,
+      bpjsKesehatan: calc.bpjsKesehatan,
+      bpjsPensiun: calc.bpjsPensiun,
+      bpjsKesehatanCompany: calc.bpjsKesehatanCompany,
+      bpjsPensiunCompany: calc.bpjsPensiunCompany,
+      netIncome: calc.netIncome,
+      ptkp: calc.ptkp,
+      pkp: calc.pkp,
+      annualTax: calc.annualTax,
+      monthlyTax: calc.monthlyTax,
+      takeHomePay: calc.takeHomePay,
+      totalCompanyCost: calc.totalCompanyCost,
+      taxBreakdown: calc.taxBreakdown,
     };
   }, [ptkpStatus, customPtkp, bpjsKesehatan, bpjsPensiun, nonTaxableAllowance]);
 

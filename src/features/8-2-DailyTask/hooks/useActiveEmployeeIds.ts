@@ -1,27 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
-
-/** Status values that mean the employee is NOT active (resigned, terminated, etc.). */
-const NON_ACTIVE_STATUSES = new Set([
-  'inactive',
-  'terminated',
-  'resigned',
-  'pending removal',
-  'pendingremoval',
-]);
-
-function isActiveEmployee(
-  status: string | null | undefined,
-  statusName: string | null | undefined,
-  pendingRemoval: boolean | null | undefined
-): boolean {
-  if (pendingRemoval === true) return false;
-  const fromField = (status ?? '').toString().trim().toLowerCase();
-  const fromRelation = (statusName ?? '').toString().trim().toLowerCase();
-  const effective = fromField || fromRelation || 'active';
-  return !NON_ACTIVE_STATUSES.has(effective);
-}
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 /**
  * Returns a Set of employee IDs that are active (not resigned, terminated, inactive, pending removal).
@@ -37,7 +17,7 @@ export function useActiveEmployeeIds(): Set<string> {
 
       const { data: employees, error: empError } = await supabase
         .from('employees')
-        .select('id, status, employee_status_id, pending_removal')
+        .select('id, employee_status_id, pending_removal')
         .eq('organization_id', organizationId);
 
       if (empError) throw empError;
@@ -56,7 +36,13 @@ export function useActiveEmployeeIds(): Set<string> {
       const ids = new Set<string>();
       (employees || []).forEach((emp: any) => {
         const statusName = emp.employee_status_id ? statusNameById.get(emp.employee_status_id) : null;
-        if (isActiveEmployee(emp.status, statusName, emp.pending_removal)) {
+        if (
+          isEmployeeActive({
+            employee_status_name: statusName,
+            status: null,
+            pending_removal: emp.pending_removal,
+          })
+        ) {
           ids.add(emp.id);
         }
       });

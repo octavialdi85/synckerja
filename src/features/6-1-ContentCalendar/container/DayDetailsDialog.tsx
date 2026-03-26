@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Plus, Calendar as CalendarIcon, ExternalLink, Pencil } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, ExternalLink, Pencil, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Card } from '@/features/ui/card';
@@ -28,13 +28,23 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
   onEditContent,
   selectedPlan = null
 }) => {
+  const selectedPlanId = selectedPlan?.id as string | undefined;
+
+  const latestSelectedPlan = useMemo(() => {
+    if (!selectedPlanId) return null;
+    if (!selectedDate) return selectedPlan;
+    const dayKey = format(selectedDate, 'yyyy-MM-dd');
+    const dayPlans = plansByDate[dayKey] || [];
+    return dayPlans.find((p: any) => p?.id === selectedPlanId) ?? selectedPlan;
+  }, [plansByDate, selectedDate, selectedPlan, selectedPlanId]);
+
   // Extract plan IDs for green cards (done = true) to fetch links
   const planIdsForLinks = useMemo(() => {
     const ids: string[] = [];
     
     // Get plans to show
-    const plansToShow = selectedPlan 
-      ? [selectedPlan]
+    const plansToShow = latestSelectedPlan 
+      ? [latestSelectedPlan]
       : selectedDate 
         ? plansByDate[format(selectedDate, 'yyyy-MM-dd')] || []
         : [];
@@ -65,11 +75,23 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-6xl w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col">
         <DialogHeader className="sticky top-0 bg-background z-10 pb-4 border-b">
-          <DialogTitle>
-            Content Plans - {selectedDate && format(selectedDate, 'dd MMMM yyyy', { locale: id })}
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle>
+              Content Plans - {selectedDate && format(selectedDate, 'dd MMMM yyyy', { locale: id })}
+            </DialogTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8 p-0"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
           
           {/* Sticky Add Content Button */}
           {selectedDate && (
@@ -94,8 +116,8 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
             <>                
               {(() => {
                 // If selectedPlan is provided, show only that plan, otherwise show all plans for the day
-                const plansToShow = selectedPlan 
-                  ? [selectedPlan]
+                const plansToShow = latestSelectedPlan 
+                  ? [latestSelectedPlan]
                   : plansByDate[format(selectedDate, 'yyyy-MM-dd')] || [];
                 
                 return plansToShow.length > 0 ? (
@@ -164,7 +186,7 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
                             </div>
                             
                             {/* Brief / script: markdown + markdown table → same table UI as brief modal */}
-                            <ContentPlanBriefDisplay brief={plan?.brief} />
+                            {plan?.id && <ContentPlanBriefDisplay planId={plan.id} brief={plan?.brief} />}
                             
                             {/* NEW: Green cards - Display all social media links */}
                             {planStatus === 'green' && planLinks.length > 0 && (

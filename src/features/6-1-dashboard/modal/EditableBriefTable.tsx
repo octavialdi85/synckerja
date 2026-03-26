@@ -45,6 +45,8 @@ interface EditableBriefTableProps {
   alwaysEditable?: boolean;
   /** When true, no edit/actions column (display-only, e.g. content calendar modal) */
   readOnly?: boolean;
+  /** Where to render Edit/Save/Cancel controls when not alwaysEditable/readOnly */
+  controlsPlacement?: 'actionsColumn' | 'taggingColumn';
   className?: string;
 }
 
@@ -54,6 +56,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   onChange,
   alwaysEditable = false,
   readOnly = false,
+  controlsPlacement = 'actionsColumn',
   className = '',
 }) => {
   const { t } = useAppTranslation();
@@ -200,6 +203,48 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   const headerRow = padRow(displayData[0]);
   const bodyRowsSource = alwaysEditable ? tableData.slice(1) : (isEditing ? editData : displayData.slice(1));
   const bodyRows = bodyRowsSource.map(padRow);
+  const taggingHeaderIndex = (() => {
+    const idx = headerRow.findIndex((h) => String(h ?? '').trim().toLowerCase() === 'tagging');
+    return idx >= 0 ? idx : Math.max(0, headerRow.length - 1);
+  })();
+  const renderControls = () => {
+    if (alwaysEditable || readOnly) return null;
+    if (isEditing) {
+      return (
+        <div className="flex gap-1 justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={saveEdit}
+            className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+            title={t('common.save', 'Save')}
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={cancelEdit}
+            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            title={t('common.cancel', 'Cancel')}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={startEdit}
+        className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+        title={t('common.edit', 'Edit')}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+    );
+  };
 
   return (
     <div
@@ -210,53 +255,34 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
       <table className="min-w-[720px] w-full text-sm">
         <thead className="sticky top-0 z-20 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
           <tr>
-            {headerRow.map((cell, j) => (
-              <th
-                key={j}
-                className={cn(
-                  'sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left font-semibold text-gray-800 whitespace-nowrap border-b-2 border-r-2 border-gray-200 last:border-r-0 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]',
-                  j === 0 && 'w-[80px] min-w-[80px] max-w-[80px]'
-                )}
-              >
-                {cell}
-              </th>
-            ))}
-                {!alwaysEditable && !readOnly && (
-                <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
-                  {isEditing ? (
-                    <div className="flex gap-1 justify-start">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={saveEdit}
-                        className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                        title={t('common.save', 'Save')}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelEdit}
-                        className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                        title={t('common.cancel', 'Cancel')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+            {headerRow.map((cell, j) => {
+              const shouldRenderControlsInThisHeader =
+                controlsPlacement === 'taggingColumn' && j === taggingHeaderIndex;
+
+              return (
+                <th
+                  key={j}
+                  className={cn(
+                    'sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left font-semibold text-gray-800 whitespace-nowrap border-b-2 border-r-2 border-gray-200 last:border-r-0 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]',
+                    j === 0 && 'w-[80px] min-w-[80px] max-w-[80px]'
+                  )}
+                >
+                  {shouldRenderControlsInThisHeader ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate">{cell}</span>
+                      {renderControls()}
                     </div>
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={startEdit}
-                      className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                      title={t('common.edit', 'Edit')}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    cell
                   )}
                 </th>
-                )}
+              );
+            })}
+            {!alwaysEditable && !readOnly && controlsPlacement === 'actionsColumn' && (
+              <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
+                {renderControls()}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
@@ -287,7 +313,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                     )}
                   </td>
                 ))}
-                {!alwaysEditable && !readOnly && (
+                {!alwaysEditable && !readOnly && controlsPlacement === 'actionsColumn' && (
                   <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px] max-w-[72px] whitespace-nowrap overflow-hidden align-middle">
                     {onSave && (
                       <DropdownMenu>

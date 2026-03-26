@@ -11,7 +11,17 @@ import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 import './AddContentDialog.css';
+
+function statusNameFromJoin(row: {
+  employee_statuses?: { name?: string } | { name?: string }[] | null;
+}) {
+  const es = row.employee_statuses;
+  if (!es) return null;
+  if (Array.isArray(es)) return es[0]?.name ?? null;
+  return es.name ?? null;
+}
 
 interface AddContentDialogProps {
   open: boolean;
@@ -92,9 +102,14 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
           .order('name'),
         supabase
           .from('employees')
-          .select('id, full_name, user_id')
+          .select(`
+            id,
+            full_name,
+            user_id,
+            pending_removal,
+            employee_statuses!left(name)
+          `)
           .eq('organization_id', organizationId)
-          .eq('status', 'active')
           .order('full_name')
       ]);
 
@@ -109,7 +124,20 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
       setServices(servicesResult.data || []);
       setSubServices(subServicesResult.data || []);
       setContentPillars(contentPillarsResult.data || []);
-      setEmployees(employeesResult.data || []);
+      const empRows = (employeesResult.data ?? []) as Array<
+        Employee & { pending_removal?: boolean | null; employee_statuses?: unknown }
+      >;
+      setEmployees(
+        empRows
+          .filter((row) =>
+            isEmployeeActive({
+              employee_status_name: statusNameFromJoin(row),
+              status: null,
+              pending_removal: row.pending_removal,
+            })
+          )
+          .map(({ id, full_name, user_id }) => ({ id, full_name, user_id }))
+      );
     } catch (error) {
       console.error('Error loading master data:', error);
       toast({
@@ -150,18 +178,33 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: employee, error } = await supabase
+        const { data: row, error } = await supabase
           .from('employees')
-          .select('id, full_name, user_id')
+          .select(`
+            id,
+            full_name,
+            user_id,
+            pending_removal,
+            employee_statuses!left(name)
+          `)
           .eq('user_id', user.id)
           .eq('organization_id', organizationId)
-          .eq('status', 'active')
-          .single() as { data: Employee | null; error: any };
+          .maybeSingle();
 
         if (error) {
           console.error('Error fetching employee:', error);
           return;
         }
+
+        const employee =
+          row &&
+          isEmployeeActive({
+            employee_status_name: statusNameFromJoin(row),
+            status: null,
+            pending_removal: row.pending_removal,
+          })
+            ? { id: row.id, full_name: row.full_name, user_id: row.user_id }
+            : null;
 
         setCurrentEmployee(employee);
         
@@ -392,7 +435,7 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden" style={{ zIndex: 999999 }}>
+      <DialogContent className="max-w-6xl w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col p-0 overflow-hidden" style={{ zIndex: 999999 }}>
         {/* Sticky Header */}
         <DialogHeader className="flex-shrink-0 bg-background z-10 pb-4 pt-6 px-6 border-b">
           <DialogTitle>

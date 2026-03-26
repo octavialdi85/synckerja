@@ -10,7 +10,11 @@ import java.util.Set;
  * Holds FCM notification tap payload forwarded from {@link MainActivity} intent extras.
  * Custom {@link SynckerjaFirebaseMessagingService} shows local notifications with a direct
  * activity PendingIntent, so Capacitor's {@code pushNotificationActionPerformed} never runs.
+ *
+ * <p>-Xlint:deprecation (compileSdk 35): generic {@link Bundle} key iteration / {@code get(String)}
+ * is still the practical way to mirror arbitrary FCM data keys into JS.
  */
+@SuppressWarnings("deprecation")
 public final class NotificationLaunchStore {
 
     private static final String TAG = "NotifLaunch";

@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -38,26 +37,14 @@ import {
 import { Crown, AlertTriangle, Mail, Loader2, Users, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
-const transferSchema = z.object({
-  transferMethod: z.enum(["member", "email"]),
-  newOwnerId: z.string().optional(),
-  targetEmail: z.string().email("Email tidak valid").optional(),
-  message: z.string().optional(),
-}).refine((data) => {
-  if (data.transferMethod === "member" && !data.newOwnerId) {
-    return false;
-  }
-  if (data.transferMethod === "email" && !data.targetEmail) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Pilih anggota atau masukkan email target",
-  path: ["newOwnerId"]
-});
-
-type TransferFormValues = z.infer<typeof transferSchema>;
+type TransferFormValues = {
+  transferMethod: "member" | "email";
+  newOwnerId?: string;
+  targetEmail?: string;
+  message?: string;
+};
 
 interface Member {
   user_id: string;
@@ -83,8 +70,44 @@ const TransferOwnershipForm = ({
   loading,
   membersLoading = false
 }: TransferOwnershipFormProps) => {
+  const { t } = useAppTranslation();
   const [isConfirming, setIsConfirming] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
+
+  const transferSchema = useMemo(
+    () =>
+      z
+        .object({
+          transferMethod: z.enum(["member", "email"]),
+          newOwnerId: z.string().optional(),
+          targetEmail: z
+            .union([
+              z.string().email(t("transferOwnership.form.validation.emailInvalid", "Invalid email")),
+              z.literal(""),
+            ])
+            .optional(),
+          message: z.string().optional(),
+        })
+        .refine(
+          (data) => {
+            if (data.transferMethod === "member" && !data.newOwnerId) {
+              return false;
+            }
+            if (data.transferMethod === "email" && !data.targetEmail) {
+              return false;
+            }
+            return true;
+          },
+          {
+            message: t(
+              "transferOwnership.form.validation.pickTarget",
+              "Select a member or enter a target email",
+            ),
+            path: ["newOwnerId"],
+          },
+        ),
+    [t],
+  );
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
@@ -118,8 +141,11 @@ const TransferOwnershipForm = ({
     // Make sure members are loaded before proceeding
     if (membersLoading) {
       toast({
-        title: "Warning",
-        description: "Data anggota masih dimuat, silakan tunggu sebentar",
+        title: t("transferOwnership.toast.warning.title", "Warning"),
+        description: t(
+          "transferOwnership.toast.warning.membersLoading",
+          "Member data is still loading. Please wait.",
+        ),
         variant: "destructive",
       });
       setIsConfirming(false);
@@ -149,8 +175,11 @@ const TransferOwnershipForm = ({
           success = await initiateEmailTransfer(values.targetEmail, values.message || undefined);
         } else {
           toast({
-            title: "Error",
-            description: "Email tersebut tidak ditemukan sebagai anggota organisasi. User harus sudah menjadi anggota organisasi terlebih dahulu.",
+            title: t("transferOwnership.toast.error.title", "Error"),
+            description: t(
+              "transferOwnership.toast.error.emailNotMember",
+              "That email is not an organization member. The user must join the organization first.",
+            ),
             variant: "destructive",
           });
           setIsConfirming(false);
@@ -182,7 +211,10 @@ const TransferOwnershipForm = ({
       if (memberByEmail) {
         return memberByEmail;
       }
-      return { full_name: "User", email: values.targetEmail };
+      return {
+        full_name: t("transferOwnership.form.externalUserFallback", "User"),
+        email: values.targetEmail,
+      };
     }
     return null;
   };
@@ -194,13 +226,15 @@ const TransferOwnershipForm = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-yellow-600" />
-            Transfer Ownership
+            {t("transferOwnership.form.title", "Transfer ownership")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
-            <span>Memuat data anggota organisasi...</span>
+            <span>
+              {t("transferOwnership.form.loadingMembers", "Loading organization members…")}
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -214,7 +248,7 @@ const TransferOwnershipForm = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-yellow-600" />
-            Transfer Ownership
+            {t("transferOwnership.form.title", "Transfer ownership")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -222,11 +256,13 @@ const TransferOwnershipForm = ({
             <Users className="h-12 w-12 text-gray-400" />
             <div className="text-center">
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Tidak Ada Anggota yang Memenuhi Syarat
+                {t("transferOwnership.form.noEligibleTitle", "No eligible members")}
               </h3>
               <p className="text-sm text-gray-600 mb-4">
-                Tidak ada anggota organisasi lain yang dapat menerima transfer ownership. 
-                Anda dapat mengundang anggota baru terlebih dahulu atau melakukan transfer via email.
+                {t(
+                  "transferOwnership.form.noEligibleBody",
+                  "There are no other members who can receive ownership.",
+                )}
               </p>
             </div>
             <div className="w-full max-w-md">
@@ -239,17 +275,23 @@ const TransferOwnershipForm = ({
                       <FormItem>
                         <FormLabel className="flex items-center gap-2">
                           <Mail className="h-4 w-4" />
-                          Email Target
+                          {t("transferOwnership.form.emailTarget", "Target email")}
                         </FormLabel>
                         <FormControl>
                           <Input
                             type="email"
-                            placeholder="Masukkan email calon owner baru"
+                            placeholder={t(
+                              "transferOwnership.form.emailPlaceholderMember",
+                              "Enter the new owner's email",
+                            )}
                             {...field}
                           />
                         </FormControl>
                         <p className="text-xs text-gray-500">
-                          Email harus terdaftar sebagai anggota organisasi aktif
+                          {t(
+                            "transferOwnership.form.emailMustBeMemberHint",
+                            "Email must belong to an active member.",
+                          )}
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -261,10 +303,15 @@ const TransferOwnershipForm = ({
                     name="message"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Pesan (Opsional)</FormLabel>
+                        <FormLabel>
+                          {t("transferOwnership.form.messageOptional", "Message (optional)")}
+                        </FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Tambahkan pesan untuk owner baru..."
+                            placeholder={t(
+                              "transferOwnership.form.messagePlaceholder",
+                              "Add a message for the new owner…",
+                            )}
                             className="resize-none"
                             {...field}
                           />
@@ -282,10 +329,10 @@ const TransferOwnershipForm = ({
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Memproses...
+                        {t("transferOwnership.form.processing", "Processing…")}
                       </>
                     ) : (
-                      "Transfer via Email"
+                      t("transferOwnership.form.transferViaEmail", "Transfer via email")
                     )}
                   </Button>
                 </form>
@@ -302,7 +349,9 @@ const TransferOwnershipForm = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Crown className="h-5 w-5 text-yellow-600" />
-          {isConfirming ? "Konfirmasi Transfer Ownership" : "Transfer Ownership"}
+          {isConfirming
+            ? t("transferOwnership.form.confirmTitle", "Confirm transfer ownership")
+            : t("transferOwnership.form.title", "Transfer ownership")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -313,18 +362,22 @@ const TransferOwnershipForm = ({
                 <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-yellow-800">
-                    Peringatan Penting
+                    {t("transferOwnership.form.warningTitle", "Important warning")}
                   </h3>
                   <p className="mt-1 text-sm text-yellow-700">
-                    Setelah transfer ownership, Anda akan kehilangan akses sebagai owner 
-                    dan tidak dapat membatalkan tindakan ini. Pastikan Anda yakin dengan keputusan ini.
+                    {t(
+                      "transferOwnership.form.warningBody",
+                      "After transferring ownership, you will lose owner access and cannot undo this.",
+                    )}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm text-gray-600">Target transfer:</p>
+              <p className="text-sm text-gray-600">
+                {t("transferOwnership.form.targetLabel", "Transfer target:")}
+              </p>
               <div className="bg-gray-50 rounded-lg p-3">
                 {(() => {
                   const target = getSelectedTarget();
@@ -334,7 +387,9 @@ const TransferOwnershipForm = ({
                       <p className="text-sm text-gray-600">{target.email}</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-500">Target tidak ditemukan</p>
+                    <p className="text-sm text-gray-500">
+                      {t("transferOwnership.form.targetNotFound", "Target not found")}
+                    </p>
                   );
                 })()}
               </div>
@@ -342,7 +397,9 @@ const TransferOwnershipForm = ({
 
             {form.getValues("message") && (
               <div className="space-y-2">
-                <p className="text-sm text-gray-600">Pesan:</p>
+                <p className="text-sm text-gray-600">
+                  {t("transferOwnership.form.messageLabel", "Message:")}
+                </p>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-sm">{form.getValues("message")}</p>
                 </div>
@@ -357,7 +414,7 @@ const TransferOwnershipForm = ({
                 disabled={loading}
                 className="flex-1"
               >
-                Batal
+                {t("transferOwnership.form.cancel", "Cancel")}
               </Button>
               <Button
                 onClick={() => onSubmit(form.getValues())}
@@ -367,10 +424,10 @@ const TransferOwnershipForm = ({
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Memproses...
+                    {t("transferOwnership.form.processing", "Processing…")}
                   </>
                 ) : (
-                  "Ya, Transfer Ownership"
+                  t("transferOwnership.form.confirmYes", "Yes, transfer ownership")
                 )}
               </Button>
             </div>
@@ -383,20 +440,34 @@ const TransferOwnershipForm = ({
                 name="transferMethod"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Metode Transfer</FormLabel>
+                    <FormLabel>
+                      {t("transferOwnership.form.methodLabel", "Transfer method")}
+                    </FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Pilih metode transfer" />
+                          <SelectValue
+                            placeholder={t(
+                              "transferOwnership.form.methodPlaceholder",
+                              "Choose a transfer method",
+                            )}
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {eligibleMembers.length > 0 && (
                           <SelectItem value="member">
-                            Pilih dari Anggota Organisasi ({eligibleMembers.length} tersedia)
+                            {t("transferOwnership.form.methodMember", "{{count}} members available", {
+                              count: eligibleMembers.length,
+                            })}
                           </SelectItem>
                         )}
-                        <SelectItem value="email">Transfer via Email dengan Autocomplete</SelectItem>
+                        <SelectItem value="email">
+                          {t(
+                            "transferOwnership.form.methodEmailAutocomplete",
+                            "Transfer via email with autocomplete",
+                          )}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -410,11 +481,18 @@ const TransferOwnershipForm = ({
                   name="newOwnerId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Pilih Owner Baru</FormLabel>
+                      <FormLabel>
+                        {t("transferOwnership.form.pickNewOwner", "Choose new owner")}
+                      </FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Pilih anggota untuk dijadikan owner baru" />
+                            <SelectValue
+                              placeholder={t(
+                                "transferOwnership.form.pickMemberPlaceholder",
+                                "Select a member to become the new owner",
+                              )}
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -444,7 +522,10 @@ const TransferOwnershipForm = ({
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <Mail className="h-4 w-4" />
-                        Email Target dengan Autocomplete
+                        {t(
+                          "transferOwnership.form.emailAutocompleteLabel",
+                          "Target email with autocomplete",
+                        )}
                       </FormLabel>
                       <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
                         <PopoverTrigger asChild>
@@ -458,7 +539,11 @@ const TransferOwnershipForm = ({
                                 !field.value && "text-muted-foreground"
                               )}
                             >
-                              {field.value || "Ketik nama atau email anggota..."}
+                              {field.value ||
+                                t(
+                                  "transferOwnership.form.comboboxPlaceholder",
+                                  "Type a member name or email…",
+                                )}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
@@ -466,7 +551,10 @@ const TransferOwnershipForm = ({
                         <PopoverContent className="w-full p-0">
                           <Command>
                             <CommandInput
-                              placeholder="Cari nama atau email anggota..."
+                              placeholder={t(
+                                "transferOwnership.form.searchPlaceholder",
+                                "Search by name or email…",
+                              )}
                               value={field.value}
                               onValueChange={(value) => {
                                 field.onChange(value);
@@ -474,10 +562,15 @@ const TransferOwnershipForm = ({
                             />
                             <CommandList>
                               <CommandEmpty>
-                                {field.value && field.value.includes('@') ? 
-                                  "Tidak ada anggota ditemukan, akan melakukan transfer via email" : 
-                                  "Tidak ada anggota ditemukan"
-                                }
+                                {field.value && field.value.includes("@")
+                                  ? t(
+                                      "transferOwnership.form.commandEmptyWillEmail",
+                                      "No member found; transfer will be sent by email",
+                                    )
+                                  : t(
+                                      "transferOwnership.form.commandEmpty",
+                                      "No members found",
+                                    )}
                               </CommandEmpty>
                               {filteredMembers.length > 0 && (
                                 <CommandGroup>
@@ -511,7 +604,10 @@ const TransferOwnershipForm = ({
                         </PopoverContent>
                       </Popover>
                       <p className="text-xs text-gray-500">
-                        Ketik untuk mencari anggota organisasi atau masukkan email baru
+                        {t(
+                          "transferOwnership.form.emailFieldHint",
+                          "Search organization members or enter a new email address.",
+                        )}
                       </p>
                       <FormMessage />
                     </FormItem>
@@ -545,10 +641,10 @@ const TransferOwnershipForm = ({
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Memproses...
+                    {t("transferOwnership.form.processing", "Processing…")}
                   </>
                 ) : (
-                  "Lanjutkan"
+                  t("transferOwnership.form.continue", "Continue")
                 )}
               </Button>
             </form>

@@ -40,8 +40,7 @@ export const buildEmployeeData = async (
     job_position_id: formData.job_position_id,
     job_level_id: formData.job_level_id,
     branch_id: branchId,
-    employee_status_id: formData.status, // Use the new employee_status_id field
-    status: null, // Keep the old status field as null for backward compatibility
+    employee_status_id: formData.employee_status_id || formData.status || null,
     join_date: formData.join_date || null,
     hire_date: formData.hire_date || null,
     

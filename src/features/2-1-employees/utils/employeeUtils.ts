@@ -160,6 +160,44 @@ export const getEmployeeStatusForFilter = (employee: {
 };
 
 /**
+ * Resolve payroll status from canonical source:
+ * 1) employee_statuses.name (joined as employee_status_name)
+ * 2) employees.status
+ * 3) empty string when both are missing
+ *
+ * Note:
+ * - We intentionally do NOT default to 'active' here.
+ * - Payroll eligibility should be explicit and deterministic.
+ */
+export const getCanonicalPayrollStatus = (employee: {
+  employee_status_name?: string | null;
+  status?: string | null;
+}): string => {
+  const statusFromRelation = employee.employee_status_name?.trim().toLowerCase();
+  const statusFromField = employee.status?.trim().toLowerCase();
+
+  if (statusFromRelation) return statusFromRelation;
+  if (statusFromField) return statusFromField;
+  return '';
+};
+
+/**
+ * Payroll eligibility rule:
+ * - Include: active, probation
+ * - Exclude: terminated/inactive/resigned/pending removal and unknown status
+ */
+export const isEmployeeEligibleForPayroll = (employee: {
+  employee_status_name?: string | null;
+  status?: string | null;
+  pending_removal?: boolean | null;
+}): boolean => {
+  if (employee.pending_removal === true) return false;
+
+  const canonicalStatus = getCanonicalPayrollStatus(employee);
+  return canonicalStatus === 'active' || canonicalStatus === 'probation';
+};
+
+/**
  * Filter employees based on multiple criteria
  */
 export interface EmployeeFilters {

@@ -75,7 +75,6 @@ interface SubStepAssignmentRow {
 interface EmployeeRow {
   id: string;
   full_name: string | null;
-  status?: string | null;
   employee_status_id?: string | null;
   pending_removal?: boolean | null;
 }
@@ -94,9 +93,8 @@ function isActiveEmployee(
   statusNameById: Map<string, string>
 ): boolean {
   if (emp.pending_removal === true) return false;
-  const statusField = (emp.status ?? "").trim().toLowerCase();
   const fromRelation = emp.employee_status_id ? statusNameById.get(emp.employee_status_id)?.trim().toLowerCase() : "";
-  const effective = statusField || fromRelation || "active";
+  const effective = fromRelation || "active";
   return !NON_ACTIVE_STATUSES.has(effective);
 }
 
@@ -463,7 +461,7 @@ const fetchAssignments = async (
     await Promise.all([
       supabase
         .from("employees")
-        .select("id, full_name, status, employee_status_id, pending_removal")
+        .select("id, full_name, employee_status_id, pending_removal")
         .eq("organization_id", organizationId)
         .order("full_name", { ascending: true }),
       supabase.from("employee_statuses").select("id, name"),
@@ -504,7 +502,7 @@ const fetchAssignments = async (
   const statusNameById = new Map<string, string>();
   if (statusesRes.error) {
     if (import.meta.env.DEV) {
-      console.warn('Job Desc: employee_statuses fetch failed, filtering by employees.status only:', statusesRes.error);
+      console.warn('Job Desc: employee_statuses fetch failed, defaulting unresolved statuses to active:', statusesRes.error);
     }
   } else {
     (statusesRes.data ?? []).forEach((s: { id: string; name: string }) => {

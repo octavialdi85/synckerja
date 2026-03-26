@@ -68,6 +68,8 @@ const getExistingRoutes = (): string[] => {
     '/tools/pph21-calculator',
     '/tools/pricing-tools',
     '/tools/promo-simulation',
+    '/payroll',
+    '/payroll/calculations',
     '/my-info/personal',
     '/my-info/address',
     '/my-info/employment',
@@ -173,7 +175,7 @@ export const testRouteProtectionCoverage = (): RouteProtectionCoverage => {
     
     // Check if this route should have permissions but doesn't
     const shouldBeProtected = [
-      '/admin', '/users', '/subscription', '/digital-marketing',
+      '/admin', '/users', '/subscription', '/digital-marketing', '/payroll',
       '/access-permissions', '/recruitment', '/dashboard'
     ].some(protectedPrefix => route.startsWith(protectedPrefix));
     

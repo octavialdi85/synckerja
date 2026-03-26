@@ -298,6 +298,24 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     notes: 'Maps to /attendance-management permission configuration'
   },
   {
+    path: '/payroll',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/employee-management',
+    description: 'Payroll section landing page',
+    defaultRoles: ['owner', 'admin', 'hr'],
+    notes: 'Maps to /employee-management permission configuration'
+  },
+  {
+    path: '/payroll/calculations',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/employee-management',
+    description: 'Payroll calculations page (periods and runs are managed in the sidebar on this page)',
+    defaultRoles: ['owner', 'admin', 'hr'],
+    notes: 'Maps to /employee-management permission configuration; /payroll/periods and /payroll/runs redirect here'
+  },
+  {
     path: '/access-permissions/page-access',
     requiresAuth: true,
     requiresPermissions: false,

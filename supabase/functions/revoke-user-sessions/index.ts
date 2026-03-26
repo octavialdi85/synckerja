@@ -1,6 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const RESIGNED_STATUS_PRIORITY = ['terminated', 'inactive', 'resigned', 'dismissed'] as const
+
+type ServiceSupabase = ReturnType<typeof createClient>
+
+async function resolveResignedEmployeeStatusId(
+  supabase: ServiceSupabase,
+  organizationId: string
+): Promise<string | null> {
+  const { data: orgRows, error: orgErr } = await supabase
+    .from('employee_statuses')
+    .select('id, name')
+    .eq('organization_id', organizationId)
+
+  if (!orgErr && orgRows?.length) {
+    const id = pickResignedStatusId(orgRows)
+    if (id) return id
+  }
+
+  const { data: globalRows, error: globalErr } = await supabase
+    .from('employee_statuses')
+    .select('id, name')
+    .is('organization_id', null)
+
+  if (globalErr || !globalRows?.length) return null
+  return pickResignedStatusId(globalRows)
+}
+
+function pickResignedStatusId(rows: { id: string; name: string }[]): string | null {
+  const byLower = new Map(rows.map((r) => [r.name.trim().toLowerCase(), r.id]))
+  for (const name of RESIGNED_STATUS_PRIORITY) {
+    const id = byLower.get(name)
+    if (id) return id
+  }
+  return null
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -117,7 +153,7 @@ serve(async (req) => {
       .select('role')
       .eq('user_id', userId)
       .eq('organization_id', userRole.organization_id)
-      .single();
+      .maybeSingle();
 
     if (empRoleError) {
       console.error('[revoke-user-sessions] Error checking employee role:', empRoleError);
@@ -157,17 +193,30 @@ serve(async (req) => {
 
     console.log('[revoke-user-sessions] User owns organizations:', ownedOrgNames);
 
-    // 1. Update employee status to terminated (so frontend filters and security checks block access)
+    // 1. Set employee_status_id to a non-active status (employees.status column removed)
+    const resignedStatusId = await resolveResignedEmployeeStatusId(supabase, userRole.organization_id);
+    if (!resignedStatusId) {
+      console.error('[revoke-user-sessions] No terminated/inactive/resigned employee_status row for org');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'No resigned status configured. Add an employee status named Terminated, Inactive, or Resigned (org or global).',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
     const { error: updateError } = await supabase
       .from('employees')
       .update({
-        status: 'terminated',
-        updated_at: new Date().toISOString()
+        employee_status_id: resignedStatusId,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', employeeId);
 
     if (updateError) {
-      console.error('[revoke-user-sessions] Error updating employee status:', updateError);
+      console.error('[revoke-user-sessions] Error updating employee_status_id:', updateError);
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to update employee status: ' + updateError.message }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

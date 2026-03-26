@@ -1,7 +1,7 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui/card";
 import { Button } from "@/features/ui/button";
 import { User } from "lucide-react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface PendingTransfer {
   id: string;
@@ -19,6 +19,8 @@ interface PendingTransfersListProps {
 }
 
 const PendingTransfersList = ({ transfers, onCancelTransfer }: PendingTransfersListProps) => {
+  const { t, language } = useAppTranslation();
+
   if (transfers.length === 0) {
     return null;
   }
@@ -26,7 +28,9 @@ const PendingTransfersList = ({ transfers, onCancelTransfer }: PendingTransfersL
   return (
     <Card className="shadow-sm mt-6">
       <CardHeader>
-        <CardTitle className="text-lg">Permintaan Transfer Pending</CardTitle>
+        <CardTitle className="text-lg">
+          {t("transferOwnership.pending.title", "Pending transfer requests")}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -48,11 +52,14 @@ const PendingTransfersList = ({ transfers, onCancelTransfer }: PendingTransfersL
                   size="sm"
                   onClick={() => onCancelTransfer(transfer.id)}
                 >
-                  Batalkan
+                  {t("transferOwnership.pending.cancel", "Cancel")}
                 </Button>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                Dikirim: {new Date(transfer.created_at).toLocaleDateString('id-ID')}
+                {t("transferOwnership.pending.sent", "Sent:")}{" "}
+                {new Date(transfer.created_at).toLocaleDateString(
+                  language === "id" ? "id-ID" : "en-US",
+                )}
               </p>
             </div>
           ))}

@@ -81,11 +81,32 @@ export const useSubscriptionAnalytics = () => {
       }));
 
       // Get current employee count
-      const { count: employeeCount } = await supabase
+      const { data: employeeRows, error: employeeCountError } = await supabase
         .from('employees')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('status', 'active');
+        .select('id, employee_status_id, pending_removal')
+        .eq('organization_id', organizationId);
+      if (employeeCountError) throw employeeCountError;
+
+      const statusIds = Array.from(
+        new Set((employeeRows ?? []).map((e: any) => e.employee_status_id).filter(Boolean))
+      ) as string[];
+      let activeStatusIds = new Set<string>();
+      if (statusIds.length > 0) {
+        const { data: statusRows } = await supabase
+          .from('employee_statuses')
+          .select('id, name')
+          .in('id', statusIds);
+        activeStatusIds = new Set(
+          (statusRows ?? [])
+            .filter((s: any) => ['active', 'probation'].includes(String(s.name || '').toLowerCase()))
+            .map((s: any) => s.id)
+        );
+      }
+      const employeeCount = (employeeRows ?? []).filter((e: any) => {
+        if (e.pending_removal === true) return false;
+        if (!e.employee_status_id) return true;
+        return activeStatusIds.has(e.employee_status_id);
+      }).length;
 
       const cost_analysis: CostAnalysisData = {
         current_monthly: 0,

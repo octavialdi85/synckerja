@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 export interface TeamAvailabilityData {
   name: string;
@@ -26,12 +27,15 @@ export const useTeamAvailability = () => {
       const today = new Date().toISOString().split('T')[0];
 
       // Get employees with their departments and today's attendance
-      const { data: employeesWithAttendance, error } = await supabase
+      const { data: rawRows, error } = await supabase
         .from('employees')
         .select(`
           id,
           full_name,
-          status,
+          pending_removal,
+          employee_statuses!left (
+            name
+          ),
           departments!inner (
             id,
             name
@@ -45,13 +49,29 @@ export const useTeamAvailability = () => {
           )
         `)
         .eq('organization_id', currentOrg.id)
-        .eq('status', 'active')
         .eq('attendance_records.attendance_date', today);
 
       if (error) {
         console.error('❌ Error fetching employees with attendance:', error);
         throw error;
       }
+
+      const statusNameFromJoin = (row: {
+        employee_statuses?: { name?: string } | { name?: string }[] | null;
+      }) => {
+        const es = row.employee_statuses;
+        if (!es) return null;
+        if (Array.isArray(es)) return es[0]?.name ?? null;
+        return es.name ?? null;
+      };
+
+      const employeesWithAttendance = (rawRows ?? []).filter((row) =>
+        isEmployeeActive({
+          employee_status_name: statusNameFromJoin(row),
+          status: null,
+          pending_removal: row.pending_removal,
+        })
+      );
 
       logger.query('📊 Raw employees with attendance:', employeesWithAttendance);
 

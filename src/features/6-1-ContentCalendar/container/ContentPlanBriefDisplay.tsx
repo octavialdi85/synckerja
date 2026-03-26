@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { parseMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
+import { parseMarkdownTable, replaceTableInMarkdown, stringifyMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
 import { EditableBriefTable } from '@/features/6-1-dashboard/modal/EditableBriefTable';
 import {
   stripBreakdownScriptLabel,
@@ -9,6 +9,7 @@ import {
   makeBriefSectionsInline,
 } from '@/features/share/utils/briefUtils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useSocialMediaMutations } from '@/features/6-1-dashboard/hook/useOptimizedSocialMediaState';
 
 /** Match BriefDialog markdown styling for consistency with brief content modal */
 const briefMarkdownComponents = {
@@ -41,11 +42,13 @@ const briefMarkdownComponents = {
 };
 
 export interface ContentPlanBriefDisplayProps {
+  planId: string;
   brief: string | null | undefined;
 }
 
-export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = ({ brief }) => {
+export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = ({ planId, brief }) => {
   const { t } = useAppTranslation();
+  const { updateContentPlan } = useSocialMediaMutations();
   const briefText = brief?.trim() ?? '';
 
   const parsedTable = useMemo(() => {
@@ -73,6 +76,7 @@ export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = (
 
   const before = briefText.slice(0, parsedTable.startIndex);
   const after = briefText.slice(parsedTable.endIndex);
+  const canUpdate = Boolean(planId && planId !== '__missing_plan_id__');
 
   return (
     <div className="space-y-2 min-w-0">
@@ -85,8 +89,19 @@ export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = (
       )}
       <div className="min-w-0 -mx-1">
         <EditableBriefTable
-          readOnly
           tableData={parsedTable.table}
+          controlsPlacement="taggingColumn"
+          onSave={(newTableData) => {
+            if (!canUpdate) return;
+            const newTableMarkdown = stringifyMarkdownTable(newTableData);
+            const nextBrief = replaceTableInMarkdown(
+              briefText,
+              newTableMarkdown,
+              parsedTable.startIndex,
+              parsedTable.endIndex
+            );
+            updateContentPlan(planId, { brief: nextBrief });
+          }}
           className="!my-1 !max-h-[min(480px,52vh)]"
         />
       </div>

@@ -20,7 +20,7 @@ export const useEmployeeValidation = (formData: EmployeeFormData) => {
       formData.branch_id &&
       formData.join_date &&
       formData.role &&
-      formData.status
+      formData.employee_status_id
     );
   };
 
@@ -77,12 +77,6 @@ export const useEmployeeValidation = (formData: EmployeeFormData) => {
 };
 
 export const validateEmployeeData = async (formData: any, organizationId: string) => {
-  const validEmploymentStatuses = ['permanent', 'contract', 'probation', 'internship', 'part_time'];
-  let employmentStatus: string | null = null;
-  if (formData.status && validEmploymentStatuses.includes(formData.status)) {
-    employmentStatus = formData.status;
-  }
-
   // Handle branch validation
   let branchId = null;
   if (formData.branch) {
@@ -101,7 +95,6 @@ export const validateEmployeeData = async (formData: any, organizationId: string
 
   return {
     branchId
-    // Removed employmentStatus since employment_status column no longer exists
   };
 };
 

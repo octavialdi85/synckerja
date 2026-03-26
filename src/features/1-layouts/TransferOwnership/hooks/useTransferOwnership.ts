@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/features/1-login/contexts/AuthContext";
 import { toast } from "@/features/1-login/hooks/use-toast";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { useInvalidateUserCache } from "./useInvalidateUserCache";
 
 interface OwnershipTransfer {
@@ -29,6 +30,7 @@ interface OrganizationMember {
 
 export const useTransferOwnership = (organizationId?: string | null) => {
   const { user } = useAuth();
+  const { t } = useAppTranslation();
   const [transfers, setTransfers] = useState<OwnershipTransfer[]>([]);
   const [pendingTransfers, setPendingTransfers] = useState<OwnershipTransfer[]>([]);
   const [organizationMembers, setOrganizationMembers] = useState<OrganizationMember[]>([]);
@@ -192,8 +194,14 @@ export const useTransferOwnership = (organizationId?: string | null) => {
       }
 
       toast({
-        title: "Transfer Berhasil Dimulai",
-        description: "Permintaan transfer kepemilikan telah dikirim.",
+        title: t(
+          "transferOwnership.toast.success.requestSentTitle",
+          "Transfer started",
+        ),
+        description: t(
+          "transferOwnership.toast.success.requestSentDescription",
+          "The ownership transfer request has been sent.",
+        ),
       });
 
       // Refresh pending transfers
@@ -203,8 +211,16 @@ export const useTransferOwnership = (organizationId?: string | null) => {
     } catch (error: any) {
       console.error('Error initiating transfer:', error);
       toast({
-        title: "Transfer Gagal",
-        description: error.message || "Terjadi kesalahan saat memulai transfer kepemilikan.",
+        title: t(
+          "transferOwnership.toast.error.rpcFailedTitle",
+          "Transfer failed",
+        ),
+        description:
+          error.message ||
+          t(
+            "transferOwnership.toast.error.startFailedDescription",
+            "Could not start the ownership transfer.",
+          ),
         variant: "destructive",
       });
       return false;
@@ -222,8 +238,14 @@ export const useTransferOwnership = (organizationId?: string | null) => {
 
       if (userError || !userData) {
         toast({
-          title: "Pengguna Tidak Ditemukan",
-          description: "Email yang dimasukkan tidak terdaftar dalam sistem.",
+          title: t(
+            "transferOwnership.toast.error.userNotFoundTitle",
+            "User not found",
+          ),
+          description: t(
+            "transferOwnership.toast.error.userNotFoundDescription",
+            "That email is not registered in the system.",
+          ),
           variant: "destructive",
         });
         return false;
@@ -233,8 +255,14 @@ export const useTransferOwnership = (organizationId?: string | null) => {
     } catch (error: any) {
       console.error('Error initiating email transfer:', error);
       toast({
-        title: "Transfer Gagal",
-        description: "Terjadi kesalahan saat memulai transfer kepemilikan.",
+        title: t(
+          "transferOwnership.toast.error.rpcFailedTitle",
+          "Transfer failed",
+        ),
+        description: t(
+          "transferOwnership.toast.error.startFailedDescription",
+          "Could not start the ownership transfer.",
+        ),
         variant: "destructive",
       });
       return false;
@@ -254,8 +282,14 @@ export const useTransferOwnership = (organizationId?: string | null) => {
       }
 
       toast({
-        title: "Transfer Dibatalkan",
-        description: "Permintaan transfer kepemilikan telah berhasil dibatalkan.",
+        title: t(
+          "transferOwnership.toast.success.cancelledTitle",
+          "Transfer cancelled",
+        ),
+        description: t(
+          "transferOwnership.toast.success.cancelledDescription",
+          "The ownership transfer request has been cancelled.",
+        ),
       });
 
       // Refresh pending transfers
@@ -265,8 +299,16 @@ export const useTransferOwnership = (organizationId?: string | null) => {
     } catch (error: any) {
       console.error('Error cancelling transfer:', error);
       toast({
-        title: "Gagal Membatalkan",
-        description: error.message || "Terjadi kesalahan saat membatalkan transfer.",
+        title: t(
+          "transferOwnership.toast.error.cancelFailedTitle",
+          "Could not cancel",
+        ),
+        description:
+          error.message ||
+          t(
+            "transferOwnership.toast.error.cancelFailedDescription",
+            "Something went wrong while cancelling the transfer.",
+          ),
         variant: "destructive",
       });
       return false;
@@ -285,8 +327,14 @@ export const useTransferOwnership = (organizationId?: string | null) => {
       }
 
       toast({
-        title: "Transfer Berhasil",
-        description: "Kepemilikan organisasi telah berhasil ditransfer kepada Anda. Halaman akan dimuat ulang...",
+        title: t(
+          "transferOwnership.toast.success.acceptedTitle",
+          "Transfer complete",
+        ),
+        description: t(
+          "transferOwnership.toast.success.acceptedDescription",
+          "Organization ownership has been transferred to you. The page will reload…",
+        ),
       });
 
       // Enhanced auto-refresh sequence
@@ -308,8 +356,16 @@ export const useTransferOwnership = (organizationId?: string | null) => {
     } catch (error: any) {
       console.error('Error accepting transfer:', error);
       toast({
-        title: "Transfer Gagal",
-        description: error.message || "Terjadi kesalahan saat menerima transfer kepemilikan.",
+        title: t(
+          "transferOwnership.toast.error.rpcFailedTitle",
+          "Transfer failed",
+        ),
+        description:
+          error.message ||
+          t(
+            "transferOwnership.toast.error.acceptFailedDescription",
+            "Could not accept the ownership transfer.",
+          ),
         variant: "destructive",
       });
       return false;

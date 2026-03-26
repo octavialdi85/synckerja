@@ -30,6 +30,7 @@ import { SaveToPlanPreviewDialog } from './SaveToPlanPreviewDialog';
 import { format } from 'date-fns';
 import { CalendarIcon, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 interface FormDataForPlan {
   content_type_id?: string;
@@ -50,6 +51,9 @@ interface Employee {
   id: string;
   full_name: string;
   user_id: string;
+  employee_status_id?: string | null;
+  employee_status_name?: string | null;
+  pending_removal?: boolean | null;
 }
 
 export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
@@ -98,23 +102,32 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
     setMasterLoading(true);
     setMasterError(null);
     try {
-      const [ct, svc, sub, cp, emp] = await Promise.all([
+      const [ct, svc, sub, cp, emp, statuses] = await Promise.all([
         supabase.from('content_types').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).eq('is_active', true).order('name'),
         supabase.from('services').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).eq('is_active', true).order('name'),
         supabase.from('sub_services').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).eq('is_active', true).order('name'),
         supabase.from('content_pillars').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).eq('is_active', true).order('name'),
-        supabase.from('employees').select('id, full_name, user_id').eq('organization_id', organizationId).eq('status', 'active').order('full_name'),
+        supabase.from('employees').select('id, full_name, user_id, employee_status_id, pending_removal').eq('organization_id', organizationId).order('full_name'),
+        supabase.from('employee_statuses').select('id, name'),
       ]);
       if (ct.error) throw ct.error;
       if (svc.error) throw svc.error;
       if (sub.error) throw sub.error;
       if (cp.error) throw cp.error;
       if (emp.error) throw emp.error;
+      if (statuses.error) throw statuses.error;
       setContentTypes(ct.data || []);
       setServices(svc.data || []);
       setSubServices(sub.data || []);
       setContentPillars(cp.data || []);
-      setEmployees(emp.data || []);
+      const statusNameById = new Map((statuses.data || []).map((status) => [status.id, status.name]));
+      const activeEmployees = ((emp.data || []) as Employee[])
+        .map((employee) => ({
+          ...employee,
+          employee_status_name: employee.employee_status_id ? statusNameById.get(employee.employee_status_id) || null : null
+        }))
+        .filter((employee) => isEmployeeActive(employee));
+      setEmployees(activeEmployees);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Gagal memuat data';
       setMasterError(msg);
