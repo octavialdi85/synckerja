@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/hooks/organized/utils';
 import { HeaderAndTab } from './HeaderAndTab';
 import { AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 type PayrollCalculationLoose = {
   [key: string]: unknown;
@@ -27,6 +28,7 @@ const PayrollCalculationsPage = () => {
   const [selectedPayrollRunId, setSelectedPayrollRunId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [runBlockedMessage, setRunBlockedMessage] = useState<string | null>(null);
+  const [deletingCalculationId, setDeletingCalculationId] = useState<string | null>(null);
 
   // Fetch payroll calculations
   const { data: calculations = [], isLoading, refetch } = useQuery({
@@ -189,6 +191,51 @@ const PayrollCalculationsPage = () => {
     enabled: !!selectedEmployee?.id,
   });
 
+  const handleDeleteCalculation = async (calculation: any) => {
+    if (!organizationId || !calculation?.id) return;
+
+    if (calculation.payment_status === 'paid') {
+      toast.error('Payroll dengan status paid tidak dapat dihapus.');
+      return;
+    }
+
+    const employeeName = calculation.employee_payroll_info?.employees?.full_name || 'this employee';
+    const confirmed = window.confirm(
+      `Delete payroll calculation for ${employeeName}? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingCalculationId(calculation.id);
+
+      const { error: itemsDeleteError } = await supabase
+        .from('payroll_items')
+        .delete()
+        .eq('payroll_calculation_id', calculation.id);
+
+      if (itemsDeleteError) throw itemsDeleteError;
+
+      const { error: calculationDeleteError } = await supabase
+        .from('employee_payroll_calculations')
+        .delete()
+        .eq('id', calculation.id);
+
+      if (calculationDeleteError) throw calculationDeleteError;
+
+      if (selectedEmployee?.id === calculation.id) {
+        setSelectedEmployee(null);
+      }
+
+      toast.success('Payroll calculation deleted successfully.');
+      await refetch();
+    } catch (error: any) {
+      console.error('Failed to delete payroll calculation:', error);
+      toast.error(error?.message || 'Failed to delete payroll calculation.');
+    } finally {
+      setDeletingCalculationId(null);
+    }
+  };
+
   return <StandardLayout>
       <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
@@ -257,6 +304,8 @@ const PayrollCalculationsPage = () => {
                     isLoading={isLoading}
                     onEmployeeSelect={setSelectedEmployee}
                     onRefresh={() => refetch()}
+                    onDeleteCalculation={handleDeleteCalculation}
+                    deletingCalculationId={deletingCalculationId}
                   />
                 </div>
               </div>

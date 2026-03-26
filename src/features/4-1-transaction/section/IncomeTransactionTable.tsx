@@ -126,23 +126,23 @@ export const IncomeTransactionTable = ({
       {/* Table Content - satu scroll container per panel, scroll chaining */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-20">
             <TableRow className="bg-gray-50">
-              <TableHead className="h-8 px-3 text-xs font-medium">Transaction</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Customer</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Service</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Type & Category</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Amount</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Payment Method</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Bank Account</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Recurring</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Receipt</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium max-w-[10rem]">
+              <TableHead className="h-8 w-[200px] min-w-[200px] px-3 text-xs font-medium bg-gray-50">Transaction</TableHead>
+              <TableHead className="h-8 w-[130px] min-w-[130px] px-3 text-xs font-medium bg-gray-50">Customer</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Service</TableHead>
+              <TableHead className="h-8 w-[150px] min-w-[150px] px-3 text-xs font-medium bg-gray-50">Type & Category</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Amount</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Payment Method</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Bank Account</TableHead>
+              <TableHead className="h-8 w-[118px] min-w-[118px] px-3 text-xs font-medium bg-gray-50">Recurring</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Receipt</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium bg-gray-50">Status</TableHead>
+              <TableHead className="h-8 w-[130px] min-w-[130px] px-3 text-xs font-medium bg-gray-50">
                 {t('incomes.tableTransactionId', 'Transaction ID')}
               </TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
+              <TableHead className="h-8 w-[110px] min-w-[110px] px-3 text-xs font-medium bg-gray-50">Date</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium w-16 bg-gray-50">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -155,12 +155,12 @@ export const IncomeTransactionTable = ({
             ) : (
               transactions.map((transaction) => (
                 <TableRow key={transaction.id} className="hover:bg-gray-50">
-                  <TableCell className="px-3 py-2 text-xs max-w-xs">
-                    <div className="font-medium text-wrap break-words">
+                  <TableCell className="w-[200px] min-w-[200px] px-3 py-2 text-xs">
+                    <div className="font-medium break-words leading-snug line-clamp-2">
                       {transaction.description || 'Transaction'}
                     </div>
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-xs font-medium">
+                  <TableCell className="w-[130px] min-w-[130px] px-3 py-2 text-xs font-medium">
                     {transaction.customer_name || '-'}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
@@ -173,7 +173,7 @@ export const IncomeTransactionTable = ({
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-xs">
+                  <TableCell className="w-[150px] min-w-[150px] px-3 py-2 text-xs">
                     <div>
                       {transaction.income_types?.name || 'Unknown'}
                     </div>
@@ -225,7 +225,7 @@ export const IncomeTransactionTable = ({
                       );
                     })()}
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-xs">
+                  <TableCell className="w-[118px] min-w-[118px] px-3 py-2 text-xs">
                     <Badge
                       variant="outline"
                       className={transaction.is_recurring ? "text-xs bg-purple-50 text-purple-700 border-purple-200" : "text-xs"}
@@ -279,7 +279,7 @@ export const IncomeTransactionTable = ({
                       {transaction.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-xs max-w-[10rem] min-w-0">
+                  <TableCell className="w-[130px] min-w-[130px] px-3 py-2 text-xs">
                     {(() => {
                       const { display, title } = getIncomeTransactionIdDisplay(transaction);
                       return (
@@ -289,7 +289,7 @@ export const IncomeTransactionTable = ({
                       );
                     })()}
                   </TableCell>
-                  <TableCell className="px-3 py-2 text-xs">
+                  <TableCell className="w-[110px] min-w-[110px] px-3 py-2 text-xs">
                     {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}
                   </TableCell>
                   <TableCell className="px-3 py-2">

@@ -205,7 +205,7 @@ export async function submitDebtPayment(params: SubmitDebtPaymentParams): Promis
       bankAccountId,
       -paymentAmount,
       'expense',
-      debtId,
+      paymentRowId,
       `Debt Payment: ${debtDisplayName}`
     );
   } catch (e) {

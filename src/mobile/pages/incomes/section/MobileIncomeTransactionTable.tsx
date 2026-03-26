@@ -98,22 +98,22 @@ export function MobileIncomeTransactionTable({
         <table className="w-full min-w-[2000px] select-none">
           <thead className="border-b border-slate-400/50 sticky top-0 z-10 bg-slate-500">
             <tr>
-              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Transaction</th>
-              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Customer</th>
+              <th className="w-[200px] min-w-[200px] max-w-[200px] text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Transaction</th>
+              <th className="w-[120px] min-w-[120px] max-w-[120px] text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Customer</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Service</th>
-              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Type & Category</th>
+              <th className="w-[130px] min-w-[130px] max-w-[130px] text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Type & Category</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Amount</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Payment Method</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500 max-w-[10rem]">
                 {t("incomes.bankAccount", "Bank Account")}
               </th>
-              <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Recurring</th>
+              <th className="w-[108px] min-w-[108px] max-w-[108px] text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Recurring</th>
               <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Receipt</th>
               <th className="text-center py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Status</th>
-              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500 max-w-[10rem]">
+              <th className="w-[120px] min-w-[120px] max-w-[120px] text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">
                 {t("incomes.tableTransactionId", "Transaction ID")}
               </th>
-              <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Date</th>
+              <th className="w-[105px] min-w-[105px] max-w-[105px] text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Date</th>
               <th className="text-left py-2 px-2 font-medium text-slate-100 whitespace-nowrap text-xs bg-slate-500">Actions</th>
             </tr>
           </thead>
@@ -127,15 +127,19 @@ export function MobileIncomeTransactionTable({
             ) : (
               transactions.map((transaction) => (
                 <tr key={transaction.id} className="border-b hover:bg-muted/30 active:bg-gray-100">
-                  <td className="px-3 py-2 text-xs max-w-xs">
-                    <div className="font-medium text-wrap break-words">{transaction.description || "Transaction"}</div>
+                  <td className="w-[200px] min-w-[200px] max-w-[200px] px-2 py-2 text-xs">
+                    <div className="font-medium break-words leading-snug line-clamp-2">
+                      {transaction.description || "Transaction"}
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-xs font-medium">{transaction.customer_name || "-"}</td>
+                  <td className="w-[120px] min-w-[120px] max-w-[120px] px-3 py-2 text-xs font-medium">
+                    {transaction.customer_name || "-"}
+                  </td>
                   <td className="px-3 py-2 text-xs">
                     <div>{transaction.services?.name || "-"}</div>
                     {transaction.sub_services?.name && <div className="text-gray-500 text-xs">{transaction.sub_services.name}</div>}
                   </td>
-                  <td className="px-3 py-2 text-xs">
+                  <td className="w-[130px] min-w-[130px] max-w-[130px] px-3 py-2 text-xs">
                     <div>{transaction.income_types?.name || "Unknown"}</div>
                     {transaction.income_categories?.name && <div className="text-gray-500 text-xs">{transaction.income_categories.name}</div>}
                   </td>
@@ -174,7 +178,7 @@ export function MobileIncomeTransactionTable({
                       );
                     })()}
                   </td>
-                  <td className="px-3 py-2 text-xs whitespace-nowrap text-center">
+                  <td className="w-[108px] min-w-[108px] max-w-[108px] px-3 py-2 text-xs whitespace-nowrap text-center">
                     <Badge
                       variant="outline"
                       className={cn(
@@ -226,7 +230,7 @@ export function MobileIncomeTransactionTable({
                       {transaction.status}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-xs max-w-[10rem] min-w-0 text-left">
+                  <td className="w-[120px] min-w-[120px] max-w-[120px] px-3 py-2 text-xs text-left">
                     {(() => {
                       const { display, title } = getIncomeTransactionIdDisplay(transaction);
                       return (
@@ -236,7 +240,9 @@ export function MobileIncomeTransactionTable({
                       );
                     })()}
                   </td>
-                  <td className="px-3 py-2 text-xs text-left">{format(new Date(transaction.transaction_date), "MMM dd, yyyy")}</td>
+                  <td className="w-[105px] min-w-[105px] max-w-[105px] px-3 py-2 text-xs text-left">
+                    {format(new Date(transaction.transaction_date), "MMM dd, yyyy")}
+                  </td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap text-left">
                     <div className="flex items-center justify-start gap-2">
                       <button

@@ -77,7 +77,7 @@ export function IncomeTransactionTableSection() {
     status: "all",
     type: "all",
     category: "all",
-    period: "this_month",
+    period: "all",
   });
 
   const typedTransactions = (incomeTransactions || []) as IncomeTransactionWithRelations[];
@@ -85,6 +85,7 @@ export function IncomeTransactionTableSection() {
   const categories = useMemo(() => getUniqueIncomeCategories(typedTransactions), [typedTransactions]);
   const periodFilteredTransactions = useMemo(() => {
     if (!typedTransactions.length) return [];
+    if (filters.period === "all") return typedTransactions;
     const { startDate, endDate } = getDateRangeForPeriod(filters.period);
     const startDateStr = formatDateToString(startDate);
     const endDateStr = formatDateToString(endDate);
@@ -103,10 +104,10 @@ export function IncomeTransactionTableSection() {
   );
 
   const setFilter = (key: keyof IncomeFilters, value: string) => setFilters((prev) => ({ ...prev, [key]: value }));
-  const clearFilters = () => setFilters({ search: "", status: "all", type: "all", category: "all", period: "this_month" });
+  const clearFilters = () => setFilters({ search: "", status: "all", type: "all", category: "all", period: "all" });
 
   return (
-    <div className="px-2 pt-2 pb-2">
+    <div className="px-2 pt-2 pb-1">
       <Card className="w-full min-w-0 border border-border bg-card overflow-hidden">
         <CardContent className="p-0 flex flex-col min-w-0">
           <div className="px-1.5 py-1.5 border-b bg-muted/50 flex-shrink-0 min-w-0">
@@ -176,6 +177,7 @@ export function IncomeTransactionTableSection() {
                         title="Period"
                         current={filters.period}
                         options={[
+                          { value: "all", label: "All Time" },
                           { value: "this_month", label: "This Month" },
                           { value: "last_month", label: "Last Month" },
                           { value: "last_3_months", label: "Last 3 Months" },

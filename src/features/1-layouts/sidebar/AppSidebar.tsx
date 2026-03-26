@@ -28,11 +28,8 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
   const { t } = useAppTranslation();
   const resolvedTitle = t(titleKey, title);
 
-  // Check if any sub-item is accessible for a main section
   const hasAnyAccessibleSubItem = (mainPath: string) => {
-    // OWNER/ADMIN OVERRIDE - They can access any sub-paths
     if (isOwner || userRole === 'owner' || isAdmin || userRole === 'admin') {
-      console.log('🔑 SIDEBAR SUB-PATH OVERRIDE: Admin/Owner can access sub-paths for', mainPath);
       return true;
     }
 
@@ -118,69 +115,26 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
     return subPaths.some(subPath => canAccessPage(subPath));
   };
 
-  // Determine if a sidebar item should be accessible
-  // For sub-sidebar items, we only check direct access (no sub-path fallback)
   const isItemAccessible = (itemUrl: string, checkSubPaths: boolean = false): boolean => {
-    // SPECIFIC DEBUG FOR PAGE ACCESS
-    if (itemUrl === '/access-permissions/page-access') {
-      console.group('🔍 PAGE ACCESS SIDEBAR DEBUG');
-      console.log('URL:', itemUrl);
-      console.log('User Role:', userRole);
-      console.log('Is Owner:', isOwner);
-      console.log('Is Admin:', isAdmin);
-      console.log('Check Sub Paths:', checkSubPaths);
-    }
-
-    // OWNER OVERRIDE - Owner can see all menu items
     if (isOwner || userRole === 'owner') {
-      if (itemUrl === '/access-permissions/page-access') {
-        console.log('🔑 SIDEBAR OWNER OVERRIDE: Showing Page Access menu item');
-        console.groupEnd();
-      }
       return true;
     }
 
-    // ADMIN OVERRIDE - Admin can see most menu items 
     if (isAdmin || userRole === 'admin') {
-      if (itemUrl === '/access-permissions/page-access') {
-        console.log('🔧 SIDEBAR ADMIN OVERRIDE: Showing Page Access menu item');
-        console.groupEnd();
-      }
       return true;
     }
     
-    // For other roles, check permissions normally
-    // First check direct access to the path
     const directAccess = canAccessPage(itemUrl);
-    if (itemUrl === '/access-permissions/page-access') {
-      console.log('🔍 Direct Access Result:', directAccess);
-    }
     
     if (directAccess) {
-      if (itemUrl === '/access-permissions/page-access') {
-        console.log('✅ PAGE ACCESS: Direct access granted');
-        console.groupEnd();
-      }
       return true;
     }
     
-    // For sub-sidebar items, don't check sub-paths - only direct access matters
-    // This ensures padlock appears correctly for items that are locked
     if (!checkSubPaths) {
-      if (itemUrl === '/access-permissions/page-access') {
-        console.log('❌ SUB-SIDEBAR ITEM: Direct access denied - item will be locked');
-        console.groupEnd();
-      }
       return false;
     }
     
-    // If direct access is denied, check if any sub-paths are accessible (only for main sidebar items)
     const subPathAccess = hasAnyAccessibleSubItem(itemUrl);
-    if (itemUrl === '/access-permissions/page-access') {
-      console.log('🔍 Sub-path Access Result:', subPathAccess);
-      console.log('❌ PAGE ACCESS: Access denied - item will be locked');
-      console.groupEnd();
-    }
     return subPathAccess;
   };
 
@@ -214,18 +168,12 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
                 <button
                   key={item.url}
                   onClick={() => {
-                    // ENHANCED NAVIGATION - Owner/Admin always can navigate
                     if (isOwner || userRole === 'owner' || isAdmin || userRole === 'admin') {
-                      console.log('🔑 SIDEBAR NAVIGATION OVERRIDE: Allowing navigation to', item.url);
                       smartNavigate(item.url);
                     } else if (hasAccess) {
                       smartNavigate(item.url);
                     } else if (configLoading) {
-                      // During loading, allow navigation - the route protection will handle actual access control
-                      console.log('⏳ LOADING NAVIGATION: Allowing navigation during loading to', item.url);
                       smartNavigate(item.url);
-                    } else {
-                      console.log('❌ SIDEBAR: Navigation blocked for', item.url, 'due to insufficient permissions');
                     }
                   }}
                   disabled={!hasAccess && !isOwner && !isAdmin && userRole !== 'owner' && userRole !== 'admin' && !configLoading}
@@ -406,11 +354,11 @@ export function AppSidebar() {
       <div
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="group relative transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
+        className="group relative z-20 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
       >
         <Sidebar
           collapsible="icon"
-          className="top-16 fixed left-0 h-full border-r border-gray-200 bg-white shadow-none transition-[width] duration-300 ease-in-out motion-reduce:transition-none"
+          className="top-16 fixed left-0 z-20 h-full border-r border-gray-200 bg-white shadow-none transition-[width] duration-300 ease-in-out motion-reduce:transition-none"
           style={{
             fontFamily: 'system-ui, -apple-system, sans-serif',
             height: 'calc(100vh - 4rem)',
@@ -542,7 +490,7 @@ export function AppSidebar() {
           onMouseLeave={handleSubSidebarMouseLeave}
           onTransitionEnd={handleSubSidebarPanelTransitionEnd}
           className={cn(
-            'pointer-events-none absolute left-full top-0 z-50 overflow-hidden',
+            'pointer-events-none absolute left-full top-0 z-10 overflow-hidden',
             'h-[calc(100vh-4rem)]',
             'transition-[width,opacity,transform] duration-300 ease-in-out motion-reduce:transition-none',
             subSidebarMeasuredOpen

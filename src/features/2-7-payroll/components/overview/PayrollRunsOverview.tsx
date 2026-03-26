@@ -15,6 +15,9 @@ interface PayrollRun {
   status: string;
   created_at: string;
   total_employees?: number;
+  realtime_eligible_employees?: number;
+  processed_employees_count?: number;
+  ready_to_process_employees?: number;
   total_gross_pay?: number;
   total_net_pay?: number;
   total_deductions?: number;
@@ -48,8 +51,11 @@ export const PayrollRunsOverview = ({ selectedRunId, onRunSelect, onRunBlocked }
   const queryClient = useQueryClient();
   const [processingRunId, setProcessingRunId] = useState<string | null>(null);
 
-  const runPayrollPreflight = async (): Promise<{ ok: boolean; issues: PreflightIssue[] }> => {
-    if (!organizationId) return { ok: false, issues: [] };
+  const buildPayrollEligibilitySnapshot = async (): Promise<{
+    eligibleEmployees: Array<{ id: string; full_name: string | null; employee_id: string | null }>;
+    issues: PreflightIssue[];
+  }> => {
+    if (!organizationId) return { eligibleEmployees: [], issues: [] };
 
     const { data: employees, error: employeesError } = await supabase
       .from('employees')
@@ -80,16 +86,7 @@ export const PayrollRunsOverview = ({ selectedRunId, onRunSelect, onRunBlocked }
 
     const eligibleEmployees = normalizedEmployees.filter((emp) => isEmployeeEligibleForPayroll(emp));
 
-    if (eligibleEmployees.length === 0) {
-      return {
-        ok: false,
-        issues: [{
-          employeeName: 'No eligible employees',
-          employeeId: '-',
-          missing: ['Employee status must be active or probation']
-        }]
-      };
-    }
+    if (eligibleEmployees.length === 0) return { eligibleEmployees: [], issues: [] };
 
     const eligibleIds = eligibleEmployees.map((emp) => emp.id);
     const { data: payrollInfo, error: payrollInfoError } = await supabase
@@ -123,7 +120,22 @@ export const PayrollRunsOverview = ({ selectedRunId, onRunSelect, onRunBlocked }
       }
     }
 
-    return { ok: issues.length === 0, issues };
+    return { eligibleEmployees, issues };
+  };
+
+  const runPayrollPreflight = async (): Promise<{ ok: boolean; issues: PreflightIssue[] }> => {
+    const snapshot = await buildPayrollEligibilitySnapshot();
+    if (snapshot.eligibleEmployees.length === 0) {
+      return {
+        ok: false,
+        issues: [{
+          employeeName: 'No eligible employees',
+          employeeId: '-',
+          missing: ['Employee status must be active or probation']
+        }]
+      };
+    }
+    return { ok: snapshot.issues.length === 0, issues: snapshot.issues };
   };
 
   const handleProcessPayroll = async (runId: string, event: React.MouseEvent) => {
@@ -216,25 +228,38 @@ export const PayrollRunsOverview = ({ selectedRunId, onRunSelect, onRunBlocked }
       }
       
       console.log('📊 Payroll runs data:', data);
-      
-      // Check if we have employees with payroll info
-      const { data: employeesWithPayroll, error: empError } = await supabase
-        .from('employees')
-        .select(`
-          id, full_name, employee_status_id,
-          employee_payroll_info (
-            basic_salary
-          )
-        `)
-        .eq('organization_id', organizationId);
-        
-      if (empError) {
-        console.error('❌ Error fetching employees:', empError);
-      } else {
-        console.log('👥 Employees with payroll info:', employeesWithPayroll);
+
+      const runIds = (data || []).map((run) => run.id);
+
+      // Use exactly the same source and logic as preflight, so card numbers stay in sync.
+      const snapshot = await buildPayrollEligibilitySnapshot();
+      const realtimeEligibleEmployees = snapshot.eligibleEmployees.length;
+      const readyToProcessEmployees = Math.max(0, realtimeEligibleEmployees - snapshot.issues.length);
+
+      // Processed count per run = number of calculation rows in that run.
+      const processedCountByRun = new Map<string, number>();
+      if (runIds.length > 0) {
+        const { data: calculationsRows, error: calculationsError } = await supabase
+          .from('employee_payroll_calculations')
+          .select('payroll_run_id')
+          .in('payroll_run_id', runIds);
+
+        if (calculationsError) {
+          console.error('❌ Error fetching processed calculations per run:', calculationsError);
+        } else {
+          (calculationsRows || []).forEach((row) => {
+            const runId = row.payroll_run_id as string;
+            processedCountByRun.set(runId, (processedCountByRun.get(runId) || 0) + 1);
+          });
+        }
       }
-      
-      return data as PayrollRun[];
+
+      return (data as PayrollRun[]).map((run) => ({
+        ...run,
+        realtime_eligible_employees: realtimeEligibleEmployees,
+        ready_to_process_employees: readyToProcessEmployees,
+        processed_employees_count: processedCountByRun.get(run.id) || 0,
+      }));
     },
     enabled: !!organizationId,
   });
@@ -311,8 +336,14 @@ export const PayrollRunsOverview = ({ selectedRunId, onRunSelect, onRunBlocked }
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-1 text-gray-500">
                   <Users className="h-3 w-3" />
-                  <span>{run.total_employees || 0} eligible employees</span>
+                  <span>{run.realtime_eligible_employees ?? run.total_employees ?? 0} eligible now</span>
                 </div>
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Ready to process: {run.ready_to_process_employees ?? 0}
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Processed in this run: {run.processed_employees_count ?? run.total_employees ?? 0}
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="text-center">

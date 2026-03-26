@@ -307,9 +307,14 @@ export const useBankAccountBalances = () => {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id;
 
-    // Get or create balance first (this ensures balance record exists)
+    // Keep mutation source consistent with UI: prefer current ledger balance (query result),
+    // then fallback to stored `bank_account_balances` value.
     const currentBalance = await getOrCreateBalance(bankAccountId);
-    const balanceBefore = currentBalance.balance;
+    const ledgerBalance = balances.find((b) => b.bank_account_id === bankAccountId)?.balance;
+    const balanceBefore =
+      typeof ledgerBalance === 'number' && Number.isFinite(ledgerBalance)
+        ? ledgerBalance
+        : currentBalance.balance;
     const balanceAfter = balanceBefore + amount;
 
     // Prevent negative balance for expenses (optional - you can remove this if you want to allow overdraft)

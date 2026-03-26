@@ -114,7 +114,7 @@ export default function IncomeTransactionPage() {
             <div
               ref={listScrollRef}
               className="flex-1 min-h-0 overflow-auto seamless-scroll pt-2 pb-0"
-              style={{ paddingBottom: "calc(3.8rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))" }}
+              style={{ paddingBottom: "calc(3.2rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))" }}
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}

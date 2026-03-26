@@ -2,7 +2,7 @@ import React from 'react';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
-import { Eye, AlertTriangle, Calculator, RefreshCw } from 'lucide-react';
+import { Eye, Trash2, AlertTriangle, Calculator, RefreshCw, Loader2 } from 'lucide-react';
 import { PayrollCalculationsTableFooter } from './PayrollCalculationsTableFooter';
 
 interface PayrollCalculationsTableProps {
@@ -11,6 +11,8 @@ interface PayrollCalculationsTableProps {
   isLoading: boolean;
   onEmployeeSelect: (employee: any) => void;
   onRefresh?: () => void;
+  onDeleteCalculation?: (calculation: any) => void;
+  deletingCalculationId?: string | null;
 }
 
 export const PayrollCalculationsTable = ({
@@ -18,7 +20,9 @@ export const PayrollCalculationsTable = ({
   taxAmounts,
   isLoading,
   onEmployeeSelect,
-  onRefresh
+  onRefresh,
+  onDeleteCalculation,
+  deletingCalculationId
 }: PayrollCalculationsTableProps) => {
   const paidCalculations = calculations.filter(
     (calc) => calc.payment_status === 'paid'
@@ -168,15 +172,33 @@ export const PayrollCalculationsTable = ({
                     </Badge>
                   </TableCell>
                   <TableCell className="min-w-[80px] px-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEmployeeSelect(calc)}
-                      title="View Payroll Details"
-                      className="hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEmployeeSelect(calc)}
+                        title="View Payroll Details"
+                        className="hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {onDeleteCalculation && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDeleteCalculation(calc)}
+                          title="Delete Payroll Calculation"
+                          disabled={deletingCalculationId === calc.id}
+                          className="hover:bg-red-50 hover:text-red-600 disabled:opacity-80"
+                        >
+                          {deletingCalculationId === calc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
