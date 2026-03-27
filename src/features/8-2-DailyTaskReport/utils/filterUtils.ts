@@ -74,14 +74,20 @@ function filterByDateRange(
 ): ComputedPerformanceRow[] {
   if (!start) return data;
 
-  return data.filter(d => {
-    if (!d.dueDate) return false;
-    
+  const toValidTs = (iso: string | null | undefined): number | null => {
+    if (!iso) return null;
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? null : t;
+  };
+
+  return data.filter((d) => {
     try {
-      const dueDate = new Date(d.dueDate);
-      if (isNaN(dueDate.getTime())) return false;
-      
-      const ts = dueDate.getTime();
+      // Window: due date if present; otherwise assignment date (many rows have no due_date)
+      const dueTs = toValidTs(d.dueDate);
+      const assignedTs = toValidTs(d.assignedAt);
+      const ts = dueTs ?? assignedTs;
+      if (ts === null) return false;
+
       const afterStart = ts >= start.getTime();
       const beforeEnd = end ? ts <= end.getTime() : true;
       return afterStart && beforeEnd;

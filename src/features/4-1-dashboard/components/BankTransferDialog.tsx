@@ -28,6 +28,7 @@ import { CameraModal } from '@/mobile/components/CameraModal';
 import { pickReceiptImageFiles } from '@/mobile/utils/pickReceiptFromGallery';
 import type { BankAccount } from '@/hooks/organized/useBankAccounts';
 import { useCreateBankTransfer } from '@/hooks/organized/useCreateBankTransfer';
+import { DrawerSelectField } from '@/mobile/components/DrawerSelectField';
 import { AlertCircle, Camera, FileText, Upload, X } from 'lucide-react';
 
 export interface BankTransferDialogProps {
@@ -88,6 +89,7 @@ export function BankTransferDialog({
   const [note, setNote] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptCameraOpen, setReceiptCameraOpen] = useState(false);
+  const [destinationDrawerOpen, setDestinationDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -99,6 +101,7 @@ export function BankTransferDialog({
       setNote('');
       setReceiptFile(null);
       setReceiptCameraOpen(false);
+      setDestinationDrawerOpen(false);
     }
   }, [open]);
 
@@ -107,6 +110,14 @@ export function BankTransferDialog({
   const totalOut = amountNum + feeNum;
 
   const dest = destinationAccounts.find((a) => a.id === toId);
+  const destinationOptions = useMemo(
+    () =>
+      destinationAccounts.map((a) => ({
+        value: a.id,
+        label: `${a.name}${a.account_number ? ` · ${a.account_number}` : ''}`,
+      })),
+    [destinationAccounts]
+  );
   const receiptPreviewUrl = useMemo(
     () => (receiptFile && receiptFile.type.startsWith('image/') ? URL.createObjectURL(receiptFile) : null),
     [receiptFile]
@@ -276,19 +287,32 @@ export function BankTransferDialog({
           {step === 1 && (
             <div className="space-y-2">
               <Label>{t('incomes.bankTransfer.to', 'To')}</Label>
-              <Select value={toId} onValueChange={setToId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('incomes.bankTransfer.selectDestination', 'Select destination account')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {destinationAccounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                      {a.account_number ? ` · ${a.account_number}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isMobile ? (
+                <DrawerSelectField
+                  open={destinationDrawerOpen}
+                  onOpenChange={setDestinationDrawerOpen}
+                  title={t('incomes.bankTransfer.selectDestination', 'Select destination account')}
+                  value={toId}
+                  placeholder={t('incomes.bankTransfer.selectDestination', 'Select destination account')}
+                  options={destinationOptions}
+                  onSelect={setToId}
+                  disabled={destinationAccounts.length === 0}
+                />
+              ) : (
+                <Select value={toId} onValueChange={setToId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('incomes.bankTransfer.selectDestination', 'Select destination account')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinationAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                        {a.account_number ? ` · ${a.account_number}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 

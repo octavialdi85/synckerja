@@ -103,7 +103,7 @@ export const EmployeeDetailSidebar = ({
             <FileUpload
               id="employee-photo"
               label="Upload Photo"
-              value={currentPhotoUrl || employee.photo_url || undefined}
+              value={(currentPhotoUrl || employee.photo_url) ?? ''}
               onChange={handlePhotoUpload}
               accept=".jpg,.jpeg,.png"
               maxSize={2 * 1024 * 1024} // 2MB

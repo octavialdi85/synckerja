@@ -2,7 +2,7 @@ import { Expense } from '@/features/4_2_dashboard/hooks/useExpenses';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Badge } from '@/features/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
-import { Building, Calendar, Clock, DollarSign } from 'lucide-react';
+import { Building, Calendar, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ActionsDropdown } from '@/features/4_2_dashboard/ActionsDropdown';
 
@@ -10,12 +10,18 @@ interface ReminderBillsTableProps {
   bills: Expense[];
   isLoading?: boolean;
   onRefresh?: () => void;
+  onViewDetails: (bill: Expense) => void;
+  onEdit: (bill: Expense) => void;
+  onDelete: (bill: Expense) => void;
 }
 
-export const ReminderBillsTable = ({ 
-  bills, 
+export const ReminderBillsTable = ({
+  bills,
   isLoading = false,
-  onRefresh 
+  onRefresh: _onRefresh,
+  onViewDetails,
+  onEdit,
+  onDelete,
 }: ReminderBillsTableProps) => {
   const getStatusBadge = (bill: Expense) => {
     // Check if overdue
@@ -74,21 +80,6 @@ export const ReminderBillsTable = ({
     if (diffDays === 0) return 'Due today';
     if (diffDays === 1) return 'Due tomorrow';
     return `${diffDays} days`;
-  };
-
-  const handleViewDetails = (bill: Expense) => {
-    console.log('View details for bill:', bill.id);
-    // TODO: Implement view details functionality
-  };
-
-  const handleEdit = (bill: Expense) => {
-    console.log('Edit bill:', bill.id);
-    // TODO: Implement edit functionality
-  };
-
-  const handleDelete = (bill: Expense) => {
-    console.log('Delete bill:', bill.id);
-    // TODO: Implement delete functionality
   };
 
   if (isLoading) {
@@ -206,9 +197,9 @@ export const ReminderBillsTable = ({
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <ActionsDropdown
-                      onViewDetails={() => handleViewDetails(bill)}
-                      onEdit={() => handleEdit(bill)}
-                      onDelete={() => handleDelete(bill)}
+                      onViewDetails={() => onViewDetails(bill)}
+                      onEdit={() => onEdit(bill)}
+                      onDelete={() => onDelete(bill)}
                     />
                   </TableCell>
                 </TableRow>

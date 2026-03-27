@@ -5,9 +5,19 @@ const NON_ACTIVE_STATUSES = new Set([
   'inactive',
   'terminated',
   'resigned',
+  'resign',
+  'resignation',
   'pending removal',
   'pendingremoval',
 ]);
+
+/** Org-defined labels may be e.g. "Resign" or "Under termination" — not only canonical set members */
+function normalizedStatusImpliesNonActive(normalized: string): boolean {
+  if (!normalized) return false;
+  if (normalized.includes('resign')) return true;
+  if (normalized.includes('terminat')) return true;
+  return false;
+}
 
 /**
  * Active / assignable employee: not pending removal and not in a terminal non-active status.
@@ -31,6 +41,9 @@ export const isEmployeeActive = (employee: {
   const statusFromName = (employee.employee_status_name ?? '').toString().trim().toLowerCase();
 
   if (NON_ACTIVE_STATUSES.has(statusFromField) || NON_ACTIVE_STATUSES.has(statusFromName)) {
+    return false;
+  }
+  if (normalizedStatusImpliesNonActive(statusFromField) || normalizedStatusImpliesNonActive(statusFromName)) {
     return false;
   }
   return true;

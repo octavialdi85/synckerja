@@ -1,4 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   HeaderAndTab,
   ReminderBillsFilters,
@@ -10,11 +12,19 @@ import {
   type ReminderBillsFiltersType
 } from './section';
 import { useExpenses, Expense, useExpenseTypes, useExpenseCategories } from '@/features/4_2_dashboard/hooks';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { ReminderBillDetailDialog, ReminderBillDeleteDialog } from './components/ReminderBillsActionModals';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { filterReminderBills, calculateNextPaymentDate } from './utils/reminderBillsUtils';
 
 export const ReminderBillsPage = () => {
+  const { t } = useAppTranslation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('reminder-bills');
+  const [detailBill, setDetailBill] = useState<Expense | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [deleteBillId, setDeleteBillId] = useState<string | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [filters, setFilters] = useState<ReminderBillsFiltersType>({
     search: '',
     status: 'all',
@@ -22,7 +32,7 @@ export const ReminderBillsPage = () => {
     department: 'all'
   });
   
-  const { expenses = [], isLoading, refetch } = useExpenses();
+  const { expenses = [], isLoading, refetch, deleteExpense } = useExpenses();
   const { data: purchaseRequests = [], isLoading: isLoadingPurchaseRequests } = usePurchaseRequests();
   const { expenseTypes } = useExpenseTypes();
   const { expenseCategories: allExpenseCategories } = useExpenseCategories();
@@ -102,7 +112,10 @@ export const ReminderBillsPage = () => {
 
   // Combine expenses with paid recurring purchase requests
   const allBills = useMemo(() => {
-    const combined: Expense[] = [...expensesWithNextPayment];
+    const combined: Expense[] = expensesWithNextPayment.map((e) => ({
+      ...e,
+      bill_source: e.bill_source ?? 'expense',
+    }));
 
     // Add paid recurring purchase requests as bills
     paidRecurringPurchaseRequests.forEach(pr => {
@@ -134,6 +147,7 @@ export const ReminderBillsPage = () => {
         created_by: pr.created_by,
         created_at: pr.created_at,
         updated_at: pr.updated_at,
+        bill_source: 'purchase_request',
       } as Expense);
     });
 
@@ -166,6 +180,58 @@ export const ReminderBillsPage = () => {
       department: 'all'
     });
   }, []);
+
+  const handleViewBill = useCallback((bill: Expense) => {
+    setDetailBill(bill);
+    setIsDetailOpen(true);
+  }, []);
+
+  const handleEditBill = useCallback(
+    (bill: Expense) => {
+      if (bill.bill_source === 'purchase_request') {
+        toast.message(
+          t('reminderBills.editPurchaseRequestTitle', 'Manage in Payment process'),
+          {
+            description: t(
+              'reminderBills.editPurchaseRequestHint',
+              'Edit or manage this bill from the Payment process page.'
+            ),
+          }
+        );
+        navigate('/expenses/payment-process');
+        return;
+      }
+      navigate('/expenses/dashboard', { state: { openExpenseEditId: bill.id } });
+    },
+    [navigate, t]
+  );
+
+  const handleDeleteBill = useCallback(
+    (bill: Expense) => {
+      if (bill.bill_source === 'purchase_request') {
+        toast.info(
+          t(
+            'reminderBills.cannotDeletePurchaseRequestBill',
+            'Bills from purchase requests cannot be removed here. Use the request or payment workflow.'
+          )
+        );
+        return;
+      }
+      setDeleteBillId(bill.id);
+      setIsDeleteOpen(true);
+    },
+    [t]
+  );
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteBillId) return;
+    const ok = await deleteExpense(deleteBillId);
+    if (ok) {
+      setIsDeleteOpen(false);
+      setDeleteBillId(null);
+      refetch();
+    }
+  }, [deleteBillId, deleteExpense, refetch]);
 
   // Calculate totals
   const totalAmount = useMemo(() => {
@@ -211,10 +277,13 @@ export const ReminderBillsPage = () => {
                 {/* Table Section - scroll container di dalam ReminderBillsTable */}
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
-                    <ReminderBillsTable 
+                    <ReminderBillsTable
                       bills={filteredBills}
                       onRefresh={handleRefresh}
                       isLoading={isLoading || isLoadingPurchaseRequests}
+                      onViewDetails={handleViewBill}
+                      onEdit={handleEditBill}
+                      onDelete={handleDeleteBill}
                     />
                     <ReminderBillsTableFooter
                       totalBills={recurringBills.length}
@@ -258,6 +327,16 @@ export const ReminderBillsPage = () => {
           </div>
         </div>
       </div>
+
+      <ReminderBillDetailDialog bill={detailBill} open={isDetailOpen} onOpenChange={setIsDetailOpen} />
+      <ReminderBillDeleteDialog
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          setIsDeleteOpen(open);
+          if (!open) setDeleteBillId(null);
+        }}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 };

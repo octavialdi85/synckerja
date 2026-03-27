@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Card, CardContent } from '@/features/ui/card';
@@ -160,6 +161,8 @@ export function ExpenseDashboard() {
   };
 
   const { organizationId } = useCurrentOrg();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { expenses, isLoading, isCreating, isUpdating, createExpense, updateExpense, deleteExpense } = useExpenses();
   const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
   const { expenseTypes, isLoading: expenseTypesLoading, refetch: refetchExpenseTypes } = useExpenseTypes();
@@ -589,6 +592,21 @@ export function ExpenseDashboard() {
       }
     }
   };
+
+  useEffect(() => {
+    const id = (location.state as { openExpenseEditId?: string } | null)?.openExpenseEditId;
+    if (!id) return;
+    if (isLoading) return;
+    const expense = expenses.find((e) => e.id === id);
+    if (expense) {
+      handleOpenEditExpense(expense);
+    } else {
+      toast.error(t('reminderBills.expenseNotFound', 'Expense not found. It may have been removed.'));
+    }
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    // Intentionally omit handleOpenEditExpense: stable enough for one-shot navigation from reminder bills.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open edit once when state + expenses are ready
+  }, [location.state, location.pathname, location.search, expenses, isLoading, navigate, t]);
 
   const formatCurrency = (amount: number) => {
     return `Rp ${amount.toLocaleString('id-ID')}`;

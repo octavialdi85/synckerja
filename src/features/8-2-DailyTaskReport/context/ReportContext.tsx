@@ -5,6 +5,7 @@ import { logger } from '@/config/logger';
 import { getCached, setCache, clearCache } from '@/features/8-2-DailyTask/utils/optimizationUtils';
 import { fetchCompletionDates, fetchStepBlockers } from '../utils/batchQueryProcessor';
 import { filterPerformanceData, filterBySearchAndFilters, getDateRangeFromFilter } from '../utils/filterUtils';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 
 export interface AssignmentRow {
   id: string;
@@ -13,7 +14,13 @@ export interface AssignmentRow {
   task_steps_to_steps_id?: string; // NEW: hanya untuk sub-step assignments
   task_steps_to_steps_assigned_id?: string; // NEW: ID assignment sub-step (untuk fetch due_date)
   assigned_at: string;
-  employee: { id: string; full_name: string; email?: string } | null;
+  employee: {
+    id: string;
+    full_name: string;
+    email?: string;
+    pending_removal?: boolean | null;
+    employee_statuses?: { name: string } | null;
+  } | null;
   step: { id: string; title: string; updated_at: string | null; completed_at: string | null; is_completed: boolean; task?: { id: string; title: string } } | null; // Parent step (untuk sub-step juga)
   subStep?: { id: string; title: string; parent_step_id: string; is_completed: boolean; completed_at: string | null } | null; // NEW: untuk sub-step details
   due_date: string | null;
@@ -35,6 +42,8 @@ export interface ComputedPerformanceRow {
   subStepTitle?: string | null;
   subStepId?: string | null; // NEW: untuk identifikasi sub-step
   type?: 'step' | 'substep'; // NEW: untuk identifikasi type
+  /** Match /employees: non-active (resigned, etc.) excluded from PIC filter options only */
+  employeeIsActive: boolean;
 }
 
 export interface ReportContextType {
@@ -450,7 +459,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         if (allEmployeeIds.length > 0) {
           const { data: employees } = await supabase
             .from('employees')
-            .select('id, full_name, email')
+            .select('id, full_name, email, pending_removal, employee_statuses(name)')
             .in('id', allEmployeeIds);
 
           if (employees) {
@@ -459,6 +468,33 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             });
           }
         }
+
+        // Enrich step assignments with HR fields from employees (avoids fragile nested embed on task_steps_assigned)
+        for (let i = 0; i < stepMapped.length; i++) {
+          const row = stepMapped[i];
+          const eid = row.employee?.id;
+          if (eid && employeeMap[eid]) {
+            const full = employeeMap[eid];
+            stepMapped[i] = {
+              ...row,
+              employee: {
+                id: full.id,
+                full_name: full.full_name,
+                email: full.email,
+                pending_removal: full.pending_removal,
+                employee_statuses: full.employee_statuses,
+              },
+            };
+          }
+        }
+        Object.keys(stepAssignmentMap).forEach((k) => {
+          delete stepAssignmentMap[k];
+        });
+        stepMapped.forEach((row) => {
+          if (row.task_step_id) {
+            stepAssignmentMap[row.task_step_id] = row;
+          }
+        });
 
         if (allSubSteps.length > 0) {
           // Map ALL sub-steps (both assigned and unassigned)
@@ -1019,6 +1055,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
   const performance = useMemo<ComputedPerformanceRow[]>(() => {
     return rows.map((r) => {
+      const emp = r.employee;
+      const employeeIsActive = emp
+        ? isEmployeeActive({
+            status: null,
+            pending_removal: emp.pending_removal ?? null,
+            employee_status_name: emp.employee_statuses?.name ?? null,
+          })
+        : false;
       const due = r.due_date ? new Date(r.due_date) : null;
       
       // Determine completion status based on type
@@ -1067,9 +1111,21 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         subStepTitle: r.subStep?.title || null,
         subStepId: r.subStep?.id || null,
         type: r.type,
+        employeeIsActive,
       };
     });
   }, [rows]);
+
+  // PIC filter value can go stale if an employee resigns (name dropped from options)
+  useEffect(() => {
+    if (!filters.pic || filters.pic === 'all') return;
+    const activeNames = new Set(
+      performance.filter((p) => p.employeeId && p.employeeIsActive).map((p) => p.employeeName)
+    );
+    if (!activeNames.has(filters.pic)) {
+      setFilters((prev) => ({ ...prev, pic: 'all' }));
+    }
+  }, [filters.pic, performance]);
 
   const filtered = useMemo(() => {
     return filterPerformanceData(performance, filters);
@@ -1135,7 +1191,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
   // Build dependent dropdown options from current dataset (memoized to avoid new refs every render)
   const options = useMemo(() => {
     const base = [...performance];
-    const pics = Array.from(new Set(base.map(p => p.employeeName).filter(Boolean))).sort();
+    const pics = Array.from(
+      new Set(
+        base
+          .filter((p) => p.employeeId && p.employeeIsActive)
+          .map((p) => p.employeeName)
+          .filter(Boolean)
+      )
+    ).sort();
     const tasks = Array.from(new Set(base.map(p => p.taskTitle).filter(Boolean))).sort();
     const steps = Array.from(new Set(
       base
