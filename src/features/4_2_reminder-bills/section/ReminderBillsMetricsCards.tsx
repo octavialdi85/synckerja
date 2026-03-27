@@ -5,8 +5,13 @@ import { Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 export const ReminderBillsMetricsCards = () => {
   const { expenses = [] } = useExpenses();
 
-  // Filter expenses that are recurring for reminder bills
-  const recurringExpenses = expenses.filter(expense => expense.is_recurring);
+  // Align with reminder table: recurring masters only, not settlement rows, not dismissed from reminder
+  const recurringExpenses = expenses.filter(
+    (expense) =>
+      expense.is_recurring &&
+      !expense.recurring_settlement_for_expense_id &&
+      !expense.exclude_from_reminder_bills
+  );
   
   const metrics = {
     total: {

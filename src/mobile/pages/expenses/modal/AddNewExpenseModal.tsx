@@ -83,6 +83,11 @@ export interface AddNewExpenseModalProps {
   aiAutofillStatus?: "idle" | "loading" | "success" | "error";
   aiAutofillData?: ExpenseReceiptAutofillData;
   aiAutofillRequestId?: number;
+  /**
+   * When true and viewport is not mobile: square shell (equal width/height, capped by viewport)
+   * and sharp corners. Omit/false: default wide rectangle + rounded corners. Mobile unchanged.
+   */
+  desktopSquareCorners?: boolean;
 }
 
 export interface AddExpensePrefillPayload {
@@ -170,6 +175,7 @@ export function AddNewExpenseModal({
   aiAutofillStatus = "idle",
   aiAutofillData,
   aiAutofillRequestId = 0,
+  desktopSquareCorners = false,
 }: AddNewExpenseModalProps) {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
@@ -705,7 +711,12 @@ export function AddNewExpenseModal({
           "w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-background shadow-xl focus:outline-none overflow-hidden",
           isMobile
             ? "fixed left-0 right-0 top-0 modal-above-safe-area h-screen"
-            : "sm:max-w-lg sm:rounded-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[90vh]"
+            : cn(
+                "sm:translate-x-[-50%] sm:translate-y-[-50%] sm:left-[50%] sm:top-[50%] sm:flex sm:flex-col sm:overflow-hidden",
+                desktopSquareCorners
+                  ? "sm:w-[min(88vw,88vh,42rem,90vh)] sm:h-[min(88vw,88vh,42rem,90vh)] sm:max-w-none sm:max-h-[90vh] sm:rounded-none"
+                  : "sm:max-w-lg sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+              )
         )}
         fullscreenAnimation={isMobile}
         onInteractOutside={(e) => {

@@ -69,10 +69,12 @@ export const filterReminderBills = (
   expenses: Expense[],
   filters: ReminderBillsFiltersType
 ): Expense[] => {
-  // First filter only recurring expenses (bills), exclude settlement payment rows
+  // First filter only recurring expenses (bills), exclude settlement payment rows and reminder-dismissed rows
   const recurringBills = expenses.filter(
     (expense) =>
-      expense.is_recurring && !expense.recurring_settlement_for_expense_id
+      expense.is_recurring &&
+      !expense.recurring_settlement_for_expense_id &&
+      !expense.exclude_from_reminder_bills
   );
   
   return recurringBills.filter((bill) => {

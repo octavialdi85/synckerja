@@ -5,7 +5,13 @@ export function useBillsDashboardStats() {
   const { expenses = [], isLoading } = useExpenses();
 
   const recurringBills = useMemo(
-    () => expenses.filter((expense) => expense.is_recurring),
+    () =>
+      expenses.filter(
+        (expense) =>
+          expense.is_recurring &&
+          !expense.recurring_settlement_for_expense_id &&
+          !expense.exclude_from_reminder_bills
+      ),
     [expenses]
   );
 

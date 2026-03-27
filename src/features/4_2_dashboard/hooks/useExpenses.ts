@@ -41,6 +41,8 @@ export interface Expense {
   /** Payment row linked to master recurring expense; excluded from reminder bills list. */
   recurring_settlement_for_expense_id?: string | null;
   transaction_reference?: string | null;
+  /** Hidden from /expenses/reminder-bills only; does not soft-delete or reverse debt. */
+  exclude_from_reminder_bills?: boolean;
 }
 
 export interface CreateExpenseData {
@@ -724,6 +726,65 @@ export const useExpenses = () => {
     }
   };
 
+  /**
+   * Reminder-bills only: stop showing this recurring row in the reminder UI without soft-delete
+   * (avoids active→deleted debt reversal triggers). Dashboard and metrics unchanged.
+   */
+  const dismissReminderBillFromList = async (id: string) => {
+    if (!organizationId) {
+      toast.error('Organization not found');
+      return false;
+    }
+
+    try {
+      const { data: row, error: fetchError } = await supabase
+        .from('expenses')
+        .select('id, is_recurring, status')
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+      if (!row) {
+        toast.error(t('reminderBills.expenseNotFound', 'Expense not found. It may have been removed.'));
+        return false;
+      }
+      if (!row.is_recurring) {
+        toast.error(t('reminderBills.dismissNotRecurring', 'Only recurring bills can be removed from reminders.'));
+        return false;
+      }
+      if (row.status !== 'active') {
+        toast.error(t('reminderBills.dismissNotActive', 'This bill is no longer active.'));
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('expenses')
+        .update({
+          exclude_from_reminder_bills: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .eq('status', 'active');
+
+      if (error) throw error;
+
+      toast.success(
+        t(
+          'reminderBills.removedFromReminderSuccess',
+          'Bill removed from reminders. Your expenses and balances were not changed.'
+        )
+      );
+      queryClient.invalidateQueries({ queryKey });
+      return true;
+    } catch (error: any) {
+      console.error('Error dismissing reminder bill:', error);
+      toast.error(error?.message || 'Failed to remove from reminders');
+      return false;
+    }
+  };
+
   const updateRecurringBillAfterPayNow = async (billId: string, paymentDate: string) => {
     if (!organizationId) {
       toast.error('Organization not found');
@@ -779,6 +840,7 @@ export const useExpenses = () => {
     createExpense,
     updateExpense,
     deleteExpense,
+    dismissReminderBillFromList,
     updateRecurringBillAfterPayNow,
     refetch,
   };

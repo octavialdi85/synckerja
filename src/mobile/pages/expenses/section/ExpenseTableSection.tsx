@@ -46,7 +46,7 @@ import {
 } from "@/mobile/components/ui/drawer";
 import type { ExpenseTableItem } from "@/mobile/pages/expenses/hooks/useExpenseTable";
 import type { UseExpenseTableReturn } from "@/mobile/pages/expenses/hooks/useExpenseTable";
-import { AddNewExpenseModal } from "@/mobile/pages/expenses/modal/AddNewExpenseModal";
+import { AddNewExpenseModal } from "../modal/AddNewExpenseModal";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 
 function formatCurrency(amount: number) {

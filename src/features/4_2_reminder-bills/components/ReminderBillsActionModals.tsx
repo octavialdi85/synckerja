@@ -206,8 +206,15 @@ export function ReminderBillDeleteDialog({ open, onOpenChange, onConfirm }: Remi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('expenses.deleteExpense', 'Delete expense')}</DialogTitle>
-          <DialogDescription>{t('expenses.deleteConfirm', 'Are you sure you want to delete this expense?')}</DialogDescription>
+          <DialogTitle>
+            {t('reminderBills.removeFromReminderTitle', 'Remove from reminders')}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              'reminderBills.removeFromReminderDescription',
+              'This removes the bill from reminder bills only. Recorded expenses, bank balances, debt limits, and income links are not changed.'
+            )}
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button
@@ -219,7 +226,7 @@ export function ReminderBillDeleteDialog({ open, onOpenChange, onConfirm }: Remi
             {t('expenses.cancel', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
-            {t('expenses.delete', 'Delete')}
+            {t('reminderBills.removeFromReminderConfirm', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

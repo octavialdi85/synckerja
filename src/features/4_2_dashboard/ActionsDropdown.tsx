@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit, Trash2, Banknote } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,13 +13,27 @@ interface ActionsDropdownProps {
   onViewDetails: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Recurring bill Pay now (parity with mobile reminder bills). */
+  showPayNow?: boolean;
+  onPayNow?: () => void;
 }
 
-export const ActionsDropdown = ({ onViewDetails, onEdit, onDelete }: ActionsDropdownProps) => {
+export const ActionsDropdown = ({
+  onViewDetails,
+  onEdit,
+  onDelete,
+  showPayNow = false,
+  onPayNow,
+}: ActionsDropdownProps) => {
   const [open, setOpen] = useState(false);
 
   const handleViewDetails = () => {
     onViewDetails();
+    setOpen(false);
+  };
+
+  const handlePayNow = () => {
+    onPayNow?.();
     setOpen(false);
   };
 
@@ -48,6 +62,15 @@ export const ActionsDropdown = ({ onViewDetails, onEdit, onDelete }: ActionsDrop
           <Eye className="h-3.5 w-3.5 mr-2" />
           View Details
         </DropdownMenuItem>
+        {showPayNow && onPayNow ? (
+          <DropdownMenuItem
+            onClick={handlePayNow}
+            className="cursor-pointer text-xs text-blue-600 hover:bg-blue-50 focus:bg-blue-50"
+          >
+            <Banknote className="h-3.5 w-3.5 mr-2" />
+            Paynow
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem 
           onClick={handleEdit}
           className="cursor-pointer text-xs hover:bg-slate-50 focus:bg-slate-50"

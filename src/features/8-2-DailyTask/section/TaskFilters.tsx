@@ -304,7 +304,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden min-w-0 seamless-scroll nested-scroll-touch-chain">
       {/* Search Input - Hidden when PIC filter is active */}
       {!filters.pic && (
-        <div className="relative flex-1 min-w-[140px]">
+        <div className="relative flex-1 min-w-[120px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
           <Input
             placeholder="Search tasks and steps..."
@@ -315,12 +315,12 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </div>
       )}
 
-      {/* Department Filter */}
+      {/* Department Filter — icon + "All Departments" needs more width than Priority-only trigger */}
       <Select
         value={departmentsError ? 'all' : (filters.department || 'all')}
         onValueChange={handleDepartmentChange}
       >
-        <SelectTrigger className="w-[120px] sm:w-32 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
+        <SelectTrigger className="min-w-[152px] w-[152px] sm:min-w-[164px] sm:w-[164px] shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
           <SelectValue placeholder="All Departments">
             {departmentsError ? (
               <span className="truncate text-amber-600">Failed to load</span>
@@ -400,9 +400,9 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectContent>
       </Select>
 
-      {/* Priority Filter */}
+      {/* Priority Filter — enough room for "All Priority" / "Presentation" without feeling oversized */}
       <Select value={filters.priority || "all"} onValueChange={(value) => handlePriorityChange(value === "all" ? "" : value)}>
-        <SelectTrigger className="w-[95px] sm:w-28 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
+        <SelectTrigger className="min-w-[120px] w-[120px] sm:min-w-[132px] sm:w-[132px] shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
           <SelectValue placeholder="All Priority" />
         </SelectTrigger>
         <SelectContent>

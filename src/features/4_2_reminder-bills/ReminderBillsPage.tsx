@@ -14,6 +14,7 @@ import {
 import { useExpenses, Expense, useExpenseTypes, useExpenseCategories } from '@/features/4_2_dashboard/hooks';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { ReminderBillDetailDialog, ReminderBillDeleteDialog } from './components/ReminderBillsActionModals';
+import { ReminderBillPayNowModal } from './components/ReminderBillPayNowModal';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { filterReminderBills, calculateNextPaymentDate } from './utils/reminderBillsUtils';
 
@@ -25,6 +26,8 @@ export const ReminderBillsPage = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [deleteBillId, setDeleteBillId] = useState<string | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPayNowModalOpen, setIsPayNowModalOpen] = useState(false);
+  const [selectedPayNowBill, setSelectedPayNowBill] = useState<Expense | null>(null);
   const [filters, setFilters] = useState<ReminderBillsFiltersType>({
     search: '',
     status: 'all',
@@ -32,7 +35,7 @@ export const ReminderBillsPage = () => {
     department: 'all'
   });
   
-  const { expenses = [], isLoading, refetch, deleteExpense } = useExpenses();
+  const { expenses = [], isLoading, refetch, dismissReminderBillFromList } = useExpenses();
   const { data: purchaseRequests = [], isLoading: isLoadingPurchaseRequests } = usePurchaseRequests();
   const { expenseTypes } = useExpenseTypes();
   const { expenseCategories: allExpenseCategories } = useExpenseCategories();
@@ -81,7 +84,9 @@ export const ReminderBillsPage = () => {
 
   // Calculate next payment dates for recurring expenses that are missing them
   const expensesWithNextPayment = useMemo(() => {
-    return expenses.map(expense => {
+    return expenses
+      .filter((expense) => !expense.exclude_from_reminder_bills)
+      .map(expense => {
       // If expense is recurring but missing next_payment_date, calculate it
       if (expense.is_recurring && expense.recurring_frequency && !expense.next_payment_date) {
         const nextPaymentDate = calculateNextPaymentDate(expense.create_date, expense.recurring_frequency);
@@ -223,15 +228,20 @@ export const ReminderBillsPage = () => {
     [t]
   );
 
+  const handlePayNow = useCallback((bill: Expense) => {
+    setSelectedPayNowBill(bill);
+    setIsPayNowModalOpen(true);
+  }, []);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteBillId) return;
-    const ok = await deleteExpense(deleteBillId);
+    const ok = await dismissReminderBillFromList(deleteBillId);
     if (ok) {
       setIsDeleteOpen(false);
       setDeleteBillId(null);
       refetch();
     }
-  }, [deleteBillId, deleteExpense, refetch]);
+  }, [deleteBillId, dismissReminderBillFromList, refetch]);
 
   // Calculate totals
   const totalAmount = useMemo(() => {
@@ -284,6 +294,7 @@ export const ReminderBillsPage = () => {
                       onViewDetails={handleViewBill}
                       onEdit={handleEditBill}
                       onDelete={handleDeleteBill}
+                      onPayNow={handlePayNow}
                     />
                     <ReminderBillsTableFooter
                       totalBills={recurringBills.length}
@@ -336,6 +347,15 @@ export const ReminderBillsPage = () => {
           if (!open) setDeleteBillId(null);
         }}
         onConfirm={handleConfirmDelete}
+      />
+
+      <ReminderBillPayNowModal
+        open={isPayNowModalOpen}
+        onOpenChange={(next) => {
+          setIsPayNowModalOpen(next);
+          if (!next) setSelectedPayNowBill(null);
+        }}
+        bill={selectedPayNowBill}
       />
     </div>
   );

@@ -13,10 +13,11 @@ import {
   DrawerTrigger,
 } from "@/mobile/components/ui/drawer";
 import { filterReminderBills, getUniqueBillCategories, getUniqueBillDepartments } from "@/features/4_2_reminder-bills/utils/reminderBillsUtils";
+import { buildReminderBillPayNowPrefill } from "@/features/4_2_reminder-bills/utils/reminderBillPayNowPrefill";
 import { useReminderBillsData } from "../hooks/useReminderBillsData";
 import { MobileReminderBillsTable } from "./MobileReminderBillsTable";
 import { formatToRupiah } from "@/utils/formatCurrency";
-import { AddNewExpenseModal, type AddExpensePrefillPayload } from "../../modal/AddNewExpenseModal";
+import { AddNewExpenseModal } from "../../modal/AddNewExpenseModal";
 import { useExpenses, type Expense } from "@/features/4_2_dashboard/hooks";
 
 type BillFilters = {
@@ -53,20 +54,10 @@ export function BillsTableSection() {
     setIsPayNowModalOpen(true);
   };
 
-  const payNowPrefillData = useMemo<AddExpensePrefillPayload | undefined>(() => {
-    if (!selectedPayNowBill) return undefined;
-    return {
-      source_bill_id: selectedPayNowBill.id,
-      expense_name: selectedPayNowBill.expense_name,
-      amount: selectedPayNowBill.amount,
-      expense_type: selectedPayNowBill.expense_type,
-      category: selectedPayNowBill.category,
-      department: selectedPayNowBill.department ?? "",
-      recurring_frequency: selectedPayNowBill.recurring_frequency,
-      next_payment_date: selectedPayNowBill.next_payment_date,
-      bill_create_date: selectedPayNowBill.create_date,
-    };
-  }, [selectedPayNowBill]);
+  const payNowPrefillData = useMemo(
+    () => (selectedPayNowBill ? buildReminderBillPayNowPrefill(selectedPayNowBill) : undefined),
+    [selectedPayNowBill]
+  );
 
   return (
     <div className="px-2 pt-4 pb-6">

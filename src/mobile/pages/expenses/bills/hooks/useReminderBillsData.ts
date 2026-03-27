@@ -38,7 +38,10 @@ export function useReminderBillsData() {
 
   const expensesWithNextPayment = useMemo(() => {
     return expenses
-      .filter((expense) => !expense.recurring_settlement_for_expense_id)
+      .filter(
+        (expense) =>
+          !expense.recurring_settlement_for_expense_id && !expense.exclude_from_reminder_bills
+      )
       .map((expense) => {
       if (expense.is_recurring && expense.recurring_frequency && !expense.next_payment_date) {
         const nextPaymentDate = calculateNextPaymentDate(expense.create_date, expense.recurring_frequency);

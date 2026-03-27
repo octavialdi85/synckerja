@@ -1,4 +1,5 @@
 import { Expense } from '@/features/4_2_dashboard/hooks/useExpenses';
+import { isRecurringBillPayNowEligible } from '@/features/4_2_reminder-bills/utils/reminderBillsUtils';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Badge } from '@/features/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
@@ -13,6 +14,7 @@ interface ReminderBillsTableProps {
   onViewDetails: (bill: Expense) => void;
   onEdit: (bill: Expense) => void;
   onDelete: (bill: Expense) => void;
+  onPayNow?: (bill: Expense) => void;
 }
 
 export const ReminderBillsTable = ({
@@ -22,6 +24,7 @@ export const ReminderBillsTable = ({
   onViewDetails,
   onEdit,
   onDelete,
+  onPayNow,
 }: ReminderBillsTableProps) => {
   const getStatusBadge = (bill: Expense) => {
     // Check if overdue
@@ -200,6 +203,8 @@ export const ReminderBillsTable = ({
                       onViewDetails={() => onViewDetails(bill)}
                       onEdit={() => onEdit(bill)}
                       onDelete={() => onDelete(bill)}
+                      showPayNow={isRecurringBillPayNowEligible(bill) && !!onPayNow}
+                      onPayNow={onPayNow ? () => onPayNow(bill) : undefined}
                     />
                   </TableCell>
                 </TableRow>
