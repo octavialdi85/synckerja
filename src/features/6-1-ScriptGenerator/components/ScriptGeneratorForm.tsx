@@ -48,6 +48,66 @@ interface ScriptGeneratorFormProps {
   isGenerating: boolean;
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function richTextToPlainText(value: string | null | undefined): string {
+  if (!value) return '';
+  let text = decodeHtmlEntities(String(value).replace(/\u200B/g, ''));
+  text = text.replace(/<\s*br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/\s*p\s*>/gi, '\n');
+  text = text.replace(/<\s*p[^>]*>/gi, '');
+  text = text.replace(/<\/\s*li\s*>/gi, '\n');
+  text = text.replace(/<\s*li[^>]*>/gi, '- ');
+  text = text.replace(/<\/?\s*(ul|ol)[^>]*>/gi, '\n');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+  return text;
+}
+
+function sanitizeScriptRequestPayload(request: ScriptGeneratorRequest): ScriptGeneratorRequest {
+  return {
+    ...request,
+    keinginan: richTextToPlainText(request.keinginan),
+    kebutuhan: richTextToPlainText(request.kebutuhan),
+    hidden_needs: richTextToPlainText(request.hidden_needs),
+    problem: richTextToPlainText(request.problem),
+    impact: richTextToPlainText(request.impact),
+    false_belief: richTextToPlainText(request.false_belief),
+    false_belief_impact: richTextToPlainText(request.false_belief_impact),
+    what_makes_them_stop: richTextToPlainText(request.what_makes_them_stop),
+    feature_name: richTextToPlainText(request.feature_name),
+    feature_description: richTextToPlainText(request.feature_description),
+    competitive_advantage: richTextToPlainText(request.competitive_advantage),
+    solution: richTextToPlainText(request.solution),
+    hook_description: richTextToPlainText(request.hook_description),
+    hook_content: richTextToPlainText(request.hook_content),
+    style_instruksi: richTextToPlainText(request.style_instruksi),
+    structure: richTextToPlainText(request.structure),
+    judul: richTextToPlainText(request.judul),
+    judul_custom: richTextToPlainText(request.judul_custom),
+    target_market: richTextToPlainText(request.target_market),
+    gender: richTextToPlainText(request.gender),
+    age: richTextToPlainText(request.age),
+    buying_roles: richTextToPlainText(request.buying_roles),
+    service_name: richTextToPlainText(request.service_name),
+    sub_service_name: richTextToPlainText(request.sub_service_name),
+    content_pillar: richTextToPlainText(request.content_pillar),
+    content_type: richTextToPlainText(request.content_type),
+  };
+}
+
 // Judul templates - bisa digunakan oleh semua multi tenant
 const judulTemplates = [
   {
@@ -295,18 +355,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
 
   // Helper function to parse hidden_needs string into array
   const parseHiddenNeeds = (hiddenNeeds: string | null | undefined): string[] => {
-    if (!hiddenNeeds || hiddenNeeds.trim() === '') return [];
+    const normalized = richTextToPlainText(hiddenNeeds);
+    if (!normalized || normalized.trim() === '') return [];
     
     // Split by double newline first (like problems_solved format)
-    if (hiddenNeeds.includes('\n\n')) {
-      return hiddenNeeds
+    if (normalized.includes('\n\n')) {
+      return normalized
         .split(/\n\n+/)
         .map((item) => item.trim())
         .filter((item) => item !== '');
     }
     
     // Fallback to single newline
-    return hiddenNeeds
+    return normalized
       .split('\n')
       .map((item) => item.trim())
       .filter((item) => item !== '');
@@ -314,18 +375,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   
   // Helper function to parse impact string into array
   const parseImpact = (impact: string | null | undefined): string[] => {
-    if (!impact || impact.trim() === '') return [];
+    const normalized = richTextToPlainText(impact);
+    if (!normalized || normalized.trim() === '') return [];
     
     // Split by double newline first (like problems_solved format)
-    if (impact.includes('\n\n')) {
-      return impact
+    if (normalized.includes('\n\n')) {
+      return normalized
         .split(/\n\n+/)
         .map((item) => item.trim())
         .filter((item) => item !== '');
     }
     
     // Fallback to single newline
-    return impact
+    return normalized
       .split('\n')
       .map((item) => item.trim())
       .filter((item) => item !== '');
@@ -343,19 +405,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     if (!competitiveAdvantage) return '';
     
     if (typeof competitiveAdvantage === 'string') {
-      return competitiveAdvantage.trim();
+      return richTextToPlainText(competitiveAdvantage);
     }
     
     if (Array.isArray(competitiveAdvantage)) {
       // Format dengan newline dan baris kosong di antara setiap advantage
-      return competitiveAdvantage.filter(Boolean).join('\n\n');
+      return richTextToPlainText(competitiveAdvantage.filter(Boolean).join('\n\n'));
     }
     
     if (typeof competitiveAdvantage === 'object') {
-      return JSON.stringify(competitiveAdvantage);
+      return richTextToPlainText(JSON.stringify(competitiveAdvantage));
     }
     
-    return String(competitiveAdvantage);
+    return richTextToPlainText(String(competitiveAdvantage));
   };
 
   // Load master data
@@ -516,14 +578,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     const sub_service_id = filteredSubServices.find((ss: { name: string }) => ss.name === formData.sub_service_name)?.id ?? '';
     const content_pillar_id = contentPillars.find((cp: { name: string }) => cp.name === formData.content_pillar)?.id ?? '';
     // Pass useKeyword flag and plan IDs to the service
-    await onGenerate({
+    await onGenerate(sanitizeScriptRequestPayload({
       ...formData,
       useKeyword,
       content_type_id,
       service_id,
       sub_service_id,
       content_pillar_id,
-    });
+    }));
   };
 
   const handleReset = () => {
@@ -948,8 +1010,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     handleInputChange('what_makes_them_stop', '');
                     if (selectedPK) {
                       handleInputChange('feature_name', selectedPK.feature_name?.trim() || '');
-                      handleInputChange('feature_description', selectedPK.feature_description?.trim() || '');
-                      handleInputChange('solution', selectedPK.solusi?.trim() || '');
+                      handleInputChange('feature_description', richTextToPlainText(selectedPK.feature_description) || '');
+                      handleInputChange('solution', richTextToPlainText(selectedPK.solusi) || '');
                       handleInputChange(
                         'competitive_advantage',
                         selectedPK.competitive_advantage
@@ -1097,11 +1159,11 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                         ? (parseImpact(selectedPK.impact).join('\n\n') || '')
                         : '';
                       updates.false_belief = selectedPK.false_belief?.trim() || '';
-                      updates.false_belief_impact = selectedPK.false_belief_impact?.trim() || '';
-                      updates.what_makes_them_stop = selectedPK.what_makes_them_stop?.trim() || '';
-                      updates.solution = selectedPK.solusi?.trim() || '';
+                      updates.false_belief_impact = richTextToPlainText(selectedPK.false_belief_impact) || '';
+                      updates.what_makes_them_stop = richTextToPlainText(selectedPK.what_makes_them_stop) || '';
+                      updates.solution = richTextToPlainText(selectedPK.solusi) || '';
                       updates.feature_name = selectedPK.feature_name?.trim() || '';
-                      updates.feature_description = selectedPK.feature_description?.trim() || '';
+                      updates.feature_description = richTextToPlainText(selectedPK.feature_description) || '';
                       updates.competitive_advantage = selectedPK.competitive_advantage
                         ? parseCompetitiveAdvantage(selectedPK.competitive_advantage)
                         : '';
@@ -1380,7 +1442,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       
                       // Auto-fill solution if found
                       if (selectedPK && selectedPK.solusi) {
-                        const solusiValue = selectedPK.solusi.trim();
+                        const solusiValue = richTextToPlainText(selectedPK.solusi);
                         handleInputChange('solution', solusiValue);
                       } else {
                         // Clear solution if no product knowledge found or no solusi available
@@ -1442,14 +1504,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       
                       // Auto-fill false_belief_impact if found
                       if (selectedPK && selectedPK.false_belief_impact) {
-                        handleInputChange('false_belief_impact', selectedPK.false_belief_impact.trim());
+                        handleInputChange('false_belief_impact', richTextToPlainText(selectedPK.false_belief_impact));
                       } else {
                         handleInputChange('false_belief_impact', '');
                       }
                       
                       // Auto-fill what_makes_them_stop if found
                       if (selectedPK && selectedPK.what_makes_them_stop) {
-                        handleInputChange('what_makes_them_stop', selectedPK.what_makes_them_stop.trim());
+                        handleInputChange('what_makes_them_stop', richTextToPlainText(selectedPK.what_makes_them_stop));
                       } else {
                         handleInputChange('what_makes_them_stop', '');
                       }
@@ -1463,7 +1525,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       
                       // Auto-fill feature_description if found
                       if (selectedPK && selectedPK.feature_description) {
-                        handleInputChange('feature_description', selectedPK.feature_description.trim());
+                        handleInputChange('feature_description', richTextToPlainText(selectedPK.feature_description));
                       } else {
                         handleInputChange('feature_description', '');
                       }

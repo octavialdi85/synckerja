@@ -17,6 +17,62 @@ interface OptimizedCommentPanelProps {
   linkUrl: string;
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function parseEmbeddedImages(commentText: string): { plainText: string; imageUrls: string[] } {
+  if (!commentText) return { plainText: '', imageUrls: [] };
+
+  const decoded = decodeHtmlEntities(commentText);
+  const imageUrls = new Set<string>();
+
+  // HTML img src
+  const htmlImgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  let htmlMatch: RegExpExecArray | null = null;
+  while ((htmlMatch = htmlImgRegex.exec(decoded)) !== null) {
+    const src = (htmlMatch[1] || '').trim();
+    if (/^https?:\/\//i.test(src)) imageUrls.add(src);
+  }
+
+  // Markdown image syntax ![alt](url)
+  const mdImgRegex = /!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/gi;
+  let mdMatch: RegExpExecArray | null = null;
+  while ((mdMatch = mdImgRegex.exec(decoded)) !== null) {
+    const src = (mdMatch[1] || '').trim();
+    if (/^https?:\/\//i.test(src)) imageUrls.add(src);
+  }
+
+  // Plain image URLs
+  const plainImgUrlRegex = /(https?:\/\/[^\s<>"')]+?\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"')]*)?)/gi;
+  let plainMatch: RegExpExecArray | null = null;
+  while ((plainMatch = plainImgUrlRegex.exec(decoded)) !== null) {
+    const src = (plainMatch[1] || '').trim();
+    if (/^https?:\/\//i.test(src)) imageUrls.add(src);
+  }
+
+  const plainText = decoded
+    .replace(/<img[^>]*>/gi, '')
+    .replace(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/gi, '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/\s*p\s*>/gi, '\n')
+    .replace(/<\s*p[^>]*>/gi, '')
+    .replace(/<\/\s*li\s*>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '- ')
+    .replace(/<\/?\s*(ul|ol|div|blockquote|strong|b|em|i|u|span)[^>]*>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return { plainText, imageUrls: Array.from(imageUrls) };
+}
+
 // Image Preview Modal Component
 interface ImagePreviewModalProps {
   isOpen: boolean;
@@ -123,6 +179,7 @@ const CommentItem = React.memo<{
     const s = Math.floor(Number(seconds) % 60);
     return `Di ${m}:${s.toString().padStart(2, '0')}`;
   };
+  const parsedComment = useMemo(() => parseEmbeddedImages(comment.comment_text || ''), [comment.comment_text]);
   return <div className="border rounded-lg p-4 bg-white shadow-sm">
       <div className="flex items-start gap-3 mb-2">
         <Avatar className="h-8 w-8">
@@ -187,8 +244,23 @@ const CommentItem = React.memo<{
             <p className="text-xs text-gray-500 mb-1">Anotasi pada frame</p>
           )}
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {comment.comment_text || 'No comment text'}
+            {parsedComment.plainText || 'No comment text'}
           </p>
+
+          {parsedComment.imageUrls.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {parsedComment.imageUrls.map((imageUrl, idx) => (
+                <img
+                  key={`${comment.id}-embedded-${idx}`}
+                  src={imageUrl}
+                  alt={`Embedded image ${idx + 1}`}
+                  className="w-20 h-20 rounded-lg border object-cover shadow-sm cursor-pointer hover:opacity-85 transition-opacity"
+                  onClick={() => onImageClick(imageUrl, `Embedded image ${idx + 1}`, comment.created_at)}
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          )}
           
           {/* Show images associated with this specific comment */}
           <CommentImages commentId={comment.id} socialMediaPlanId={socialMediaPlanId} linkUrl={linkUrl} onImageClick={onImageClick} />

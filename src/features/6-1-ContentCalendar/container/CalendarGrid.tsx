@@ -157,6 +157,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
   };
 
+  const revisionBadgeClass = () => 'inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold leading-none bg-white/90 text-slate-900 ring-1 ring-white/40 backdrop-blur-[1px]';
+
   return (
     <div className="relative">
       {/* Days of week header - Fixed positioning */}
@@ -279,21 +281,46 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
                         {(cardTone === 'prod-need-review' || cardTone === 'prod-request-revision') &&
                           onOpenPreview && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenPreview(plan);
-                            }}
-                            className={`mt-1 flex w-full items-center justify-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold text-white ring-1 hover:opacity-95 ${
-                              cardTone === 'prod-request-revision'
-                                ? 'bg-white/20 ring-white/25 hover:bg-white/30'
-                                : 'bg-white/25 ring-white/30 hover:bg-white/35'
-                            }`}
-                          >
-                            <Play className="h-2.5 w-2.5 shrink-0 fill-current" aria-hidden />
-                            {t('contentCalendar.grid.preview', 'Preview')}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenPreview(plan);
+                              }}
+                              className={`mt-1 flex w-full items-center justify-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold text-white ring-1 hover:opacity-95 ${
+                                cardTone === 'prod-request-revision'
+                                  ? 'bg-white/20 ring-white/25 hover:bg-white/30'
+                                  : 'bg-white/25 ring-white/30 hover:bg-white/35'
+                              }`}
+                            >
+                              <Play className="h-2.5 w-2.5 shrink-0 fill-current" aria-hidden />
+                              {t('contentCalendar.grid.preview', 'Preview')}
+                            </button>
+                            {Number(plan?.production_revision_count || 0) > 0 && (
+                              <div className="mt-1">
+                                <span
+                                  className={revisionBadgeClass()}
+                                  aria-label={`Revision ${Number(plan?.production_revision_count || 0)}`}
+                                >
+                                  Rev {Number(plan?.production_revision_count || 0)}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Fallback: non-preview cards tetap tampilkan Rev badge jika ada revision */}
+                        {!(cardTone === 'prod-need-review' || cardTone === 'prod-request-revision') &&
+                          Number(plan?.production_revision_count || 0) > 0 && (
+                          <div className="mt-1">
+                            <span
+                              className={revisionBadgeClass()}
+                              aria-label={`Revision ${Number(plan?.production_revision_count || 0)}`}
+                            >
+                              Rev {Number(plan?.production_revision_count || 0)}
+                            </span>
+                          </div>
                         )}
                         
                         {/* NEW: Green cards - Display all social media links */}

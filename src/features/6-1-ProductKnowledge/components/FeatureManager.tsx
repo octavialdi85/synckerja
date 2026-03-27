@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import {
 } from '@/features/ui/select';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
-import { MoreVertical, Plus, Edit, Trash2, Search } from 'lucide-react';
+import { MoreVertical, Plus, Edit, Trash2, Search, Bold, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, IndentIncrease, IndentDecrease } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -34,8 +34,35 @@ function formatCompetitiveAdvantage(value: any): string {
 
 function parseCompetitiveAdvantage(value: string): any {
   if (!value || !value.trim()) return null;
+  if (looksLikeHtml(value)) return value.trim();
   const lines = value.split(/\n\n+/).map((p) => p.replace(/\s+$/, '')).filter((p) => p.trim().length > 0);
   return lines.length > 0 ? lines : null;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function looksLikeHtml(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function toEditorHtml(value: string): string {
+  if (!value.trim()) return '';
+  if (looksLikeHtml(value)) return value;
+  return escapeHtml(value).replace(/\n/g, '<br>');
+}
+
+function normalizeRichText(value: string): string | null {
+  const cleanValue = value.replace(/\u200B/g, '');
+  const plain = cleanValue.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (!plain) return null;
+  return cleanValue.trim();
 }
 
 interface FeatureManagerProps {
@@ -59,6 +86,10 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const [featureSearchTerm, setFeatureSearchTerm] = useState('');
+  const [activeEditor, setActiveEditor] = useState<'feature_description' | 'solution' | 'competitive_advantage_raw' | null>(null);
+  const featureDescriptionEditorRef = useRef<HTMLDivElement>(null);
+  const solutionEditorRef = useRef<HTMLDivElement>(null);
+  const competitiveAdvantageEditorRef = useRef<HTMLDivElement>(null);
 
   const filteredFeatures = useMemo(() => {
     const term = featureSearchTerm.trim().toLowerCase();
@@ -150,14 +181,16 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
       toast.error(t('productKnowledge.masterData.selectServiceRequired', 'Pilih Service untuk feature baru.'));
       return;
     }
+    const normalizedFeatureDescription = normalizeRichText(feature_description);
+    const normalizedSolution = normalizeRichText(solution);
     const competitive_advantage = parseCompetitiveAdvantage(competitive_advantage_raw);
 
     if (modalData.mode === 'add') {
       await createFeature({
         service_id: service_id ?? null,
         feature_name: feature_name.trim(),
-        feature_description: feature_description.trim() || null,
-        solution: solution.trim() || null,
+        feature_description: normalizedFeatureDescription,
+        solution: normalizedSolution,
         competitive_advantage,
       });
     } else if (modalData.item) {
@@ -166,16 +199,16 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
         input: {
           service_id: service_id ?? null,
           feature_name: feature_name.trim(),
-          feature_description: feature_description.trim() || null,
-          solution: solution.trim() || null,
+          feature_description: normalizedFeatureDescription,
+          solution: normalizedSolution,
           competitive_advantage,
         },
       });
       // Sync ke tabel utama: update semua baris product_knowledge yang pakai feature ini
       onMasterFeatureUpdated?.(modalData.item.id, {
         feature_name: feature_name.trim(),
-        feature_description: feature_description.trim() || null,
-        solution: solution.trim() || null,
+        feature_description: normalizedFeatureDescription,
+        solution: normalizedSolution,
         competitive_advantage,
       });
     }
@@ -193,7 +226,173 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
     if (!open) setFeatureSearchTerm('');
   }, []);
 
+  useEffect(() => {
+    if (!modalData.open || !featureDescriptionEditorRef.current) return;
+    const nextHtml = toEditorHtml(modalData.feature_description);
+    if (featureDescriptionEditorRef.current.innerHTML !== nextHtml) {
+      featureDescriptionEditorRef.current.innerHTML = nextHtml;
+    }
+  }, [modalData.open, modalData.feature_description]);
+
+  useEffect(() => {
+    if (!modalData.open || !solutionEditorRef.current) return;
+    const nextHtml = toEditorHtml(modalData.solution);
+    if (solutionEditorRef.current.innerHTML !== nextHtml) {
+      solutionEditorRef.current.innerHTML = nextHtml;
+    }
+  }, [modalData.open, modalData.solution]);
+
+  useEffect(() => {
+    if (!modalData.open || !competitiveAdvantageEditorRef.current) return;
+    const nextHtml = toEditorHtml(modalData.competitive_advantage_raw);
+    if (competitiveAdvantageEditorRef.current.innerHTML !== nextHtml) {
+      competitiveAdvantageEditorRef.current.innerHTML = nextHtml;
+    }
+  }, [modalData.open, modalData.competitive_advantage_raw]);
+
+  const applyFeatureDescriptionCommand = useCallback((command: string) => {
+    if (!featureDescriptionEditorRef.current) return;
+    featureDescriptionEditorRef.current.focus();
+    document.execCommand(command, false);
+    setModalData((prev) => ({
+      ...prev,
+      feature_description: featureDescriptionEditorRef.current?.innerHTML ?? prev.feature_description,
+    }));
+  }, []);
+
+  const applySolutionCommand = useCallback((command: string) => {
+    if (!solutionEditorRef.current) return;
+    solutionEditorRef.current.focus();
+    document.execCommand(command, false);
+    setModalData((prev) => ({
+      ...prev,
+      solution: solutionEditorRef.current?.innerHTML ?? prev.solution,
+    }));
+  }, []);
+
+  const applyCompetitiveAdvantageCommand = useCallback((command: string) => {
+    if (!competitiveAdvantageEditorRef.current) return;
+    competitiveAdvantageEditorRef.current.focus();
+    document.execCommand(command, false);
+    setModalData((prev) => ({
+      ...prev,
+      competitive_advantage_raw: competitiveAdvantageEditorRef.current?.innerHTML ?? prev.competitive_advantage_raw,
+    }));
+  }, []);
+
+  const isFeatureDescriptionEmpty = useMemo(() => {
+    return !normalizeRichText(modalData.feature_description);
+  }, [modalData.feature_description]);
+
+  const isSolutionEmpty = useMemo(() => {
+    return !normalizeRichText(modalData.solution);
+  }, [modalData.solution]);
+
+  const isCompetitiveAdvantageEmpty = useMemo(() => {
+    return !normalizeRichText(modalData.competitive_advantage_raw);
+  }, [modalData.competitive_advantage_raw]);
+
+  const renderRichTextToolbar = (
+    editorKey: 'feature_description' | 'solution' | 'competitive_advantage_raw',
+    onCommand: (command: string) => void
+  ) => (
+    <div className={`${activeEditor === editorKey ? 'sticky top-[-8px] z-20' : 'relative'} flex flex-wrap items-center gap-1 border-b px-2 py-1 bg-gray-50`}>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('bold')} title={t('productKnowledge.masterData.toolbar.bold', 'Bold')}>
+        <Bold className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('insertOrderedList')} title={t('productKnowledge.masterData.toolbar.numberedList', 'Numbering')}>
+        <ListOrdered className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('insertUnorderedList')} title={t('productKnowledge.masterData.toolbar.bulletList', 'Bullet list')}>
+        <List className="h-4 w-4" />
+      </Button>
+      <div className="mx-1 h-5 w-px bg-gray-300" />
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('justifyLeft')} title={t('productKnowledge.masterData.toolbar.alignLeft', 'Align left')}>
+        <AlignLeft className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('justifyCenter')} title={t('productKnowledge.masterData.toolbar.alignCenter', 'Align center')}>
+        <AlignCenter className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('justifyRight')} title={t('productKnowledge.masterData.toolbar.alignRight', 'Align right')}>
+        <AlignRight className="h-4 w-4" />
+      </Button>
+      <div className="mx-1 h-5 w-px bg-gray-300" />
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('outdent')} title={t('productKnowledge.masterData.toolbar.outdent', 'Decrease indent')}>
+        <IndentDecrease className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommand('indent')} title={t('productKnowledge.masterData.toolbar.indent', 'Increase indent')}>
+        <IndentIncrease className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  const handleRichTextKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const anchorNode = selection.anchorNode;
+    if (!anchorNode) return;
+
+    const anchorElement =
+      anchorNode.nodeType === Node.ELEMENT_NODE
+        ? (anchorNode as HTMLElement)
+        : (anchorNode.parentElement as HTMLElement | null);
+
+    if (!anchorElement) return;
+
+    const currentListItem = anchorElement.closest('li');
+    if (!currentListItem) return;
+
+    const isEmptyListItem = currentListItem.textContent?.replace(/\u00a0/g, ' ').trim() === '';
+    if (!isEmptyListItem) return;
+
+    const currentList = currentListItem.parentElement;
+    const parentListItem = currentList?.parentElement?.closest('li');
+    if (!currentList || !parentListItem) return;
+
+    const parentList = parentListItem.parentElement;
+    if (!parentList) return;
+
+    // On second Enter at an empty nested list item:
+    // - if parent list is numbered (OL), continue to next number item
+    // - otherwise fallback to default outdent behavior
+    event.preventDefault();
+
+    const isParentOrderedList = parentList.tagName.toLowerCase() === 'ol';
+    if (!isParentOrderedList) {
+      document.execCommand('outdent', false);
+      return;
+    }
+
+    const newListItem = document.createElement('li');
+    const placeholder = document.createTextNode('\u200B');
+    newListItem.appendChild(placeholder);
+    parentList.insertBefore(newListItem, parentListItem.nextSibling);
+
+    // Remove the empty nested item, and remove nested list container if it becomes empty.
+    currentListItem.remove();
+    if (currentList.children.length === 0) {
+      currentList.remove();
+    }
+
+    const range = document.createRange();
+    range.setStart(placeholder, 1);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, []);
+
   const loading = isCreating || isUpdating;
+
+  const handleRichTextInput = useCallback(
+    (key: 'feature_description' | 'solution' | 'competitive_advantage_raw', html: string) => {
+      const cleanedHtml = html.replace(/\u200B/g, '');
+      setModalData((prev) => ({ ...prev, [key]: cleanedHtml }));
+    },
+    []
+  );
 
   return (
     <>
@@ -323,37 +522,97 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
                     <label className="block text-sm font-medium mb-2">
                       {t('productKnowledge.masterData.featureDescription', 'Feature description')}
                     </label>
-                    <textarea
-                      value={modalData.feature_description}
-                      onChange={(e) => setModalData((prev) => ({ ...prev, feature_description: e.target.value }))}
-                      className="w-full p-2 border rounded text-sm resize-y min-h-[4.5rem]"
-                      rows={4}
-                      placeholder={t('productKnowledge.masterData.featureDescriptionPlaceholder', 'Enter feature description')}
-                    />
+                    <div className="border rounded-md bg-white">
+                      {renderRichTextToolbar('feature_description', applyFeatureDescriptionCommand)}
+                      <div className="relative">
+                        {isFeatureDescriptionEmpty && (
+                          <span className="pointer-events-none absolute left-3 top-2 text-sm text-gray-400">
+                            {t('productKnowledge.masterData.featureDescriptionPlaceholder', 'Enter feature description')}
+                          </span>
+                        )}
+                        <div
+                          ref={featureDescriptionEditorRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          spellCheck={false}
+                          data-gramm="false"
+                          data-gramm_editor="false"
+                          data-enable-grammarly="false"
+                          onFocus={() => setActiveEditor('feature_description')}
+                          onBlur={() => setActiveEditor((prev) => (prev === 'feature_description' ? null : prev))}
+                          onInput={(e) => {
+                            const html = (e.currentTarget as HTMLDivElement).innerHTML;
+                            handleRichTextInput('feature_description', html);
+                          }}
+                          onKeyDown={handleRichTextKeyDown}
+                          className="min-h-[7rem] w-full p-2 text-sm outline-none [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6"
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       {t('productKnowledge.masterData.solution', 'Solution')}
                     </label>
-                    <textarea
-                      value={modalData.solution}
-                      onChange={(e) => setModalData((prev) => ({ ...prev, solution: e.target.value }))}
-                      className="w-full p-2 border rounded text-sm resize-y min-h-[4.5rem]"
-                      rows={5}
-                      placeholder={t('productKnowledge.masterData.solutionPlaceholder', 'Enter solution')}
-                    />
+                    <div className="border rounded-md bg-white">
+                      {renderRichTextToolbar('solution', applySolutionCommand)}
+                      <div className="relative">
+                        {isSolutionEmpty && (
+                          <span className="pointer-events-none absolute left-3 top-2 text-sm text-gray-400">
+                            {t('productKnowledge.masterData.solutionPlaceholder', 'Enter solution')}
+                          </span>
+                        )}
+                        <div
+                          ref={solutionEditorRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          spellCheck={false}
+                          data-gramm="false"
+                          data-gramm_editor="false"
+                          data-enable-grammarly="false"
+                          onFocus={() => setActiveEditor('solution')}
+                          onBlur={() => setActiveEditor((prev) => (prev === 'solution' ? null : prev))}
+                          onInput={(e) => {
+                            const html = (e.currentTarget as HTMLDivElement).innerHTML;
+                            handleRichTextInput('solution', html);
+                          }}
+                          onKeyDown={handleRichTextKeyDown}
+                          className="min-h-[7rem] w-full p-2 text-sm outline-none [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6"
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       {t('productKnowledge.masterData.competitiveAdvantage', 'Competitive advantage')}
                     </label>
-                    <textarea
-                      value={modalData.competitive_advantage_raw}
-                      onChange={(e) => setModalData((prev) => ({ ...prev, competitive_advantage_raw: e.target.value }))}
-                      className="w-full p-2 border rounded text-sm resize-y min-h-[4.5rem]"
-                      rows={5}
-                      placeholder={t('productKnowledge.masterData.competitiveAdvantagePlaceholder', 'One per line or paragraph')}
-                    />
+                    <div className="border rounded-md bg-white">
+                      {renderRichTextToolbar('competitive_advantage_raw', applyCompetitiveAdvantageCommand)}
+                      <div className="relative">
+                        {isCompetitiveAdvantageEmpty && (
+                          <span className="pointer-events-none absolute left-3 top-2 text-sm text-gray-400">
+                            {t('productKnowledge.masterData.competitiveAdvantagePlaceholder', 'One per line or paragraph')}
+                          </span>
+                        )}
+                        <div
+                          ref={competitiveAdvantageEditorRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          spellCheck={false}
+                          data-gramm="false"
+                          data-gramm_editor="false"
+                          data-enable-grammarly="false"
+                          onFocus={() => setActiveEditor('competitive_advantage_raw')}
+                          onBlur={() => setActiveEditor((prev) => (prev === 'competitive_advantage_raw' ? null : prev))}
+                          onInput={(e) => {
+                            const html = (e.currentTarget as HTMLDivElement).innerHTML;
+                            handleRichTextInput('competitive_advantage_raw', html);
+                          }}
+                          onKeyDown={handleRichTextKeyDown}
+                          className="min-h-[7rem] w-full p-2 text-sm outline-none [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -76,6 +76,68 @@ export const generateScript = async (
   }
 };
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function richTextToPlainText(value: string | null | undefined): string {
+  if (!value) return '';
+  let text = decodeHtmlEntities(String(value).replace(/\u200B/g, ''));
+  text = text.replace(/<\s*br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/\s*p\s*>/gi, '\n');
+  text = text.replace(/<\s*p[^>]*>/gi, '');
+  text = text.replace(/<\/\s*li\s*>/gi, '\n');
+  text = text.replace(/<\s*li[^>]*>/gi, '- ');
+  text = text.replace(/<\/?\s*(ul|ol)[^>]*>/gi, '\n');
+  text = text.replace(/<[^>]+>/g, '');
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
+
+function sanitizePromptRequest(request: ScriptGeneratorRequest): ScriptGeneratorRequest {
+  return {
+    ...request,
+    content_type: richTextToPlainText(request.content_type),
+    service_name: richTextToPlainText(request.service_name),
+    sub_service_name: richTextToPlainText(request.sub_service_name),
+    content_pillar: richTextToPlainText(request.content_pillar),
+    target_market: richTextToPlainText(request.target_market),
+    gender: richTextToPlainText(request.gender),
+    age: richTextToPlainText(request.age),
+    buying_roles: richTextToPlainText(request.buying_roles),
+    keinginan: richTextToPlainText(request.keinginan),
+    kebutuhan: richTextToPlainText(request.kebutuhan),
+    hidden_needs: richTextToPlainText(request.hidden_needs),
+    problem: richTextToPlainText(request.problem),
+    impact: richTextToPlainText(request.impact),
+    false_belief: richTextToPlainText(request.false_belief),
+    false_belief_impact: richTextToPlainText(request.false_belief_impact),
+    what_makes_them_stop: richTextToPlainText(request.what_makes_them_stop),
+    feature_name: richTextToPlainText(request.feature_name),
+    feature_description: richTextToPlainText(request.feature_description),
+    competitive_advantage: richTextToPlainText(request.competitive_advantage),
+    solution: richTextToPlainText(request.solution),
+    hook_name: richTextToPlainText(request.hook_name),
+    hook_description: richTextToPlainText(request.hook_description),
+    hook_content: richTextToPlainText(request.hook_content),
+    style_name: richTextToPlainText(request.style_name),
+    style_instruksi: richTextToPlainText(request.style_instruksi),
+    structure: richTextToPlainText(request.structure),
+    judul: richTextToPlainText(request.judul),
+    judul_custom: richTextToPlainText(request.judul_custom),
+    keywords: (request.keywords || []).map((k) => richTextToPlainText(k)).filter(Boolean),
+  };
+}
+
 // Helper function to clean duplicated labels from value
 function cleanLabelDuplication(text: string | null | undefined, label: string): string {
   if (!text) return '';
@@ -88,6 +150,7 @@ function cleanLabelDuplication(text: string | null | undefined, label: string): 
 
 // Build a comprehensive prompt for ChatGPT
 function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
+  Object.assign(request, sanitizePromptRequest(request));
   const promptParts: string[] = [];
   
   // Opening - Concise and clear

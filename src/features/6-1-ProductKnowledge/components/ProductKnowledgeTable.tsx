@@ -50,6 +50,15 @@ function isRowFullyFilled(item: ProductKnowledge): boolean {
   return hasPersona;
 }
 
+function stripHtml(value: string): string {
+  if (!value) return '';
+  return value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function looksLikeHtml(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
 interface ProductKnowledgeTableProps {
   data: ProductKnowledge[];
   isLoading?: boolean;
@@ -221,14 +230,21 @@ interface ProductKnowledgeRowProps {
   masterFeatures: ProductKnowledgeFeature[];
 }
 
-function MainTableDetailSection({ label, value }: { label: string; value: string }) {
+function MainTableDetailSection({ label, value, isRichText = false }: { label: string; value: string; isRichText?: boolean }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="px-3 py-2 bg-gray-100 border-b border-gray-200">
         <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{label}</span>
       </div>
       <div className="text-sm text-gray-900 whitespace-pre-wrap p-3 min-h-[2.5rem]">
-        {value || '—'}
+        {isRichText && looksLikeHtml(value) ? (
+          <div
+            className="[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_p]:mb-2"
+            dangerouslySetInnerHTML={{ __html: value }}
+          />
+        ) : (
+          value || '—'
+        )}
       </div>
     </div>
   );
@@ -268,6 +284,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     content: string;
     editedContent: string;
     readOnly?: boolean;
+    isHtml?: boolean;
   }>({
     isOpen: false,
     field: null,
@@ -275,6 +292,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     content: '',
     editedContent: '',
     readOnly: false,
+    isHtml: false,
   });
 
   const READ_ONLY_POPUP_FIELDS = ['feature', 'featureDescription', 'solution', 'competitiveAdvantage'];
@@ -285,7 +303,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   };
 
   // Helper function untuk membuka popup view/edit (readOnly untuk Feature, Feature Description, Solution, Competitive Advantage)
-  const openViewPopup = (field: string, title: string, content: string, readOnly?: boolean) => {
+  const openViewPopup = (field: string, title: string, content: string, readOnly?: boolean, isHtml?: boolean) => {
     const isReadOnly = readOnly ?? READ_ONLY_POPUP_FIELDS.includes(field);
     // Format content berdasarkan field type
     let formattedContent = '';
@@ -307,6 +325,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       content: formattedContent,
       editedContent: formattedContent,
       readOnly: isReadOnly,
+      isHtml: isHtml ?? field === 'featureDescription',
     });
   };
 
@@ -724,13 +743,18 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
           </div>
         ) : (
+          (() => {
+            const plainFeatureDescription = stripHtml(item.feature_description || '');
+            return (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '')}
-            title={item.feature_description || '-'}
+            onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '', true, true)}
+            title={plainFeatureDescription || '-'}
           >
-            {item.feature_description || '-'}
+            {plainFeatureDescription || '-'}
           </div>
+            );
+          })()
         )}
       </td>
 
@@ -741,13 +765,18 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
           </div>
         ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '')}
-            title={item.solusi || '-'}
-          >
-            {item.solusi || '-'}
-          </div>
+          (() => {
+            const plainSolution = stripHtml(item.solusi || '');
+            return (
+              <div
+                className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+                onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '', true, true)}
+                title={plainSolution || '-'}
+              >
+                {plainSolution || '-'}
+              </div>
+            );
+          })()
         )}
       </td>
 
@@ -758,13 +787,27 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
           </div>
         ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('competitiveAdvantage', t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'), formatCompetitiveAdvantage(item.competitive_advantage))}
-            title={formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
-          >
-            {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
-          </div>
+          (() => {
+            const competitiveAdvantageContent = formatCompetitiveAdvantage(item.competitive_advantage);
+            const plainCompetitiveAdvantage = stripHtml(competitiveAdvantageContent || '');
+            return (
+              <div
+                className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+                onClick={() =>
+                  openViewPopup(
+                    'competitiveAdvantage',
+                    t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'),
+                    competitiveAdvantageContent,
+                    true,
+                    true
+                  )
+                }
+                title={plainCompetitiveAdvantage || '-'}
+              >
+                {plainCompetitiveAdvantage || '-'}
+              </div>
+            );
+          })()
         )}
       </td>
 
@@ -1066,7 +1109,14 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           <div className="mt-4 flex-1 overflow-y-auto">
             {popupState.readOnly ? (
               <div className="min-h-[200px] text-sm whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200">
-                {popupState.content || '-'}
+                {popupState.isHtml ? (
+                  <div
+                    className="[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_p]:mb-2"
+                    dangerouslySetInnerHTML={{ __html: popupState.content || '<p>-</p>' }}
+                  />
+                ) : (
+                  popupState.content || '-'
+                )}
               </div>
             ) : (
               <Textarea
@@ -1121,14 +1171,17 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
               <MainTableDetailSection
                 label={t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
                 value={item.feature_description || '—'}
+                isRichText
               />
               <MainTableDetailSection
                 label={t('productKnowledge.table.headers.solution', 'Solution')}
                 value={item.solusi || '—'}
+                isRichText
               />
               <MainTableDetailSection
                 label={t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
                 value={formatCompetitiveAdvantage(item.competitive_advantage) || '—'}
+                isRichText
               />
               <MainTableDetailSection
                 label={t('productKnowledge.table.headers.targetMarket', 'Customer Persona')}
