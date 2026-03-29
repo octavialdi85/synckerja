@@ -13,6 +13,7 @@ import { devLog } from '@/config/logger';
 import { useSyncPicProduction } from '../hook/useSyncPicProduction';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { setTitleModalOpenPlanId } from '../hook/briefModalOpenRef';
+import { isEmployeeActive } from '@/features/2-1-employees/utils/employeeUtils';
 import {
   Tooltip,
   TooltipContent,
@@ -349,7 +350,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       if (employeeId) {
         const { data: targetEmployee, error: targetEmployeeError } = await supabase
           .from('employees')
-          .select('id, status')
+          .select('id, pending_removal, employee_statuses(name)')
           .eq('id', employeeId)
           .eq('organization_id', organizationId)
           .maybeSingle();
@@ -358,8 +359,17 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
           toast.error('Selected employee not found');
           return;
         }
-        
-        if (targetEmployee.status !== 'active' && targetEmployee.status !== null) {
+
+        const statusRow = (targetEmployee as { employee_statuses?: { name?: string } | null })
+          .employee_statuses;
+        const employee_status_name = statusRow?.name ?? null;
+
+        if (
+          !isEmployeeActive({
+            pending_removal: targetEmployee.pending_removal,
+            employee_status_name,
+          })
+        ) {
           toast.error('Selected employee is not active');
           return;
         }
