@@ -86,20 +86,26 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const [featureSearchTerm, setFeatureSearchTerm] = useState('');
+  /** Filter master list by service (dropdown in Add Feature popover) */
+  const [featureServiceFilter, setFeatureServiceFilter] = useState<string>('all');
   const [activeEditor, setActiveEditor] = useState<'feature_description' | 'solution' | 'competitive_advantage_raw' | null>(null);
   const featureDescriptionEditorRef = useRef<HTMLDivElement>(null);
   const solutionEditorRef = useRef<HTMLDivElement>(null);
   const competitiveAdvantageEditorRef = useRef<HTMLDivElement>(null);
 
   const filteredFeatures = useMemo(() => {
+    let list =
+      featureServiceFilter === 'all'
+        ? masterFeatures
+        : masterFeatures.filter((f) => f.service_id === featureServiceFilter);
     const term = featureSearchTerm.trim().toLowerCase();
-    if (!term) return masterFeatures;
-    return masterFeatures.filter((f) => {
+    if (!term) return list;
+    return list.filter((f) => {
       const name = (f.feature_name || '').toLowerCase();
       const desc = (f.feature_description || '').toLowerCase();
       return name.includes(term) || desc.includes(term);
     });
-  }, [masterFeatures, featureSearchTerm]);
+  }, [masterFeatures, featureSearchTerm, featureServiceFilter]);
 
   const [modalData, setModalData] = useState<{
     open: boolean;
@@ -409,7 +415,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
               {t('productKnowledge.masterData.addFeature', 'Add Feature')}
             </DropdownMenuItem>
             {masterFeatures.length > 0 && (
-              <div className="px-2 pb-2" onClick={(e) => e.stopPropagation()}>
+              <div className="px-2 pb-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                   <Input
@@ -421,6 +427,47 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
                     autoComplete="off"
                   />
                 </div>
+                {services.length > 0 && (
+                  <div
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <label className="block text-[10px] font-medium text-gray-500 mb-1">
+                      {t('productKnowledge.masterData.filterByService', 'Service')}
+                    </label>
+                    <Select
+                      value={featureServiceFilter}
+                      onValueChange={setFeatureServiceFilter}
+                    >
+                      <SelectTrigger className="h-8 w-full text-xs border-gray-200">
+                        <SelectValue placeholder={t('productKnowledge.masterData.allServices', 'All services')} />
+                      </SelectTrigger>
+                      <SelectContent
+                        position="popper"
+                        className="z-[1000002] max-h-[min(16rem,50vh)] overflow-hidden [&_[data-radix-select-viewport]]:max-w-[var(--radix-select-trigger-width)]"
+                        style={{
+                          width: 'var(--radix-select-trigger-width)',
+                          minWidth: 'var(--radix-select-trigger-width)',
+                          maxWidth: 'var(--radix-select-trigger-width)',
+                        }}
+                      >
+                        <SelectItem value="all" className="whitespace-normal break-words">
+                          {t('productKnowledge.masterData.allServices', 'All services')}
+                        </SelectItem>
+                        {services.map((s) => (
+                          <SelectItem
+                            key={s.id}
+                            value={s.id}
+                            className="whitespace-normal break-words"
+                            title={s.name}
+                          >
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
           </div>
