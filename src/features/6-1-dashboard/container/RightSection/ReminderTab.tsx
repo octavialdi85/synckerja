@@ -176,10 +176,25 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth, serviceFilter 
       <CardContent className="p-0 h-full flex flex-col overflow-hidden min-h-0">
         <Tabs defaultValue="funnel" className="w-full h-full flex flex-col overflow-hidden min-h-0">
           {/* Tabs Header - Fixed */}
-          <TabsList className="grid w-full grid-cols-3 flex-shrink-0 h-8">
-            <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
-            <TabsTrigger value="content-balance" className="text-xs py-1">Content Balance</TabsTrigger>
-            <TabsTrigger value="pengingat" className="text-xs py-1">{t('reminderTab.tab.pengingat', 'Reminders')}</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 flex-shrink-0 h-8 p-0 items-stretch gap-0 rounded-md overflow-hidden">
+            <TabsTrigger
+              value="funnel"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              Funnel
+            </TabsTrigger>
+            <TabsTrigger
+              value="content-balance"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              Content Balance
+            </TabsTrigger>
+            <TabsTrigger
+              value="pengingat"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              {t('reminderTab.tab.pengingat', 'Reminders')}
+            </TabsTrigger>
           </TabsList>
           
           {/* Scrollable Content Area — sama untuk ketiga tab: TabsContent = scroll container (overflow-y-auto) */}

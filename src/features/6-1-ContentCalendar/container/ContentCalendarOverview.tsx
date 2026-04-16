@@ -51,10 +51,25 @@ export const ContentCalendarOverview = ({
       <Tabs defaultValue="overview" className="w-full h-full flex flex-col overflow-hidden min-h-0">
         {/* Tabs Header - Fixed */}
         <div className="px-4 py-2 border-b flex-shrink-0">
-          <TabsList className="grid w-full grid-cols-3 h-8 mb-2">
-            <TabsTrigger value="overview" className="text-xs py-1">Overview</TabsTrigger>
-            <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
-            <TabsTrigger value="content-balance" className="text-xs py-1">Content Balance</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 h-8 mb-2 p-0 items-stretch gap-0 rounded-md overflow-hidden">
+            <TabsTrigger
+              value="overview"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="funnel"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              Funnel
+            </TabsTrigger>
+            <TabsTrigger
+              value="content-balance"
+              className="text-xs h-full min-h-0 rounded-none border-0 py-0 px-2 shadow-none data-[state=active]:shadow-none hover:bg-background"
+            >
+              Content Balance
+            </TabsTrigger>
           </TabsList>
           <p className="text-xs text-gray-500">{monthName}</p>
         </div>
