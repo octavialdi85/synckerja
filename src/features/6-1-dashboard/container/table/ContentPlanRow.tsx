@@ -469,6 +469,10 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
   // Get content type name for display
   const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name || '';
+  const isPostOrCarousel = contentTypeName === 'Post' || contentTypeName === 'Carousel';
+  const hasCarouselContent = isPostOrCarousel && carouselImageCount > 0;
+  const hasGoogleDriveLink =
+    !!plan.google_drive_link && String(plan.google_drive_link).trim().length > 0;
   
 
   // POINT 4: Content fields are no longer locked when approved
@@ -648,8 +652,6 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       // Validate: Cannot set production_approved to true if google_drive_link is NULL or EMPTY
       // For Post/Carousel: require at least one carousel image instead
       if (checked) {
-        const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name || '';
-        const isPostOrCarousel = contentTypeName === 'Post' || contentTypeName === 'Carousel';
         if (isPostOrCarousel) {
           if (carouselImageCount < 1) {
             toast({
@@ -1000,9 +1002,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
               plan.production_approved
                 ? 'Approved'
                 : plan.production_status ||
-                  (plan.google_drive_link && String(plan.google_drive_link).trim().length > 0
-                    ? 'Need Review'
-                    : 'none')
+                  (hasGoogleDriveLink || hasCarouselContent ? 'Need Review' : 'none')
             }
             onValueChange={value => {
               if (value === 'none') {
