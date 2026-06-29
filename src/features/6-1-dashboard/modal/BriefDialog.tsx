@@ -4,10 +4,17 @@ import remarkGfm from 'remark-gfm';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { MessageCircle, Send, Trash2, FileText, Globe, RotateCcw, CheckCircle, ExternalLink, CircleCheck } from 'lucide-react';
-import { parseMarkdownTable, stringifyMarkdownTable, replaceTableInMarkdown } from '../utils/markdownTableUtils';
+import { MessageCircle, Send, Trash2, FileText, Globe, RotateCcw, CheckCircle, ExternalLink, CircleCheck, Table2 } from 'lucide-react';
+import {
+  parseMarkdownTable,
+  stringifyMarkdownTable,
+  replaceTableInMarkdown,
+  normalizeTableData,
+  insertTableIntoBrief,
+} from '../utils/markdownTableUtils';
 import { stripBriefIntroductorySentence, extractBriefTitle, removeBriefTitleFromStart, stripBreakdownScriptLabel, makeBriefSectionsInline } from '@/features/share/utils/briefUtils';
 import { EditableBriefTable } from './EditableBriefTable';
+import { BriefTableWizardDialog } from './BriefTableWizardDialog';
 import { useLinkComments } from '../hook/useLinkComments';
 import { useBriefExtended } from '../hook/useBriefExtended';
 import { formatDistanceToNow } from 'date-fns';
@@ -58,6 +65,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState<string>('brief');
   const [briefViewMode, setBriefViewMode] = useState<'rendered' | 'raw'>('rendered');
+  const [tableWizardOpen, setTableWizardOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
   const skipNextAutoSaveRef = useRef(false);
@@ -523,26 +531,19 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const parsedTable = useMemo(() => parseMarkdownTable(briefText), [briefText]);
   const briefTitle = useMemo(() => extractBriefTitle(briefText), [briefText]);
 
+  const handleInsertTable = (tableData: string[][]) => {
+    const markdown = stringifyMarkdownTable(normalizeTableData(tableData), {
+      trimTrailingEmptyRows: false,
+    });
+    setBriefText(insertTableIntoBrief(briefText, markdown));
+    setBriefViewMode('rendered');
+  };
+
   const handleTableSave = (newTableData: string[][]) => {
     if (!parsedTable) return;
-    // Pastikan baris pertama adalah header (bukan data). Jika cell pertama seperti "0-3s", header hilang - prepend header standar.
-    const firstCell = newTableData[0]?.[0]?.trim() ?? '';
-    const isFirstRowData = /^\d+-\d+s$/i.test(firstCell) || /^\d+-\d+\s*s$/i.test(firstCell);
-    let dataToSave = newTableData;
-    if (isFirstRowData && newTableData.length > 0) {
-      const originalHeader = parsedTable.table[0];
-      const headerRow = originalHeader && !/^\d+-\d+s$/i.test((originalHeader[0] ?? '').trim())
-        ? originalHeader
-        : ['Timing', 'VO (Voice Over)', 'Visual', 'Element Lainnya', 'Tagging'];
-      const colCount = Math.max(headerRow.length, ...newTableData.map((r) => r.length));
-      const pad = (arr: string[]) => {
-        const a = [...arr];
-        while (a.length < colCount) a.push('');
-        return a.slice(0, colCount);
-      };
-      dataToSave = [pad(headerRow), ...newTableData.map(pad)];
-    }
-    const newTableMarkdown = stringifyMarkdownTable(dataToSave);
+    const newTableMarkdown = stringifyMarkdownTable(normalizeTableData(newTableData), {
+      trimTrailingEmptyRows: false,
+    });
     const newBrief = replaceTableInMarkdown(
       briefText,
       newTableMarkdown,
@@ -599,6 +600,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   })();
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent hideCloseButton className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden flex flex-col">
         <DialogTitle className="sr-only absolute">Content Brief</DialogTitle>
@@ -798,6 +800,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                                 <EditableBriefTable
                                   tableData={parsedTable.table}
                                   onSave={handleTableSave}
+                                  structureEditable
                                   className="!my-1"
                                 />
                                 </div>
@@ -813,19 +816,43 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                                 )}
                               </>
                             ) : (
-                              <div className="prose prose-sm max-w-none">
+                              <div className="space-y-3">
                                 {briefText ? (
-                                  <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={briefMarkdownComponents}
-                                  >
-                                    {makeBriefSectionsInline(stripBreakdownScriptLabel(removeBriefTitleFromStart(briefText)))}
-                                  </ReactMarkdown>
+                                  <div className="prose prose-sm max-w-none">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      components={briefMarkdownComponents}
+                                    >
+                                      {makeBriefSectionsInline(stripBreakdownScriptLabel(removeBriefTitleFromStart(briefText)))}
+                                    </ReactMarkdown>
+                                  </div>
                                 ) : (
-                                  <p className="text-gray-500 italic my-2">
-                                    {t('briefDialog.placeholderBrief', 'Enter brief content here...')}
+                                  <p className="text-gray-500 text-sm my-2">
+                                    {t('briefDialog.emptyTableHint', 'Belum ada tabel storyboard. Buat tabel custom atau tulis brief dalam markdown.')}
                                   </p>
                                 )}
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => setTableWizardOpen(true)}
+                                    className="gap-1.5"
+                                  >
+                                    <Table2 className="h-4 w-4" />
+                                    {briefText.trim()
+                                      ? t('briefDialog.insertTable', 'Sisipkan tabel')
+                                      : t('briefDialog.createTable', 'Buat tabel')}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs text-blue-600 hover:text-blue-700"
+                                    onClick={() => setBriefViewMode('raw')}
+                                  >
+                                    {t('briefDialog.editFullMarkdown', 'Edit full markdown')}
+                                  </Button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -971,6 +998,12 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+    <BriefTableWizardDialog
+      open={tableWizardOpen}
+      onOpenChange={setTableWizardOpen}
+      onConfirm={handleInsertTable}
+    />
+    </>
   );
 };
 

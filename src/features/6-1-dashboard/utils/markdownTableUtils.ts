@@ -2,6 +2,63 @@
  * Utilities for parsing and stringifying markdown tables in brief content.
  */
 
+export const BRIEF_TABLE_MIN_COLUMNS = 1;
+export const BRIEF_TABLE_MAX_COLUMNS = 10;
+export const BRIEF_TABLE_MIN_INITIAL_ROWS = 0;
+export const BRIEF_TABLE_MAX_INITIAL_ROWS = 20;
+export const BRIEF_TABLE_DEFAULT_INITIAL_ROWS = 3;
+export const BRIEF_TABLE_DEFAULT_COLUMN_COUNT = 4;
+
+/** Pad columns and trim trailing fully-empty columns. */
+export function normalizeTableData(rows: string[][]): string[][] {
+  if (rows.length === 0) return rows;
+
+  const colCount = Math.max(...rows.map((r) => r.length), 1);
+  const padRow = (row: string[]) => {
+    const r = [...row];
+    while (r.length < colCount) r.push('');
+    return r.slice(0, colCount);
+  };
+
+  let normalized = rows.map(padRow);
+  const headerWidth = normalized[0]?.length ?? 0;
+  let lastNonEmptyCol = Math.max(headerWidth - 1, 0);
+  for (let c = 0; c < colCount; c++) {
+    const hasContent = normalized.some((r) => (r[c] ?? '').trim() !== '');
+    if (hasContent) lastNonEmptyCol = Math.max(lastNonEmptyCol, c);
+  }
+  if (lastNonEmptyCol < 0) {
+    return [normalized[0] ?? ['']];
+  }
+  normalized = normalized.map((r) => r.slice(0, lastNonEmptyCol + 1));
+  return normalized;
+}
+
+/** Build table data: row 0 = headers, remaining rows are empty body rows. */
+export function createEmptyTableData(headers: string[], bodyRowCount: number): string[][] {
+  const resolvedHeaders = headers.map((h, i) => {
+    const trimmed = (h ?? '').trim();
+    return trimmed || `Kolom ${i + 1}`;
+  });
+  if (resolvedHeaders.length === 0) {
+    resolvedHeaders.push('Kolom 1');
+  }
+  const colCount = resolvedHeaders.length;
+  const bodyRows = Array.from({ length: Math.max(0, bodyRowCount) }, () =>
+    Array.from({ length: colCount }, () => '')
+  );
+  return normalizeTableData([resolvedHeaders, ...bodyRows]);
+}
+
+/** Append markdown table to brief (or replace empty brief). */
+export function insertTableIntoBrief(brief: string, tableMarkdown: string): string {
+  const trimmedBrief = brief.trim();
+  const trimmedTable = tableMarkdown.trim();
+  if (!trimmedTable) return trimmedBrief;
+  if (!trimmedBrief) return trimmedTable;
+  return `${trimmedBrief}\n\n${trimmedTable}`;
+}
+
 /**
  * Check if a table row is an alignment row (e.g. | --- | --- |)
  */
@@ -84,18 +141,29 @@ export function parseMarkdownTable(
   };
 }
 
+export interface StringifyMarkdownTableOptions {
+  /** When false, keeps intentionally empty body rows (brief table editor). Default true. */
+  trimTrailingEmptyRows?: boolean;
+}
+
 /**
  * Convert 2D array to markdown table string.
- * Trims trailing fully-empty rows so save does not duplicate bottom rows.
+ * Trims trailing fully-empty rows by default so save does not duplicate bottom rows.
  */
-export function stringifyMarkdownTable(rows: string[][]): string {
+export function stringifyMarkdownTable(
+  rows: string[][],
+  options?: StringifyMarkdownTableOptions
+): string {
   if (rows.length === 0) return '';
 
+  const trimTrailingEmptyRows = options?.trimTrailingEmptyRows !== false;
   const colCount = Math.max(...rows.map((r) => r.length));
   const isRowEmpty = (r: string[]) => r.length <= 0 || r.every((c) => (c ?? '').trim() === '');
   let trimmedRows = rows;
-  while (trimmedRows.length > 1 && isRowEmpty(trimmedRows[trimmedRows.length - 1])) {
-    trimmedRows = trimmedRows.slice(0, -1);
+  if (trimTrailingEmptyRows) {
+    while (trimmedRows.length > 1 && isRowEmpty(trimmedRows[trimmedRows.length - 1])) {
+      trimmedRows = trimmedRows.slice(0, -1);
+    }
   }
 
   const pad = (arr: string[]) => {

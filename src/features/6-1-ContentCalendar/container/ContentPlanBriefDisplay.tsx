@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { parseMarkdownTable, replaceTableInMarkdown, stringifyMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
+import { parseMarkdownTable, replaceTableInMarkdown, stringifyMarkdownTable, normalizeTableData } from '@/features/6-1-dashboard/utils/markdownTableUtils';
 import { EditableBriefTable } from '@/features/6-1-dashboard/modal/EditableBriefTable';
 import {
   stripBreakdownScriptLabel,
@@ -91,9 +91,12 @@ export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = (
         <EditableBriefTable
           tableData={parsedTable.table}
           controlsPlacement="taggingColumn"
+          structureEditable={canUpdate}
           onSave={(newTableData) => {
             if (!canUpdate) return;
-            const newTableMarkdown = stringifyMarkdownTable(newTableData);
+            const newTableMarkdown = stringifyMarkdownTable(normalizeTableData(newTableData), {
+              trimTrailingEmptyRows: false,
+            });
             const nextBrief = replaceTableInMarkdown(
               briefText,
               newTableMarkdown,
