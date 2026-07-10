@@ -1,9 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/features/ui/button';
-import { Pencil, Check, X, MoreVertical, Trash2, Plus, Columns3 } from 'lucide-react';
+import { Pencil, Check, X, MoreVertical, Trash2, Plus, Columns3, Loader2 } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { cn } from '@/lib/utils';
 import { normalizeTableData } from '../utils/markdownTableUtils';
+import {
+  composeBriefCellWithImage,
+  extractBriefCellImage,
+  stripBriefCellImage,
+  uploadBriefVisualImage,
+  UploadBriefVisualImageError,
+} from '../utils/briefVisualImageUtils';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +58,10 @@ interface EditableBriefTableProps {
   readOnly?: boolean;
   /** Allow add/remove columns, edit headers, and structure toolbar */
   structureEditable?: boolean;
+  /** Column index that accepts Ctrl+V image paste (e.g. 1 = second column) */
+  imagePasteColumnIndex?: number;
+  socialMediaPlanId?: string;
+  organizationId?: string;
   /** Where to render Edit/Save/Cancel controls when not alwaysEditable/readOnly */
   controlsPlacement?: 'actionsColumn' | 'taggingColumn';
   className?: string;
@@ -62,12 +74,16 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   alwaysEditable = false,
   readOnly = false,
   structureEditable = false,
+  imagePasteColumnIndex,
+  socialMediaPlanId,
+  organizationId,
   controlsPlacement = 'actionsColumn',
   className = '',
 }) => {
   const { t } = useAppTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<string[][]>([]);
+  const [uploadingCellKey, setUploadingCellKey] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const displayData = normalizeTableData(tableData);
@@ -214,7 +230,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
     });
   };
 
-  const updateCell = (rowIdx: number, cellIdx: number, value: string) => {
+  const updateCell = useCallback((rowIdx: number, cellIdx: number, value: string) => {
     if (alwaysEditable && onChange) {
       const tableColCount = Math.max(...tableData.map((r) => r.length), 1);
       const padToTableCols = (arr: string[]) => {
@@ -244,7 +260,160 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
       next[dataRowIdx] = newRow;
       return next;
     });
-  };
+  }, [alwaysEditable, onChange, tableData, structureEditable]);
+
+  const getCellRawValue = useCallback(
+    (rowIdx: number, cellIdx: number): string => {
+      if (alwaysEditable) {
+        return tableData[rowIdx + 1]?.[cellIdx] ?? '';
+      }
+      if (isEditing) {
+        const dataRowIdx = structureEditable ? rowIdx + 1 : rowIdx;
+        return editData[dataRowIdx]?.[cellIdx] ?? '';
+      }
+      return displayData[rowIdx + 1]?.[cellIdx] ?? '';
+    },
+    [alwaysEditable, tableData, isEditing, structureEditable, editData, displayData]
+  );
+
+  const setCellValueAndMaybePersist = useCallback(
+    (rowIdx: number, cellIdx: number, value: string) => {
+      if (alwaysEditable && onChange) {
+        updateCell(rowIdx, cellIdx, value);
+        return;
+      }
+
+      if (isEditing && structureEditable && onSave) {
+        setEditData((prev) => {
+          const next = prev.map((r) => [...r]);
+          const dataRowIdx = rowIdx + 1;
+          const row = next[dataRowIdx] ?? [];
+          const newRow = [...row];
+          while (newRow.length <= cellIdx) newRow.push('');
+          newRow[cellIdx] = value;
+          next[dataRowIdx] = newRow;
+          const normalized = normalizeTableData(next);
+          onSave(normalized);
+          return normalized;
+        });
+        return;
+      }
+
+      if (isEditing) {
+        updateCell(rowIdx, cellIdx, value);
+        return;
+      }
+
+      const working = getWorkingTable().map(padRow);
+      const body = working.slice(1);
+      if (!body[rowIdx]) return;
+      const newBody = body.map((r, i) => {
+        if (i !== rowIdx) return r;
+        const next = [...r];
+        while (next.length <= cellIdx) next.push('');
+        next[cellIdx] = value;
+        return next;
+      });
+      persistTable([working[0] ?? [], ...newBody]);
+    },
+    [
+      alwaysEditable,
+      onChange,
+      isEditing,
+      structureEditable,
+      onSave,
+      updateCell,
+      getWorkingTable,
+      padRow,
+      persistTable,
+    ]
+  );
+
+  const handleImagePaste = useCallback(
+    async (e: React.ClipboardEvent, rowIdx: number, cellIdx: number) => {
+      if (imagePasteColumnIndex === undefined || cellIdx !== imagePasteColumnIndex) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      let imageFile: File | null = null;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          imageFile = item.getAsFile();
+          break;
+        }
+      }
+      if (!imageFile) return;
+
+      e.preventDefault();
+
+      if (!socialMediaPlanId || !organizationId) {
+        toast.error(
+          t('briefDialog.uploadImageFailed', 'Gagal mengunggah gambar. Pastikan plan dan organisasi aktif.')
+        );
+        return;
+      }
+
+      const cellKey = `${rowIdx}-${cellIdx}`;
+      setUploadingCellKey(cellKey);
+      try {
+        const publicUrl = await uploadBriefVisualImage({
+          file: imageFile,
+          organizationId,
+          planId: socialMediaPlanId,
+        });
+        const existingText = stripBriefCellImage(getCellRawValue(rowIdx, cellIdx));
+        setCellValueAndMaybePersist(
+          rowIdx,
+          cellIdx,
+          composeBriefCellWithImage(existingText, publicUrl)
+        );
+        toast.success(t('briefDialog.uploadImageSuccess', 'Gambar berhasil diunggah'));
+      } catch (err) {
+        if (err instanceof UploadBriefVisualImageError) {
+          if (err.code === 'too_large') {
+            toast.error(t('briefDialog.imageTooLarge', 'Gambar terlalu besar (maks. 5 MB)'));
+          } else if (err.code === 'type_not_supported') {
+            toast.error(t('briefDialog.imageTypeNotSupported', 'Tipe gambar tidak didukung'));
+          } else {
+            toast.error(t('briefDialog.uploadImageFailed', 'Gagal mengunggah gambar'));
+          }
+        } else {
+          toast.error(t('briefDialog.uploadImageFailed', 'Gagal mengunggah gambar'));
+        }
+      } finally {
+        setUploadingCellKey(null);
+      }
+    },
+    [
+      imagePasteColumnIndex,
+      socialMediaPlanId,
+      organizationId,
+      t,
+      getCellRawValue,
+      setCellValueAndMaybePersist,
+    ]
+  );
+
+  const handleRemoveCellImage = useCallback(
+    (rowIdx: number, cellIdx: number) => {
+      const textOnly = stripBriefCellImage(getCellRawValue(rowIdx, cellIdx));
+      setCellValueAndMaybePersist(rowIdx, cellIdx, textOnly);
+    },
+    [getCellRawValue, setCellValueAndMaybePersist]
+  );
+
+  const handleImageColumnTextChange = useCallback(
+    (rowIdx: number, cellIdx: number, text: string) => {
+      const { url, alt } = extractBriefCellImage(getCellRawValue(rowIdx, cellIdx));
+      if (url) {
+        updateCell(rowIdx, cellIdx, composeBriefCellWithImage(text, url, alt));
+      } else {
+        updateCell(rowIdx, cellIdx, text);
+      }
+    },
+    [getCellRawValue, updateCell]
+  );
 
   if (displayData.length === 0) return null;
 
@@ -325,6 +494,15 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   const firstColClass = 'w-[6.5rem] min-w-[5rem] max-w-[7.5rem]';
   const firstColCellClass = 'px-2 py-3';
   const defaultColCellClass = 'px-4 py-3';
+  /** Standard width for text columns (VO, overlay, added columns) */
+  const TEXT_COL_PX = 480;
+  const standardTextColClass = 'box-border';
+  const imageColClass = 'w-auto align-top whitespace-nowrap';
+  const textColStyle: React.CSSProperties = {
+    width: TEXT_COL_PX,
+    minWidth: TEXT_COL_PX,
+    maxWidth: TEXT_COL_PX,
+  };
 
   return (
     <div className={className}>
@@ -374,12 +552,22 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
         className="my-1 overflow-x-auto overflow-y-auto rounded-lg border-2 border-gray-300 min-h-0 max-h-[min(720px,78vh)] seamless-scroll nested-scroll-touch-chain"
         style={{ overflowAnchor: 'none' } as React.CSSProperties}
       >
-        <table className="min-w-[720px] w-full text-sm table-fixed">
+        <table className="w-max text-sm table-auto border-collapse">
           <colgroup>
-            <col style={{ width: '6.5rem' }} />
-            {headerDisplayRow.slice(1).map((_, i) => (
-              <col key={i} />
-            ))}
+            {headerDisplayRow.map((_, j) => {
+              if (j === 0) {
+                return <col key={j} style={{ width: '6.5rem' }} />;
+              }
+              if (imagePasteColumnIndex !== undefined && j === imagePasteColumnIndex) {
+                return <col key={j} />;
+              }
+              return (
+                <col
+                  key={j}
+                  style={{ width: TEXT_COL_PX, minWidth: TEXT_COL_PX, maxWidth: TEXT_COL_PX }}
+                />
+              );
+            })}
             {showRowActions && <col style={{ width: '3rem' }} />}
           </colgroup>
           <thead className="sticky top-0 z-20 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
@@ -389,13 +577,19 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                   showActionsColumnControls &&
                   controlsPlacement === 'taggingColumn' &&
                   j === taggingHeaderIndex;
+                const isImageCol =
+                  imagePasteColumnIndex !== undefined && j === imagePasteColumnIndex;
+                const isTextCol = j !== 0 && !isImageCol;
 
                 return (
                   <th
                     key={j}
+                    style={isTextCol ? textColStyle : undefined}
                     className={cn(
                       'sticky top-0 z-10 bg-gray-50 text-left font-semibold text-gray-800 border-b-2 border-r-2 border-gray-200 last:border-r-0 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]',
                       j === 0 ? cn(firstColClass, firstColCellClass) : cn(defaultColCellClass),
+                      isImageCol && imageColClass,
+                      isTextCol && standardTextColClass,
                       structureEditable && isEditing ? 'align-top' : j === 0 ? 'whitespace-nowrap' : ''
                     )}
                   >
@@ -464,28 +658,114 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                     key={rowIdx}
                     className="divide-x divide-gray-200 hover:bg-gray-50/50 transition-colors"
                   >
-                    {displayRow.map((cell, cellIdx) => (
-                      <td
-                        key={cellIdx}
-                        className={cn(
-                          'text-gray-700 align-top border-b border-r border-gray-200 last:border-r-0',
-                          cellIdx === 0 ? cn(firstColClass, firstColCellClass) : cn(defaultColCellClass)
-                        )}
-                      >
-                        {isEditing || alwaysEditable ? (
-                          <AutoResizeTextarea
-                            value={cell}
-                            onChange={(e) => updateCell(rowIdx, cellIdx, e.target.value)}
-                            className={cellTextareaClass}
-                            minRows={2}
-                          />
-                        ) : (
-                          <span className={cn('whitespace-pre-wrap', cellIdx === 0 && 'text-sm tabular-nums')}>
-                            {cell || '\u00a0'}
-                          </span>
-                        )}
-                      </td>
-                    ))}
+                    {displayRow.map((cell, cellIdx) => {
+                      const isImageCol =
+                        imagePasteColumnIndex !== undefined && cellIdx === imagePasteColumnIndex;
+                      const { url: imageUrl, text: imageText } = isImageCol
+                        ? extractBriefCellImage(cell)
+                        : { url: null, text: cell };
+                      const cellKey = `${rowIdx}-${cellIdx}`;
+                      const isUploading = uploadingCellKey === cellKey;
+                      const cellEditable = isEditing || alwaysEditable;
+
+                      return (
+                        <td
+                          key={cellIdx}
+                          style={cellIdx !== 0 && !isImageCol ? textColStyle : undefined}
+                          className={cn(
+                            'text-gray-700 align-top border-b border-r border-gray-200 last:border-r-0',
+                            cellIdx === 0 ? cn(firstColClass, firstColCellClass) : cn(defaultColCellClass),
+                            isImageCol && imageColClass,
+                            cellIdx !== 0 && !isImageCol && standardTextColClass
+                          )}
+                        >
+                          {isImageCol ? (
+                            <div className="inline-block align-top">
+                              {imageUrl ? (
+                                <div
+                                  className="relative inline-block outline-none shrink-0"
+                                  tabIndex={cellEditable ? 0 : undefined}
+                                  onPaste={
+                                    cellEditable
+                                      ? (e) => handleImagePaste(e, rowIdx, cellIdx)
+                                      : undefined
+                                  }
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt="brief-visual"
+                                    className="block h-[420px] w-auto max-w-none shrink-0 rounded-md border border-gray-200 object-contain bg-gray-50 cursor-pointer"
+                                    onClick={() => window.open(imageUrl, '_blank', 'noopener,noreferrer')}
+                                  />
+                                  {cellEditable && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="absolute top-1.5 right-1.5 h-7 w-7 p-0 bg-white/95 hover:bg-white text-red-600 shadow-sm"
+                                      title={t('briefDialog.removeImage', 'Hapus gambar')}
+                                      onClick={() => handleRemoveCellImage(rowIdx, cellIdx)}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {isUploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-md">
+                                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <>
+                                  {isUploading && (
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-2">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      {t('briefDialog.uploadingImage', 'Mengunggah gambar...')}
+                                    </div>
+                                  )}
+                                  {cellEditable ? (
+                                    <AutoResizeTextarea
+                                      value={imageText}
+                                      onChange={(e) =>
+                                        handleImageColumnTextChange(rowIdx, cellIdx, e.target.value)
+                                      }
+                                      onPaste={(e) => handleImagePaste(e, rowIdx, cellIdx)}
+                                      className={cn(cellTextareaClass, 'min-w-[14rem] whitespace-normal')}
+                                      minRows={2}
+                                      placeholder={t(
+                                        'briefDialog.pasteImageHint',
+                                        'Paste gambar (Ctrl+V) di kolom ini'
+                                      )}
+                                      disabled={isUploading}
+                                    />
+                                  ) : (
+                                    <span className="whitespace-pre-wrap text-sm text-muted-foreground">
+                                      {imageText || '\u00a0'}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              {imageUrl && imageText && !cellEditable && (
+                                <span className="whitespace-pre-wrap text-sm block mt-1 max-w-[280px]">
+                                  {imageText}
+                                </span>
+                              )}
+                            </div>
+                          ) : cellEditable ? (
+                            <AutoResizeTextarea
+                              value={cell}
+                              onChange={(e) => updateCell(rowIdx, cellIdx, e.target.value)}
+                              className={cellTextareaClass}
+                              minRows={2}
+                            />
+                          ) : (
+                            <span className={cn('whitespace-pre-wrap', cellIdx === 0 && 'text-sm tabular-nums')}>
+                              {cell || '\u00a0'}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                     {showRowActions && (
                       <td className="px-1 py-3 border-b border-gray-200 w-[48px] min-w-[48px] max-w-[48px] whitespace-nowrap overflow-hidden align-middle">
                         {onSave && (

@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { validateRequiredFields } from '../container/table/cells/ValidationHelper';
 import type { ContentPlan } from '../types/social-media';
 
@@ -57,6 +58,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   tryStartApprovalFromBrief,
 }) => {
   const { t } = useAppTranslation();
+  const { organizationId } = useCurrentOrg();
   const [briefText, setBriefText] = useState('');
   const [targetAudienceText, setTargetAudienceText] = useState('');
   const [captionText, setCaptionText] = useState('');
@@ -801,6 +803,9 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                                   tableData={parsedTable.table}
                                   onSave={handleTableSave}
                                   structureEditable
+                                  imagePasteColumnIndex={1}
+                                  socialMediaPlanId={socialMediaPlanId}
+                                  organizationId={organizationId ?? undefined}
                                   className="!my-1"
                                 />
                                 </div>

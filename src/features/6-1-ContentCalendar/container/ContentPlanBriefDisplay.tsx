@@ -10,6 +10,7 @@ import {
 } from '@/features/share/utils/briefUtils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useSocialMediaMutations } from '@/features/6-1-dashboard/hook/useOptimizedSocialMediaState';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 /** Match BriefDialog markdown styling for consistency with brief content modal */
 const briefMarkdownComponents = {
@@ -48,6 +49,7 @@ export interface ContentPlanBriefDisplayProps {
 
 export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = ({ planId, brief }) => {
   const { t } = useAppTranslation();
+  const { organizationId } = useCurrentOrg();
   const { updateContentPlan } = useSocialMediaMutations();
   const briefText = brief?.trim() ?? '';
 
@@ -92,6 +94,9 @@ export const ContentPlanBriefDisplay: React.FC<ContentPlanBriefDisplayProps> = (
           tableData={parsedTable.table}
           controlsPlacement="taggingColumn"
           structureEditable={canUpdate}
+          imagePasteColumnIndex={1}
+          socialMediaPlanId={canUpdate ? planId : undefined}
+          organizationId={organizationId ?? undefined}
           onSave={(newTableData) => {
             if (!canUpdate) return;
             const newTableMarkdown = stringifyMarkdownTable(normalizeTableData(newTableData), {
